@@ -19,6 +19,7 @@ import ChatDetailScreen from '../screens/main/ChatDetailScreen';
 import WalletScreen from '../screens/main/WalletScreen';
 import VIPStoreScreen from '../screens/main/VIPStoreScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
+import EditProfileScreen from '../screens/main/EditProfileScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -43,6 +44,7 @@ const RootNavigator = () => {
       <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: true, title: 'Wallet' }} />
       <Stack.Screen name="VIPStore" component={VIPStoreScreen} options={{ headerShown: true, title: 'VIP Store' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Edit Profile' }} />
     </Stack.Navigator>
   );
 };

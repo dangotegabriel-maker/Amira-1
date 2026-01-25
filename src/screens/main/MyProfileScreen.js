@@ -9,7 +9,10 @@ const MyProfileScreen = ({ navigation }) => {
       <View style={styles.header}>
         <View style={styles.avatar} />
         <Text style={styles.name}>John Doe</Text>
-        <TouchableOpacity style={styles.editButton}>
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={() => navigation.navigate('EditProfile')}
+        >
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
