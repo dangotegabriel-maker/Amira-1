@@ -4,7 +4,7 @@ import { Home, Compass, MessageCircle, User } from 'lucide-react-native';
 
 import DiscoverScreen from '../screens/main/DiscoverScreen';
 import MomentsScreen from '../screens/main/MomentsScreen';
-import ChatListScreen from '../screens/main/ChatListScreen';
+import MessageHomeScreen from '../screens/main/MessageHomeScreen';
 import MyProfileScreen from '../screens/main/MyProfileScreen';
 
 const Tab = createBottomTabNavigator();
@@ -31,7 +31,7 @@ const MainTabNavigator = () => {
     >
       <Tab.Screen name="Discover" component={DiscoverScreen} />
       <Tab.Screen name="Moments" component={MomentsScreen} />
-      <Tab.Screen name="Messages" component={ChatListScreen} />
+      <Tab.Screen name="Messages" component={MessageHomeScreen} />
       <Tab.Screen name="Profile" component={MyProfileScreen} />
     </Tab.Navigator>
   );
