@@ -28,6 +28,8 @@ const MessageHomeScreen = ({ navigation }) => {
     { id: '2', name: 'Mark', depth: 'Friends', lastSeen: '1h ago' },
     { id: '3', name: 'Sarah', depth: 'Inner Circle', lastSeen: 'Now' },
     { id: '4', name: 'David', depth: 'Friends', lastSeen: '3h ago' },
+    { id: '5', name: 'Emma', depth: 'Inner Circle', lastSeen: '5m ago' },
+    { id: '6', name: 'Michael', depth: 'Friends', lastSeen: 'Yesterday' },
   ];
 
   const [contactFilter, setContactFilter] = useState('All');
@@ -165,10 +167,10 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 17, fontWeight: 'bold' },
   itemTime: { color: COLORS.textSecondary, fontSize: 13 },
   itemSubtext: { color: COLORS.textSecondary, fontSize: 15 },
-  filterBar: { flexDirection: 'row', padding: 15, backgroundColor: '#F9F9F9' },
-  filterChip: { paddingHorizontal: 15, paddingVertical: 6, borderRadius: 20, marginRight: 10, backgroundColor: '#EEE' },
-  filterChipActive: { backgroundColor: COLORS.primary },
-  filterText: { color: COLORS.textSecondary, fontSize: 13 },
+  filterBar: { flexDirection: 'row', padding: 15, backgroundColor: '#F9F9F9', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 12, backgroundColor: '#E9E9EB', borderWidth: 1, borderColor: '#DDD' },
+  filterChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  filterText: { color: '#666', fontSize: 14, fontWeight: '500' },
   filterTextActive: { color: COLORS.white, fontWeight: 'bold' },
   chatIcon: { padding: 8 }
 });

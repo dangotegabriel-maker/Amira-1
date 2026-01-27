@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 const ChatDetailScreen = ({ route, navigation }) => {
   const { name } = route.params || { name: 'Chat' };
   const [message, setMessage] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
 
   const [messages, setMessages] = useState([
     { id: '1', text: 'Hey! How are you?', sender: 'them', time: '10:30 AM' },
@@ -62,6 +63,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <ScrollView style={styles.messageList} contentContainerStyle={{ paddingVertical: 20 }}>
+        {isRecording && (
+          <View style={styles.recordingIndicator}>
+            <Mic color={COLORS.primary} size={20} />
+            <Text style={styles.recordingText}>Recording...</Text>
+          </View>
+        )}
         {messages.map((msg) => (
           <View key={msg.id} style={[
             styles.bubbleContainer,
@@ -106,8 +113,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         ) : (
           <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity style={styles.iconButton}>
-              <Mic color={COLORS.textSecondary} size={24} />
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPressIn={() => setIsRecording(true)}
+              onPressOut={() => setIsRecording(false)}
+            >
+              <Mic color={isRecording ? COLORS.primary : COLORS.textSecondary} size={24} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
               <ImageIcon color={COLORS.textSecondary} size={24} />
@@ -147,6 +158,17 @@ const styles = StyleSheet.create({
   theirMessageText: { color: COLORS.text },
   bubbleImage: { width: 200, height: 150, borderRadius: 10 },
   timestamp: { fontSize: 10, color: COLORS.textSecondary, marginTop: 4 },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFE5E9',
+    padding: 10,
+    borderRadius: 20,
+    marginBottom: 20,
+    alignSelf: 'center'
+  },
+  recordingText: { color: COLORS.primary, fontWeight: 'bold', marginLeft: 10 },
   inputBar: {
     flexDirection: 'row',
     padding: 10,
