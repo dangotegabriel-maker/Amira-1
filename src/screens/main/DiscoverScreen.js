@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { X, Heart, Star } from 'lucide-react-native';
+import { X, Heart, Star, MoreHorizontal } from 'lucide-react-native';
+import { moderationService } from '../../services/moderationService';
 
 const { width } = Dimensions.get('window');
 
@@ -41,6 +42,23 @@ const DiscoverScreen = () => {
     console.log("Superliked!");
   };
 
+  const showOptions = (name, userId) => {
+    Alert.alert(
+      "User Options",
+      `What would you like to do with ${name}?`,
+      [
+        { text: "Report", onPress: () => console.log("Report from Discover") },
+        { text: "Block", onPress: () => handleBlock(name, userId), style: 'destructive' },
+        { text: "Cancel", style: 'cancel' }
+      ]
+    );
+  };
+
+  const handleBlock = async (name, userId) => {
+    await moderationService.blockUser('current_user_id', userId);
+    Alert.alert("Blocked", `${name} has been blocked.`);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
@@ -48,7 +66,12 @@ const DiscoverScreen = () => {
           <Text style={styles.placeholderText}>User Image</Text>
         </View>
         <View style={styles.cardInfo}>
-          <Text style={styles.name}>Jessica, 24</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={styles.name}>Jessica, 24</Text>
+            <TouchableOpacity onPress={() => showOptions('Jessica', '1')}>
+              <MoreHorizontal color={COLORS.textSecondary} size={24} />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.bio}>Loves hiking and coffee. Let's explore!</Text>
         </View>
       </View>

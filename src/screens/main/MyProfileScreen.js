@@ -1,9 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Settings, CreditCard, Award, ChevronRight } from 'lucide-react-native';
+import { Settings, CreditCard, Award, ChevronRight, Coins } from 'lucide-react-native';
+import { ledgerService } from '../../services/ledgerService';
+import { useIsFocused } from '@react-navigation/native';
 
 const MyProfileScreen = ({ navigation }) => {
+  const isFocused = useIsFocused();
+  const [balance, setBalance] = useState(0);
+
+  useEffect(() => {
+    if (isFocused) {
+      loadBalance();
+    }
+  }, [isFocused]);
+
+  const loadBalance = async () => {
+    const b = await ledgerService.getBalance();
+    setBalance(b);
+  };
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -18,10 +33,10 @@ const MyProfileScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.stats}>
-        <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('Wallet')}>
-          <CreditCard color={COLORS.primary} size={24} />
-          <Text style={styles.statValue}>1,200</Text>
-          <Text style={styles.statLabel}>Diamonds</Text>
+        <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('RechargeHub')}>
+          <Coins color="#FFD700" size={24} />
+          <Text style={styles.statValue}>{balance}</Text>
+          <Text style={styles.statLabel}>Coins</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('VIPStore')}>
           <Award color="#FFD700" size={24} />
@@ -33,7 +48,7 @@ const MyProfileScreen = ({ navigation }) => {
       <View style={styles.menu}>
         {[
           { icon: <Settings size={20} />, label: 'Settings', screen: 'Settings' },
-          { icon: <CreditCard size={20} />, label: 'Wallet', screen: 'Wallet' },
+          { icon: <Coins size={20} />, label: 'Recharge Hub', screen: 'RechargeHub' },
           { icon: <Award size={20} />, label: 'VIP Store', screen: 'VIPStore' },
         ].map((item, i) => (
           <TouchableOpacity

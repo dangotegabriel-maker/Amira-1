@@ -1,30 +1,117 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Video, Send, Mic, Plus, Image as ImageIcon } from 'lucide-react-native';
+import { Video, Send, Mic, Plus, Image as ImageIcon, MoreVertical, Gift } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { moderationService } from '../../services/moderationService';
+import { translationService } from '../../services/translationService';
+import ReportUserModal from '../../components/ReportUserModal';
+import GiftTray from '../../components/GiftTray';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ChatDetailScreen = ({ route, navigation }) => {
-  const { name } = route.params || { name: 'Chat' };
+  const { name, userId = 'target_user_id' } = route.params || { name: 'Chat' };
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [isGiftTrayVisible, setIsGiftTrayVisible] = useState(false);
 
   const [messages, setMessages] = useState([
-    { id: '1', text: 'Hey! How are you?', sender: 'them', time: '10:30 AM' },
-    { id: '2', text: "I'm good, thanks! You?", sender: 'me', time: '10:31 AM' },
-    { id: '3', text: 'Doing great! Want to catch up later?', sender: 'them', time: '10:32 AM' },
+    { id: '1', text: 'Hey! How are you?', sender: 'them', time: '10:30 AM', translatedText: null },
+    { id: '2', text: "I'm good, thanks! You?", sender: 'me', time: '10:31 AM', translatedText: null },
+    { id: '3', text: 'Doing great! Want to catch up later?', sender: 'them', time: '10:32 AM', translatedText: null },
   ]);
+
+  const [autoTranslateEnabled, setAutoTranslateEnabled] = useState(false);
+
+  React.useEffect(() => {
+    checkAutoTranslate();
+  }, []);
+
+  const checkAutoTranslate = async () => {
+    const enabled = await AsyncStorage.getItem('auto_translate');
+    if (enabled === 'true') {
+      setAutoTranslateEnabled(true);
+      // Translate existing "them" messages
+      messages.forEach((msg, index) => {
+        if (msg.sender === 'them' && !msg.translatedText) {
+          handleTranslate(msg.id, msg.text, index);
+        }
+      });
+    }
+  };
+
+  const handleTranslate = async (id, text, index) => {
+    const translated = await translationService.translateMessage(text, 'en'); // Mocking 'en' as target
+    setMessages(prev => prev.map((m, i) =>
+      m.id === id ? { ...m, translatedText: translated } : m
+    ));
+  };
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity style={{ marginRight: 15 }} onPress={() => {}}>
-          <Video color={COLORS.primary} size={24} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity style={{ marginRight: 15 }} onPress={() => {}}>
+            <Video color={COLORS.primary} size={24} />
+          </TouchableOpacity>
+          <TouchableOpacity style={{ marginRight: 15 }} onPress={showMoreOptions}>
+            <MoreVertical color={COLORS.text} size={24} />
+          </TouchableOpacity>
+        </View>
       ),
       title: name,
     });
   }, [navigation, name]);
+
+  const showMoreOptions = () => {
+    Alert.alert(
+      "Options",
+      "What would you like to do?",
+      [
+        { text: "Report User", onPress: () => setIsReportModalVisible(true) },
+        { text: "Block User", onPress: confirmBlock, style: 'destructive' },
+        { text: "Cancel", style: 'cancel' }
+      ]
+    );
+  };
+
+  const confirmBlock = () => {
+    Alert.alert(
+      "Block User",
+      `Are you sure you want to block ${name}? You will no longer see their messages.`,
+      [
+        { text: "Cancel", style: 'cancel' },
+        { text: "Block", onPress: handleBlock, style: 'destructive' }
+      ]
+    );
+  };
+
+  const handleBlock = async () => {
+    await moderationService.blockUser('current_user_id', userId);
+    Alert.alert("Success", `${name} has been blocked.`);
+    navigation.goBack();
+  };
+
+  const handleReport = async (reason, info) => {
+    // Capture snapshot of last 5 messages
+    const snapshot = messages.slice(-5);
+    await moderationService.reportUser('current_user_id', userId, reason, snapshot);
+    Alert.alert("Report Sent", "Our moderation team will review your report shortly.");
+  };
+
+  const handleGiftSent = (gift, combo) => {
+    console.log(`Gift sent: ${gift.name} x${combo}`);
+    if (combo === 1) {
+       const newMessage = {
+         id: Date.now().toString(),
+         text: `Sent a ${gift.name} ${gift.icon}`,
+         sender: 'me',
+         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+       };
+       setMessages(prev => [...prev, newMessage]);
+    }
+  };
 
   const handleSend = () => {
     if (message.trim()) {
@@ -79,12 +166,30 @@ const ChatDetailScreen = ({ route, navigation }) => {
               msg.sender === 'me' ? styles.myBubble : styles.theirBubble
             ]}>
               {msg.text ? (
-                <Text style={[
-                  styles.messageText,
-                  msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
-                ]}>
-                  {msg.text}
-                </Text>
+                <View>
+                  <Text style={[
+                    styles.messageText,
+                    msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
+                  ]}>
+                    {msg.text}
+                  </Text>
+                  {msg.translatedText && (
+                    <View style={styles.translationContainer}>
+                      <View style={styles.translationDivider} />
+                      <Text style={[
+                        styles.translatedText,
+                        msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
+                      ]}>
+                        {msg.translatedText}
+                      </Text>
+                    </View>
+                  )}
+                  {msg.sender === 'them' && !msg.translatedText && (
+                    <TouchableOpacity onPress={() => handleTranslate(msg.id, msg.text)}>
+                      <Text style={styles.translateButton}>Translate</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               ) : (
                 <Image source={{ uri: msg.image }} style={styles.bubbleImage} />
               )}
@@ -94,6 +199,17 @@ const ChatDetailScreen = ({ route, navigation }) => {
         ))}
       </ScrollView>
 
+      <ReportUserModal
+        visible={isReportModalVisible}
+        onClose={() => setIsReportModalVisible(false)}
+        onReport={handleReport}
+        userName={name}
+      />
+      <GiftTray
+        visible={isGiftTrayVisible}
+        onClose={() => setIsGiftTrayVisible(false)}
+        onGiftSent={handleGiftSent}
+      />
       <View style={styles.inputBar}>
         <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
           <Plus color={COLORS.textSecondary} size={24} />
@@ -122,6 +238,9 @@ const ChatDetailScreen = ({ route, navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
               <ImageIcon color={COLORS.textSecondary} size={24} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconButton} onPress={() => setIsGiftTrayVisible(true)}>
+              <Gift color={COLORS.primary} size={24} />
             </TouchableOpacity>
           </View>
         )}
@@ -157,6 +276,10 @@ const styles = StyleSheet.create({
   myMessageText: { color: COLORS.white },
   theirMessageText: { color: COLORS.text },
   bubbleImage: { width: 200, height: 150, borderRadius: 10 },
+  translationContainer: { marginTop: 8 },
+  translationDivider: { height: 1, backgroundColor: 'rgba(0,0,0,0.1)', marginBottom: 5 },
+  translatedText: { fontSize: 14, fontStyle: 'italic', opacity: 0.9 },
+  translateButton: { fontSize: 12, color: COLORS.primary, marginTop: 5, fontWeight: 'bold' },
   timestamp: { fontSize: 10, color: COLORS.textSecondary, marginTop: 4 },
   recordingIndicator: {
     flexDirection: 'row',
