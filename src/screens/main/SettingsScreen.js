@@ -1,8 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SettingsScreen = () => {
+  const [autoTranslate, setAutoTranslate] = useState(false);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    const value = await AsyncStorage.getItem('auto_translate');
+    setAutoTranslate(value === 'true');
+  };
+
+  const toggleAutoTranslate = async (value) => {
+    setAutoTranslate(value);
+    await AsyncStorage.setItem('auto_translate', value.toString());
+  };
   return (
     <ScrollView style={styles.container}>
       <View style={styles.section}>
@@ -15,6 +31,19 @@ const SettingsScreen = () => {
           <Text style={styles.rowLabel}>Email</Text>
           <Text style={styles.rowValue}>john@example.com</Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Globalization</Text>
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Auto-Translate</Text>
+          <Switch
+            value={autoTranslate}
+            onValueChange={toggleAutoTranslate}
+            trackColor={{ true: COLORS.primary }}
+          />
+        </View>
+        <Text style={styles.helpText}>Automatically translate incoming messages to your primary language.</Text>
       </View>
 
       <View style={styles.section}>
@@ -42,6 +71,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   rowLabel: { fontSize: 16 },
   rowValue: { fontSize: 16, color: COLORS.textSecondary },
+  helpText: { fontSize: 12, color: COLORS.textSecondary, paddingVertical: 10, paddingHorizontal: 0 },
   logoutButton: { marginTop: 40, padding: 20, alignItems: 'center' },
   logoutText: { color: COLORS.primary, fontSize: 18, fontWeight: 'bold' },
 });

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, FlatList } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
 import { Search, UserPlus } from 'lucide-react-native';
+import { moderationService } from '../../services/moderationService';
 
 const { width } = Dimensions.get('window');
 
@@ -23,7 +24,7 @@ const MessageHomeScreen = ({ navigation }) => {
   };
 
   // Mock Data
-  const contacts = [
+  const contactsData = [
     { id: '1', name: 'Jessica', depth: 'Inner Circle', lastSeen: '2m ago' },
     { id: '2', name: 'Mark', depth: 'Friends', lastSeen: '1h ago' },
     { id: '3', name: 'Sarah', depth: 'Inner Circle', lastSeen: 'Now' },
@@ -32,16 +33,26 @@ const MessageHomeScreen = ({ navigation }) => {
     { id: '6', name: 'Michael', depth: 'Friends', lastSeen: 'Yesterday' },
   ];
 
+  const activeChatsData = [
+    { id: '1', name: 'Jessica', msg: 'Hey!', time: '10:30 AM', userId: '1' }
+  ];
+
   const [contactFilter, setContactFilter] = useState('All');
 
-  const filteredContacts = contacts.filter(c =>
-    contactFilter === 'All' || c.depth === contactFilter
+  // Filter out blocked users
+  const filteredContacts = contactsData.filter(c =>
+    !moderationService.isBlocked('current_user_id', c.id) &&
+    (contactFilter === 'All' || c.depth === contactFilter)
+  );
+
+  const filteredActiveChats = activeChatsData.filter(c =>
+    !moderationService.isBlocked('current_user_id', c.userId)
   );
 
   const renderActive = () => (
     <View style={styles.page}>
       <FlatList
-        data={[{ id: '1', name: 'Jessica', msg: 'Hey!', time: '10:30 AM' }]}
+        data={filteredActiveChats}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
           <TouchableOpacity
