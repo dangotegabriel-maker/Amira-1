@@ -22,8 +22,17 @@ const MyProfileScreen = ({ navigation }) => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.avatar} />
-        <Text style={styles.name}>John Doe</Text>
+        <View style={styles.avatarContainer}>
+          <View style={styles.avatar} />
+          <View style={styles.vipBadge}>
+            <Award color="#FFF" size={14} />
+            <Text style={styles.vipBadgeText}>VIP</Text>
+          </View>
+        </View>
+        <View style={styles.nameContainer}>
+          <Text style={styles.name}>John Doe</Text>
+          <Award color="#FFD700" size={20} fill="#FFD700" />
+        </View>
         <TouchableOpacity
           style={styles.editButton}
           onPress={() => navigation.navigate('EditProfile')}
@@ -70,8 +79,24 @@ const MyProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F8F8' },
   header: { alignItems: 'center', paddingVertical: 40, backgroundColor: COLORS.white },
-  avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#EEE', marginBottom: 15 },
-  name: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
+  avatarContainer: { position: 'relative', marginBottom: 15 },
+  avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#EEE' },
+  vipBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#FFD700',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.white
+  },
+  vipBadgeText: { color: COLORS.white, fontSize: 10, fontWeight: 'bold', marginLeft: 2 },
+  nameContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  name: { fontSize: 24, fontWeight: 'bold', marginRight: 5 },
   editButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
   editButtonText: { color: COLORS.textSecondary },
   stats: { flexDirection: 'row', backgroundColor: COLORS.white, marginTop: 10, paddingVertical: 20 },
