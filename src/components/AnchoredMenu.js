@@ -9,11 +9,11 @@ const AnchoredMenu = ({ visible, onClose, options, anchorPosition }) => {
   if (!anchorPosition) return null;
 
   // Calculate position to ensure it stays on screen
-  const menuWidth = 180;
-  const menuHeight = options.length * 50;
+  const menuWidth = 200;
+  const menuHeight = options.length * 48;
 
-  let top = anchorPosition.y;
-  let left = anchorPosition.x - menuWidth;
+  let top = anchorPosition.y + 10;
+  let left = anchorPosition.x - menuWidth + 20;
 
   // Adjust if too close to edges
   if (left < 10) left = 10;
@@ -58,7 +58,7 @@ const AnchoredMenu = ({ visible, onClose, options, anchorPosition }) => {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: 'transparent',
   },
   menu: {
     position: 'absolute',
