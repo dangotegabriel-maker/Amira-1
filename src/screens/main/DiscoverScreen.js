@@ -1,12 +1,17 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
 import { X, Heart, Star, MoreHorizontal } from 'lucide-react-native';
 import { moderationService } from '../../services/moderationService';
+import AnchoredMenu from '../../components/AnchoredMenu';
 
 const { width } = Dimensions.get('window');
 
 const DiscoverScreen = () => {
+  const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+
   const likeScale = useRef(new Animated.Value(1)).current;
   const dislikeScale = useRef(new Animated.Value(1)).current;
   const superlikeScale = useRef(new Animated.Value(1)).current;
@@ -68,7 +73,14 @@ const DiscoverScreen = () => {
         <View style={styles.cardInfo}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={styles.name}>Jessica, 24</Text>
-            <TouchableOpacity onPress={() => showOptions('Jessica', '1')}>
+            <TouchableOpacity
+              onPress={(e) => {
+                const { pageX, pageY } = e.nativeEvent;
+                setMenuPosition({ x: pageX, y: pageY });
+                setSelectedUser({ name: 'Jessica', id: '1' });
+                setIsMenuVisible(true);
+              }}
+            >
               <MoreHorizontal color={COLORS.textSecondary} size={24} />
             </TouchableOpacity>
           </View>

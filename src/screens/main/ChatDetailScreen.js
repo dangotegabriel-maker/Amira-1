@@ -7,6 +7,7 @@ import { moderationService } from '../../services/moderationService';
 import { translationService } from '../../services/translationService';
 import ReportUserModal from '../../components/ReportUserModal';
 import GiftTray from '../../components/GiftTray';
+import AnchoredMenu from '../../components/AnchoredMenu';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ChatDetailScreen = ({ route, navigation }) => {
@@ -15,6 +16,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [isGiftTrayVisible, setIsGiftTrayVisible] = useState(false);
+  const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState(null);
 
   const [messages, setMessages] = useState([
     { id: '1', text: 'Hey! How are you?', sender: 'them', time: '10:30 AM', translatedText: null },
@@ -55,7 +58,14 @@ const ChatDetailScreen = ({ route, navigation }) => {
           <TouchableOpacity style={{ marginRight: 15 }} onPress={() => {}}>
             <Video color={COLORS.primary} size={24} />
           </TouchableOpacity>
-          <TouchableOpacity style={{ marginRight: 15 }} onPress={showMoreOptions}>
+          <TouchableOpacity
+            style={{ marginRight: 15 }}
+            onPress={(e) => {
+              const { pageX, pageY } = e.nativeEvent;
+              setMenuPosition({ x: pageX, y: pageY + 10 });
+              setIsMenuVisible(true);
+            }}
+          >
             <MoreVertical color={COLORS.text} size={24} />
           </TouchableOpacity>
         </View>
@@ -64,17 +74,10 @@ const ChatDetailScreen = ({ route, navigation }) => {
     });
   }, [navigation, name]);
 
-  const showMoreOptions = () => {
-    Alert.alert(
-      "Options",
-      "What would you like to do?",
-      [
-        { text: "Report User", onPress: () => setIsReportModalVisible(true) },
-        { text: "Block User", onPress: confirmBlock, style: 'destructive' },
-        { text: "Cancel", style: 'cancel' }
-      ]
-    );
-  };
+  const menuOptions = [
+    { label: "Report User", onPress: () => setIsReportModalVisible(true) },
+    { label: "Block User", onPress: confirmBlock, destructive: true },
+  ];
 
   const confirmBlock = () => {
     Alert.alert(
@@ -146,10 +149,14 @@ const ChatDetailScreen = ({ route, navigation }) => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
     >
-      <ScrollView style={styles.messageList} contentContainerStyle={{ paddingVertical: 20 }}>
+      <ScrollView
+        style={styles.messageList}
+        contentContainerStyle={{ paddingVertical: 20 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {isRecording && (
           <View style={styles.recordingIndicator}>
             <Mic color={COLORS.primary} size={20} />
@@ -209,6 +216,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
         visible={isGiftTrayVisible}
         onClose={() => setIsGiftTrayVisible(false)}
         onGiftSent={handleGiftSent}
+      />
+      <AnchoredMenu
+        visible={isMenuVisible}
+        onClose={() => setIsMenuVisible(false)}
+        options={menuOptions}
+        anchorPosition={menuPosition}
       />
       <View style={styles.inputBar}>
         <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
