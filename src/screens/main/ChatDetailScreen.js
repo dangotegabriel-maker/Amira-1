@@ -10,6 +10,7 @@ import GiftTray from '../../components/GiftTray';
 import AnchoredMenu from '../../components/AnchoredMenu';
 import GiftingOverlay from '../../components/GiftingOverlay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 
 const ChatDetailScreen = ({ route, navigation }) => {
   const { name, userId = 'target_user_id' } = route.params || { name: 'Chat' };
@@ -34,12 +35,23 @@ const ChatDetailScreen = ({ route, navigation }) => {
   useEffect(() => {
     checkAutoTranslate();
 
+    // Pre-load common sounds as requested
+    const loadSounds = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+        });
+      } catch (e) {
+        console.log('Error setting audio mode', e);
+      }
+    };
+    loadSounds();
+
+    // Command: implement listener to force list to bottom on keyboard show
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       () => {
-        setTimeout(() => {
-          flatListRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        scrollToBottom();
       }
     );
 
@@ -49,10 +61,14 @@ const ChatDetailScreen = ({ route, navigation }) => {
   }, []);
 
   useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
-  }, [messages]);
+  };
 
   const checkAutoTranslate = async () => {
     const enabled = await AsyncStorage.getItem('auto_translate');
@@ -211,18 +227,18 @@ const ChatDetailScreen = ({ route, navigation }) => {
   );
 
   return (
-    <View style={{ flex: 1 }}>
-      {activeGiftId && (
-        <GiftingOverlay
-          giftId={activeGiftId}
-          onComplete={() => setActiveGiftId(null)}
-        />
-      )}
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
-      >
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
+    >
+      <View style={{ flex: 1 }}>
+        {activeGiftId && (
+          <GiftingOverlay
+            giftId={activeGiftId}
+            onComplete={() => setActiveGiftId(null)}
+          />
+        )}
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -293,8 +309,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
             </View>
           )}
         </View>
-      </KeyboardAvoidingView>
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
