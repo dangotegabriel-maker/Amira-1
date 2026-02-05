@@ -8,6 +8,7 @@ import { translationService } from '../../services/translationService';
 import ReportUserModal from '../../components/ReportUserModal';
 import GiftTray from '../../components/GiftTray';
 import AnchoredMenu from '../../components/AnchoredMenu';
+import GiftingOverlay from '../../components/GiftingOverlay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ChatDetailScreen = ({ route, navigation }) => {
@@ -16,6 +17,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [isGiftTrayVisible, setIsGiftTrayVisible] = useState(false);
+  const [activeGiftId, setActiveGiftId] = useState(null);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
 
@@ -105,6 +107,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
   const handleGiftSent = (gift, combo) => {
     console.log(`Gift sent: ${gift.name} x${combo}`);
+    setActiveGiftId(gift.id);
     if (combo === 1) {
        const newMessage = {
          id: Date.now().toString(),
@@ -147,10 +150,17 @@ const ChatDetailScreen = ({ route, navigation }) => {
   };
 
   return (
+    <View style={{ flex: 1 }}>
+      {activeGiftId && (
+        <GiftingOverlay
+          giftId={activeGiftId}
+          onComplete={() => setActiveGiftId(null)}
+        />
+      )}
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <ScrollView
         style={styles.messageList}
@@ -259,6 +269,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         )}
       </View>
     </KeyboardAvoidingView>
+    </View>
   );
 };
 

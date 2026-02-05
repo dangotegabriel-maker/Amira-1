@@ -47,25 +47,24 @@ const DiscoverScreen = () => {
     console.log("Superliked!");
   };
 
-  const showOptions = (name, userId) => {
-    Alert.alert(
-      "User Options",
-      `What would you like to do with ${name}?`,
-      [
-        { text: "Report", onPress: () => console.log("Report from Discover") },
-        { text: "Block", onPress: () => handleBlock(name, userId), style: 'destructive' },
-        { text: "Cancel", style: 'cancel' }
-      ]
-    );
-  };
-
   const handleBlock = async (name, userId) => {
     await moderationService.blockUser('current_user_id', userId);
     Alert.alert("Blocked", `${name} has been blocked.`);
   };
 
+  const menuOptions = selectedUser ? [
+    { label: "Report", onPress: () => console.log(`Report ${selectedUser.name}`) },
+    { label: "Block", onPress: () => handleBlock(selectedUser.name, selectedUser.id), destructive: true },
+  ] : [];
+
   return (
     <View style={styles.container}>
+      <AnchoredMenu
+        visible={isMenuVisible}
+        onClose={() => setIsMenuVisible(false)}
+        options={menuOptions}
+        anchorPosition={menuPosition}
+      />
       <View style={styles.card}>
         <View style={styles.imagePlaceholder}>
           <Text style={styles.placeholderText}>User Image</Text>
