@@ -24,7 +24,7 @@ const ASSETS = {
 const GiftingOverlay = ({ giftId, onComplete }) => {
   const [sound, setSound] = useState();
 
-  async function playSound(url) {
+  async function playSFX(url) {
     try {
       const { sound } = await Audio.Sound.createAsync({ uri: url });
       setSound(sound);
@@ -36,7 +36,9 @@ const GiftingOverlay = ({ giftId, onComplete }) => {
 
   useEffect(() => {
     const asset = ASSETS[giftId] || ASSETS['p12']; // Fallback to rocket
-    playSound(asset.sfx);
+
+    // Execute playSFX and playAnimation (LottieView autoPlay) simultaneously
+    playSFX(asset.sfx);
 
     return () => {
       if (sound) {
@@ -64,6 +66,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 9999,
+    backgroundColor: 'transparent',
   },
   lottie: {
     width: width,

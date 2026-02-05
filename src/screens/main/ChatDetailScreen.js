@@ -159,8 +159,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
       )}
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
     >
       <ScrollView
         style={styles.messageList}
