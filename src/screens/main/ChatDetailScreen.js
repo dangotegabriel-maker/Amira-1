@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, Alert, Keyboard } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
 import { Video, Send, Mic, Plus, Image as ImageIcon, MoreVertical, Gift } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -21,6 +21,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
 
+  const flatListRef = useRef(null);
+
   const [messages, setMessages] = useState([
     { id: '1', text: 'Hey! How are you?', sender: 'them', time: '10:30 AM', translatedText: null },
     { id: '2', text: "I'm good, thanks! You?", sender: 'me', time: '10:31 AM', translatedText: null },
@@ -29,15 +31,33 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
   const [autoTranslateEnabled, setAutoTranslateEnabled] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     checkAutoTranslate();
+
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+    };
   }, []);
+
+  useEffect(() => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, [messages]);
 
   const checkAutoTranslate = async () => {
     const enabled = await AsyncStorage.getItem('auto_translate');
     if (enabled === 'true') {
       setAutoTranslateEnabled(true);
-      // Translate existing "them" messages
       messages.forEach((msg, index) => {
         if (msg.sender === 'them' && !msg.translatedText) {
           handleTranslate(msg.id, msg.text, index);
@@ -47,7 +67,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   };
 
   const handleTranslate = async (id, text, index) => {
-    const translated = await translationService.translateMessage(text, 'en'); // Mocking 'en' as target
+    const translated = await translationService.translateMessage(text, 'en');
     setMessages(prev => prev.map((m, i) =>
       m.id === id ? { ...m, translatedText: translated } : m
     ));
@@ -99,7 +119,6 @@ const ChatDetailScreen = ({ route, navigation }) => {
   };
 
   const handleReport = async (reason, info) => {
-    // Capture snapshot of last 5 messages
     const snapshot = messages.slice(-5);
     await moderationService.reportUser('current_user_id', userId, reason, snapshot);
     Alert.alert("Report Sent", "Our moderation team will review your report shortly.");
@@ -149,6 +168,48 @@ const ChatDetailScreen = ({ route, navigation }) => {
     }
   };
 
+  const renderItem = ({ item: msg }) => (
+    <View style={[
+      styles.bubbleContainer,
+      msg.sender === 'me' ? styles.myBubbleContainer : styles.theirBubbleContainer
+    ]}>
+      <View style={[
+        styles.bubble,
+        msg.sender === 'me' ? styles.myBubble : styles.theirBubble
+      ]}>
+        {msg.text ? (
+          <View>
+            <Text style={[
+              styles.messageText,
+              msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
+            ]}>
+              {msg.text}
+            </Text>
+            {msg.translatedText && (
+              <View style={styles.translationContainer}>
+                <View style={styles.translationDivider} />
+                <Text style={[
+                  styles.translatedText,
+                  msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
+                ]}>
+                  {msg.translatedText}
+                </Text>
+              </View>
+            )}
+            {msg.sender === 'them' && !msg.translatedText && (
+              <TouchableOpacity onPress={() => handleTranslate(msg.id, msg.text)}>
+                <Text style={styles.translateButton}>Translate</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <Image source={{ uri: msg.image }} style={styles.bubbleImage} />
+        )}
+      </View>
+      <Text style={styles.timestamp}>{msg.time}</Text>
+    </View>
+  );
+
   return (
     <View style={{ flex: 1 }}>
       {activeGiftId && (
@@ -157,118 +218,82 @@ const ChatDetailScreen = ({ route, navigation }) => {
           onComplete={() => setActiveGiftId(null)}
         />
       )}
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
-    >
-      <ScrollView
-        style={styles.messageList}
-        contentContainerStyle={{ paddingVertical: 20 }}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
       >
-        {isRecording && (
-          <View style={styles.recordingIndicator}>
-            <Mic color={COLORS.primary} size={20} />
-            <Text style={styles.recordingText}>Recording...</Text>
-          </View>
-        )}
-        {messages.map((msg) => (
-          <View key={msg.id} style={[
-            styles.bubbleContainer,
-            msg.sender === 'me' ? styles.myBubbleContainer : styles.theirBubbleContainer
-          ]}>
-            <View style={[
-              styles.bubble,
-              msg.sender === 'me' ? styles.myBubble : styles.theirBubble
-            ]}>
-              {msg.text ? (
-                <View>
-                  <Text style={[
-                    styles.messageText,
-                    msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
-                  ]}>
-                    {msg.text}
-                  </Text>
-                  {msg.translatedText && (
-                    <View style={styles.translationContainer}>
-                      <View style={styles.translationDivider} />
-                      <Text style={[
-                        styles.translatedText,
-                        msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
-                      ]}>
-                        {msg.translatedText}
-                      </Text>
-                    </View>
-                  )}
-                  {msg.sender === 'them' && !msg.translatedText && (
-                    <TouchableOpacity onPress={() => handleTranslate(msg.id, msg.text)}>
-                      <Text style={styles.translateButton}>Translate</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ) : (
-                <Image source={{ uri: msg.image }} style={styles.bubbleImage} />
-              )}
-            </View>
-            <Text style={styles.timestamp}>{msg.time}</Text>
-          </View>
-        ))}
-      </ScrollView>
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderItem}
+          keyExtractor={item => item.id}
+          style={styles.messageList}
+          contentContainerStyle={{ paddingVertical: 20 }}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            isRecording ? (
+              <View style={styles.recordingIndicator}>
+                <Mic color={COLORS.primary} size={20} />
+                <Text style={styles.recordingText}>Recording...</Text>
+              </View>
+            ) : null
+          }
+        />
 
-      <ReportUserModal
-        visible={isReportModalVisible}
-        onClose={() => setIsReportModalVisible(false)}
-        onReport={handleReport}
-        userName={name}
-      />
-      <GiftTray
-        visible={isGiftTrayVisible}
-        onClose={() => setIsGiftTrayVisible(false)}
-        onGiftSent={handleGiftSent}
-      />
-      <AnchoredMenu
-        visible={isMenuVisible}
-        onClose={() => setIsMenuVisible(false)}
-        options={menuOptions}
-        anchorPosition={menuPosition}
-      />
-      <View style={styles.inputBar}>
-        <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
-          <Plus color={COLORS.textSecondary} size={24} />
-        </TouchableOpacity>
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Type a message..."
-            value={message}
-            onChangeText={setMessage}
-            multiline
-          />
-        </View>
-        {message.trim() ? (
-          <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-            <Send color={COLORS.white} size={20} />
+        <ReportUserModal
+          visible={isReportModalVisible}
+          onClose={() => setIsReportModalVisible(false)}
+          onReport={handleReport}
+          userName={name}
+        />
+        <GiftTray
+          visible={isGiftTrayVisible}
+          onClose={() => setIsGiftTrayVisible(false)}
+          onGiftSent={handleGiftSent}
+        />
+        <AnchoredMenu
+          visible={isMenuVisible}
+          onClose={() => setIsMenuVisible(false)}
+          options={menuOptions}
+          anchorPosition={menuPosition}
+        />
+        <View style={styles.inputBar}>
+          <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
+            <Plus color={COLORS.textSecondary} size={24} />
           </TouchableOpacity>
-        ) : (
-          <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPressIn={() => setIsRecording(true)}
-              onPressOut={() => setIsRecording(false)}
-            >
-              <Mic color={isRecording ? COLORS.primary : COLORS.textSecondary} size={24} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
-              <ImageIcon color={COLORS.textSecondary} size={24} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={() => setIsGiftTrayVisible(true)}>
-              <Gift color={COLORS.primary} size={24} />
-            </TouchableOpacity>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Type a message..."
+              value={message}
+              onChangeText={setMessage}
+              multiline
+            />
           </View>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+          {message.trim() ? (
+            <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
+              <Send color={COLORS.white} size={20} />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ flexDirection: 'row' }}>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPressIn={() => setIsRecording(true)}
+                onPressOut={() => setIsRecording(false)}
+              >
+                <Mic color={isRecording ? COLORS.primary : COLORS.textSecondary} size={24} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
+                <ImageIcon color={COLORS.textSecondary} size={24} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconButton} onPress={() => setIsGiftTrayVisible(true)}>
+                <Gift color={COLORS.primary} size={24} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 };
