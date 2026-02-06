@@ -46,29 +46,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
       }
     };
     loadSounds();
-
-    // Command: implement listener to force list to bottom on keyboard show
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        scrollToBottom();
-      }
-    );
-
-    return () => {
-      keyboardDidShowListener.remove();
-    };
   }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
 
   const checkAutoTranslate = async () => {
     const enabled = await AsyncStorage.getItem('auto_translate');
@@ -227,18 +205,18 @@ const ChatDetailScreen = ({ route, navigation }) => {
   );
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
-    >
-      <View style={{ flex: 1 }}>
-        {activeGiftId && (
-          <GiftingOverlay
-            giftId={activeGiftId}
-            onComplete={() => setActiveGiftId(null)}
-          />
-        )}
+    <View style={{ flex: 1 }}>
+      {activeGiftId && (
+        <GiftingOverlay
+          giftId={activeGiftId}
+          onComplete={() => setActiveGiftId(null)}
+        />
+      )}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
+      >
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -247,6 +225,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
           style={styles.messageList}
           contentContainerStyle={{ paddingVertical: 20 }}
           keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
           ListHeaderComponent={
             isRecording ? (
               <View style={styles.recordingIndicator}>
@@ -309,8 +289,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
             </View>
           )}
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
