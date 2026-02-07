@@ -7,6 +7,7 @@ export const ledgerService = {
   totalSpent: 0,
   upvotes: 0,
   receivedGifts: {}, // { giftId: count }
+  profileViews: 0,
   isInitialized: false,
 
   init: async () => {
@@ -17,12 +18,14 @@ export const ledgerService = {
       const spent = await AsyncStorage.getItem('total_spent');
       const received = await AsyncStorage.getItem('received_gifts');
       const upvotes = await AsyncStorage.getItem('upvotes_count');
+      const views = await AsyncStorage.getItem('profile_views_count');
 
       if (balance) ledgerService.currentBalance = parseInt(balance);
       if (txns) ledgerService.transactions = JSON.parse(txns);
       if (spent) ledgerService.totalSpent = parseInt(spent);
       if (received) ledgerService.receivedGifts = JSON.parse(received);
       if (upvotes) ledgerService.upvotes = parseInt(upvotes);
+      if (views) ledgerService.profileViews = parseInt(views);
 
       ledgerService.isInitialized = true;
     } catch (e) {
@@ -48,6 +51,11 @@ export const ledgerService = {
   getUpvotes: async () => {
     await ledgerService.init();
     return ledgerService.upvotes;
+  },
+
+  getProfileViews: async () => {
+    await ledgerService.init();
+    return ledgerService.profileViews;
   },
 
   getReceivedGifts: async () => {
@@ -123,6 +131,17 @@ export const ledgerService = {
       await AsyncStorage.setItem('upvotes_count', ledgerService.upvotes.toString());
     } catch (e) {
       console.error('Ledger record upvote error:', e);
+    }
+  },
+
+  // Mock profile view
+  recordProfileView: async () => {
+    await ledgerService.init();
+    ledgerService.profileViews += 1;
+    try {
+      await AsyncStorage.setItem('profile_views_count', ledgerService.profileViews.toString());
+    } catch (e) {
+      console.error('Ledger record profile view error:', e);
     }
   }
 };

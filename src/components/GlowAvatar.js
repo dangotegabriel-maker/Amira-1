@@ -3,7 +3,7 @@ import React from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import { COLORS } from '../theme/COLORS';
 
-const GlowAvatar = ({ size = 60, isRankOne = false, children }) => {
+const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, children }) => {
   const glowAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -46,6 +46,9 @@ const GlowAvatar = ({ size = 60, isRankOne = false, children }) => {
       <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
         {children || <View style={[styles.placeholder, { borderRadius: size / 2 }]} />}
       </View>
+      {isOnline && (
+        <View style={[styles.onlinePulse, { width: size * 0.25, height: size * 0.25, borderRadius: (size * 0.25) / 2 }]} />
+      )}
     </View>
   );
 };
@@ -54,6 +57,7 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   glow: {
     position: 'absolute',
@@ -73,6 +77,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#DDD',
   },
+  onlinePulse: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: '#4CD964',
+    borderWidth: 2,
+    borderColor: 'white',
+  }
 });
 
 export default GlowAvatar;

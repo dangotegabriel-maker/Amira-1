@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, Alert, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, Alert, Keyboard, ScrollView } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
 import { Video, Send, Mic, Plus, Image as ImageIcon, MoreVertical, Gift } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,6 +15,14 @@ import GiftTray from '../../components/GiftTray';
 import AnchoredMenu from '../../components/AnchoredMenu';
 import VIPBadge from '../../components/VIPBadge';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const ICEBREAKERS = [
+  "Hey! 👋",
+  "You look great today! ✨",
+  "Send me a gift? 🎁",
+  "Want to chat? 😊",
+  "Hello from the other side! 🌎"
+];
 
 const ChatDetailScreen = ({ route, navigation }) => {
   const { name, userId = 'target_user_id', totalSpent = 0 } = route.params || { name: 'Chat' };
@@ -51,9 +59,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
     // Connect to socket
     socketService.connect('current_user_id');
     const handleIncomingGift = async (data) => {
-      // Record the gift for the Trophy Cabinet
       await ledgerService.recordReceivedGift(data.giftId);
-
       const giftAsset = getGiftAsset(data.giftId);
       const newMessage = {
         id: Date.now().toString(),
@@ -148,12 +154,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   };
 
   const handleGiftSent = (gift, combo) => {
-    console.log(`Gift sent: ${gift.name} x${combo}`);
-
-    // Trigger overlay via context
     triggerGiftOverlay(gift.id, 'You', combo);
-
-    // Emit via socket
     socketService.sendGift(userId, { giftId: gift.id, combo });
 
     if (combo === 1) {
@@ -167,11 +168,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleSend = () => {
-    if (message.trim()) {
+  const handleSend = (textToSend) => {
+    const finalMsg = typeof textToSend === 'string' ? textToSend : message;
+    if (finalMsg.trim()) {
       const newMessage = {
         id: Date.now().toString(),
-        text: message,
+        text: finalMsg,
         sender: 'me',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
@@ -224,11 +226,6 @@ const ChatDetailScreen = ({ route, navigation }) => {
                   {msg.translatedText}
                 </Text>
               </View>
-            )}
-            {msg.sender === 'them' && !msg.translatedText && (
-              <TouchableOpacity onPress={() => handleTranslate(msg.id, msg.text)}>
-                <Text style={styles.translateButton}>Translate</Text>
-              </TouchableOpacity>
             )}
           </View>
         ) : (
@@ -283,40 +280,56 @@ const ChatDetailScreen = ({ route, navigation }) => {
           options={menuOptions}
           anchorPosition={menuPosition}
         />
-        <View style={styles.inputBar}>
-          <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
-            <Plus color={COLORS.textSecondary} size={24} />
-          </TouchableOpacity>
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Type a message..."
-              value={message}
-              onChangeText={setMessage}
-              multiline
-            />
-          </View>
-          {message.trim() ? (
-            <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-              <Send color={COLORS.white} size={20} />
+
+        <View style={styles.inputArea}>
+           <ScrollView
+             horizontal
+             showsHorizontalScrollIndicator={false}
+             style={styles.icebreakers}
+             contentContainerStyle={{ paddingHorizontal: 10 }}
+           >
+              {ICEBREAKERS.map((text, i) => (
+                <TouchableOpacity key={i} style={styles.icebreakerChip} onPress={() => handleSend(text)}>
+                   <Text style={styles.icebreakerText}>{text}</Text>
+                </TouchableOpacity>
+              ))}
+           </ScrollView>
+
+           <View style={styles.inputBar}>
+            <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
+              <Plus color={COLORS.textSecondary} size={24} />
             </TouchableOpacity>
-          ) : (
-            <View style={{ flexDirection: 'row' }}>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPressIn={() => setIsRecording(true)}
-                onPressOut={() => setIsRecording(false)}
-              >
-                <Mic color={isRecording ? COLORS.primary : COLORS.textSecondary} size={24} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
-                <ImageIcon color={COLORS.textSecondary} size={24} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton} onPress={() => setIsGiftTrayVisible(true)}>
-                <Gift color={COLORS.primary} size={24} />
-              </TouchableOpacity>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Type a message..."
+                value={message}
+                onChangeText={setMessage}
+                multiline
+              />
             </View>
-          )}
+            {message.trim() ? (
+              <TouchableOpacity style={styles.sendButton} onPress={() => handleSend()}>
+                <Send color={COLORS.white} size={20} />
+              </TouchableOpacity>
+            ) : (
+              <View style={{ flexDirection: 'row' }}>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPressIn={() => setIsRecording(true)}
+                  onPressOut={() => setIsRecording(false)}
+                >
+                  <Mic color={isRecording ? COLORS.primary : COLORS.textSecondary} size={24} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
+                  <ImageIcon color={COLORS.textSecondary} size={24} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconButton} onPress={() => setIsGiftTrayVisible(true)}>
+                  <Gift color={COLORS.primary} size={24} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -353,7 +366,6 @@ const styles = StyleSheet.create({
   translationContainer: { marginTop: 8 },
   translationDivider: { height: 1, backgroundColor: 'rgba(0,0,0,0.1)', marginBottom: 5 },
   translatedText: { fontSize: 14, fontStyle: 'italic', opacity: 0.9 },
-  translateButton: { fontSize: 12, color: COLORS.primary, marginTop: 5, fontWeight: 'bold' },
   timestamp: { fontSize: 10, color: COLORS.textSecondary, marginTop: 4 },
   recordingIndicator: {
     flexDirection: 'row',
@@ -366,14 +378,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center'
   },
   recordingText: { color: COLORS.primary, fontWeight: 'bold', marginLeft: 10 },
+
+  inputArea: { backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#EEE', paddingBottom: Platform.OS === 'ios' ? 30 : 10 },
+  icebreakers: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  icebreakerChip: { backgroundColor: '#F0F0F0', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, marginRight: 10 },
+  icebreakerText: { color: COLORS.text, fontSize: 13, fontWeight: '500' },
+
   inputBar: {
     flexDirection: 'row',
     padding: 10,
-    backgroundColor: COLORS.white,
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
-    paddingBottom: Platform.OS === 'ios' ? 30 : 10
   },
   inputContainer: {
     flex: 1,
