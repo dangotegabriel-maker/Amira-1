@@ -27,14 +27,14 @@ const MessageHomeScreen = ({ navigation }) => {
 
   // Mock Data
   const contactsData = [
-    { id: '1', name: 'Jessica', depth: 'Inner Circle', lastSeen: '2m ago', totalSpent: 6000, isRankOne: true },
-    { id: '2', name: 'Mark', depth: 'Friends', lastSeen: '1h ago', totalSpent: 1200 },
-    { id: '3', name: 'Sarah', depth: 'Inner Circle', lastSeen: 'Now', totalSpent: 500 },
-    { id: '4', name: 'David', depth: 'Friends', lastSeen: '3h ago', totalSpent: 0 },
+    { id: '1', name: 'Jessica', depth: 'Inner Circle', lastSeen: '2m ago', totalSpent: 6000, isRankOne: true, isOnline: true },
+    { id: '2', name: 'Mark', depth: 'Friends', lastSeen: '1h ago', totalSpent: 1200, isOnline: false },
+    { id: '3', name: 'Sarah', depth: 'Inner Circle', lastSeen: 'Now', totalSpent: 500, isOnline: true },
+    { id: '4', name: 'David', depth: 'Friends', lastSeen: '3h ago', totalSpent: 0, isOnline: false },
   ];
 
   const activeChatsData = [
-    { id: '1', name: 'Jessica', msg: 'Hey!', time: '10:30 AM', userId: '1', totalSpent: 6000, isRankOne: true }
+    { id: '1', name: 'Jessica', msg: 'Hey!', time: '10:30 AM', userId: '1', totalSpent: 6000, isRankOne: true, isOnline: true }
   ];
 
   const [contactFilter, setContactFilter] = useState('All');
@@ -57,9 +57,9 @@ const MessageHomeScreen = ({ navigation }) => {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.listItem}
-            onPress={() => navigation.navigate('ChatDetail', { name: item.name, totalSpent: item.totalSpent })}
+            onPress={() => navigation.navigate('ChatDetail', { name: item.name, userId: item.userId, totalSpent: item.totalSpent })}
           >
-            <GlowAvatar size={50} isRankOne={item.isRankOne} />
+            <GlowAvatar size={50} isRankOne={item.isRankOne} isOnline={item.isOnline} />
             <View style={styles.itemContent}>
               <View style={styles.itemHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -93,8 +93,11 @@ const MessageHomeScreen = ({ navigation }) => {
         data={filteredContacts}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <View style={styles.listItem}>
-            <GlowAvatar size={50} isRankOne={item.isRankOne} />
+          <TouchableOpacity
+            style={styles.listItem}
+            onPress={() => navigation.navigate('UserProfile', { userId: item.id, name: item.name, totalSpent: item.totalSpent, isOnline: item.isOnline, isRankOne: item.isRankOne })}
+          >
+            <GlowAvatar size={50} isRankOne={item.isRankOne} isOnline={item.isOnline} />
             <View style={styles.itemContent}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={styles.itemName}>{item.name}</Text>
@@ -102,10 +105,10 @@ const MessageHomeScreen = ({ navigation }) => {
               </View>
               <Text style={styles.itemSubtext}>{item.depth} • {item.lastSeen}</Text>
             </View>
-            <TouchableOpacity style={styles.chatIcon}>
+            <TouchableOpacity style={styles.chatIcon} onPress={() => navigation.navigate('ChatDetail', { name: item.name, userId: item.id, totalSpent: item.totalSpent })}>
                <UserPlus size={20} color={COLORS.primary} />
             </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         )}
       />
     </View>
@@ -178,7 +181,6 @@ const styles = StyleSheet.create({
   page: { width: width, flex: 1 },
   emptyText: { textAlign: 'center', marginTop: 100, color: COLORS.textSecondary, fontSize: 16 },
   listItem: { flexDirection: 'row', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F0F0F0', alignItems: 'center' },
-  avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#EEE' },
   itemContent: { flex: 1, marginLeft: 15 },
   itemHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
   itemName: { fontSize: 17, fontWeight: 'bold' },

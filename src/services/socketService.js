@@ -26,26 +26,26 @@ class SocketService {
   connect(userId) {
     console.log(`Socket connecting for user: ${userId}`);
     this.connected = true;
+    this.broadcastPresence(userId, true);
+  }
 
-    // Mock receiving a gift from another user after a delay for testing/demo
-    /*
-    setTimeout(() => {
-      this.emit('gift_received', {
-        giftId: 'l11', // Amira Crown
-        senderName: 'Sarah',
-        combo: 1
-      });
-    }, 10000);
-    */
+  broadcastPresence(userId, isOnline) {
+    console.log(`Socket: Broadcasting presence for ${userId}: ${isOnline ? 'Online' : 'Offline'}`);
+    // socket.emit('presence_update', { userId, isOnline });
+  }
+
+  emitProfileView(viewerId, profileId) {
+    console.log(`Socket: ${viewerId} viewed profile of ${profileId}`);
+    // socket.emit('profile_view', { viewerId, profileId });
   }
 
   sendGift(targetUserId, giftData) {
     console.log(`Socket: Sending gift to ${targetUserId}`, giftData);
-    // In a real app, this would emit to the server
     // socket.emit('send_gift', { targetUserId, ...giftData });
   }
 
-  disconnect() {
+  disconnect(userId) {
+    this.broadcastPresence(userId, false);
     this.connected = false;
   }
 }
