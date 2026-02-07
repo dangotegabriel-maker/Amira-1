@@ -2,41 +2,72 @@ import React from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
 import { Heart, MessageCircle, Share2, EyeOff } from 'lucide-react-native';
+import { TapGestureHandler, State, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { hapticService } from '../../services/hapticService';
+import { useGifting } from '../../context/GiftingContext';
+import { socketService } from '../../services/socketService';
 
 const MomentsScreen = () => {
+  const { triggerGiftOverlay } = useGifting();
+
   const posts = [
-    { id: '1', user: 'Alex', content: 'Beautiful sunset!', sensitive: false },
-    { id: '2', user: 'Sam', content: 'Check this out', sensitive: true },
+    { id: '1', user: 'Alex', content: 'Beautiful sunset!', sensitive: false, userId: 'u1' },
+    { id: '2', user: 'Sam', content: 'Check this out', sensitive: true, userId: 'u2' },
   ];
 
+  const onDoubleTap = (userId) => (event) => {
+    if (event.nativeEvent.state === State.ACTIVE) {
+      console.log(`Double tap on moment by ${userId}! Sending Finger Heart 🫰`);
+      const heartGift = { id: 'p2', name: 'Finger Heart', cost: 5, icon: '🫰' };
+
+      // Trigger sensory effects
+      triggerGiftOverlay(heartGift.id, 'You', 1);
+      socketService.sendGift(userId, { giftId: heartGift.id, combo: 1 });
+      hapticService.success();
+    }
+  };
+
   const renderItem = ({ item }) => (
-    <View style={styles.post}>
-      <View style={styles.header}>
-        <View style={styles.avatar} />
-        <Text style={styles.username}>{item.user}</Text>
-      </View>
+    <GestureHandlerRootView>
+      <TapGestureHandler
+        onHandlerStateChange={onDoubleTap(item.userId)}
+        numberOfTaps={2}
+      >
+        <View style={styles.post}>
+          <View style={styles.header}>
+            <View style={styles.avatar} />
+            <Text style={styles.username}>{item.user}</Text>
+          </View>
 
-      {item.sensitive ? (
-        <View style={styles.sensitiveContent}>
-          <EyeOff color={COLORS.white} size={48} />
-          <Text style={styles.sensitiveText}>Sensitive Content</Text>
-          <TouchableOpacity style={styles.viewButton}>
-            <Text style={styles.viewButtonText}>View</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.imagePlaceholder} />
-      )}
+          {item.sensitive ? (
+            <View style={styles.sensitiveContent}>
+              <EyeOff color={COLORS.white} size={48} />
+              <Text style={styles.sensitiveText}>Sensitive Content</Text>
+              <TouchableOpacity style={styles.viewButton} onPress={() => hapticService.lightImpact()}>
+                <Text style={styles.viewButtonText}>View</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.imagePlaceholder} />
+          )}
 
-      <View style={styles.footer}>
-        <Text style={styles.content}>{item.content}</Text>
-        <View style={styles.actions}>
-          <Heart size={24} color={COLORS.text} style={styles.actionIcon} />
-          <MessageCircle size={24} color={COLORS.text} style={styles.actionIcon} />
-          <Share2 size={24} color={COLORS.text} />
+          <View style={styles.footer}>
+            <Text style={styles.content}>{item.content}</Text>
+            <View style={styles.actions}>
+              <TouchableOpacity onPress={() => hapticService.lightImpact()}>
+                <Heart size={24} color={COLORS.text} style={styles.actionIcon} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => hapticService.lightImpact()}>
+                <MessageCircle size={24} color={COLORS.text} style={styles.actionIcon} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => hapticService.lightImpact()}>
+                <Share2 size={24} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      </View>
-    </View>
+      </TapGestureHandler>
+    </GestureHandlerRootView>
   );
 
   return (

@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, Alert, Keyboard, ScrollView } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Video, Send, Mic, Plus, Image as ImageIcon, MoreVertical, Gift, X } from 'lucide-react-native';
+import { Video, Send, Mic, Plus, Image as ImageIcon, MoreVertical, Gift, X, Reply } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { moderationService } from '../../services/moderationService';
 import { translationService } from '../../services/translationService';
 import { socketService } from '../../services/socketService';
 import { soundService } from '../../services/soundService';
+import { hapticService } from '../../services/hapticService';
 import { getGiftAsset } from '../../services/giftingService';
 import { ledgerService } from '../../services/ledgerService';
 import { useGifting } from '../../context/GiftingContext';
@@ -15,6 +16,7 @@ import GiftTray from '../../components/GiftTray';
 import AnchoredMenu from '../../components/AnchoredMenu';
 import VIPBadge from '../../components/VIPBadge';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TapGestureHandler, State, GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 
 const INITIAL_ICEBREAKERS = [
   "Hey! 👋",
@@ -33,10 +35,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
   const [showIcebreakers, setShowIcebreakers] = useState(true);
+  const [replyTo, setReplyTo] = useState(null);
 
   const { triggerGiftOverlay } = useGifting();
 
   const flatListRef = useRef(null);
+  const textInputRef = useRef(null);
 
   const [messages, setMessages] = useState([
     { id: '1', text: 'Hey! How are you?', sender: 'them', time: '10:30 AM', translatedText: null },
@@ -49,7 +53,6 @@ const ChatDetailScreen = ({ route, navigation }) => {
   useEffect(() => {
     checkAutoTranslate();
 
-    // Initialize Zen Audio and preload common sounds
     soundService.init();
     soundService.preload([
       'https://www.soundjay.com/nature/wind-chime-1.mp3',
@@ -57,10 +60,10 @@ const ChatDetailScreen = ({ route, navigation }) => {
       'https://www.soundjay.com/magic/magic-chime-03.mp3'
     ]);
 
-    // Connect to socket
     socketService.connect('current_user_id');
     const handleIncomingGift = async (data) => {
       await ledgerService.recordReceivedGift(data.giftId);
+      hapticService.longVibration();
       const giftAsset = getGiftAsset(data.giftId);
       const newMessage = {
         id: Date.now().toString(),
@@ -117,6 +120,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
               const { pageX, pageY } = e.nativeEvent;
               setMenuPosition({ x: pageX, y: pageY + 10 });
               setIsMenuVisible(true);
+              hapticService.lightImpact();
             }}
           >
             <MoreVertical color={COLORS.text} size={24} />
@@ -157,6 +161,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const handleGiftSent = (gift, combo) => {
     triggerGiftOverlay(gift.id, 'You', combo);
     socketService.sendGift(userId, { giftId: gift.id, combo });
+    hapticService.mediumImpact();
 
     if (combo === 1) {
        const newMessage = {
@@ -177,12 +182,23 @@ const ChatDetailScreen = ({ route, navigation }) => {
         text: finalMsg,
         sender: 'me',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        replyTo: replyTo ? replyTo.text : null
       };
       setMessages([...messages, newMessage]);
       setMessage('');
+      setReplyTo(null);
+      hapticService.lightImpact();
       if (typeof textToSend === 'string') {
-        setShowIcebreakers(false); // Clear the chip row after quick reply
+        setShowIcebreakers(false);
       }
+    }
+  };
+
+  const onDoubleTap = (event) => {
+    if (event.nativeEvent.state === State.ACTIVE) {
+      const heartGift = { id: 'p2', name: 'Finger Heart', cost: 5, icon: '🫰' };
+      handleGiftSent(heartGift, 1);
+      hapticService.success();
     }
   };
 
@@ -203,150 +219,197 @@ const ChatDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const renderItem = ({ item: msg }) => (
-    <View style={[
-      styles.bubbleContainer,
-      msg.sender === 'me' ? styles.myBubbleContainer : styles.theirBubbleContainer
-    ]}>
-      <View style={[
-        styles.bubble,
-        msg.sender === 'me' ? styles.myBubble : styles.theirBubble
-      ]}>
-        {msg.text ? (
-          <View>
-            <Text style={[
-              styles.messageText,
-              msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
-            ]}>
-              {msg.text}
-            </Text>
-            {msg.translatedText && (
-              <View style={styles.translationContainer}>
-                <View style={styles.translationDivider} />
+  const renderItem = ({ item: msg }) => {
+    const renderRightActions = (progress, dragX) => {
+       return (
+          <View style={styles.swipeAction}>
+             <Reply color={COLORS.primary} size={24} />
+          </View>
+       );
+    };
+
+    return (
+      <Swipeable
+        renderRightActions={renderRightActions}
+        onSwipeableRightWillOpen={() => {
+           hapticService.lightImpact();
+           setReplyTo(msg);
+           textInputRef.current?.focus();
+        }}
+      >
+        <View style={[
+          styles.bubbleContainer,
+          msg.sender === 'me' ? styles.myBubbleContainer : styles.theirBubbleContainer
+        ]}>
+          <View style={[
+            styles.bubble,
+            msg.sender === 'me' ? styles.myBubble : styles.theirBubble
+          ]}>
+            {msg.replyTo && (
+              <View style={styles.replyBubble}>
+                 <Text style={styles.replyText} numberOfLines={1}>{msg.replyTo}</Text>
+              </View>
+            )}
+            {msg.text ? (
+              <View>
                 <Text style={[
-                  styles.translatedText,
+                  styles.messageText,
                   msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
                 ]}>
-                  {msg.translatedText}
+                  {msg.text}
                 </Text>
+                {msg.translatedText && (
+                  <View style={styles.translationContainer}>
+                    <View style={styles.translationDivider} />
+                    <Text style={[
+                      styles.translatedText,
+                      msg.sender === 'me' ? styles.myMessageText : styles.theirMessageText
+                    ]}>
+                      {msg.translatedText}
+                    </Text>
+                  </View>
+                )}
               </View>
+            ) : (
+              <Image source={{ uri: msg.image }} style={styles.bubbleImage} />
             )}
           </View>
-        ) : (
-          <Image source={{ uri: msg.image }} style={styles.bubbleImage} />
-        )}
-      </View>
-      <Text style={styles.timestamp}>{msg.time}</Text>
-    </View>
-  );
+          <Text style={styles.timestamp}>{msg.time}</Text>
+        </View>
+      </Swipeable>
+    );
+  };
 
   return (
-    <View style={{ flex: 1 }}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <TapGestureHandler
+        onHandlerStateChange={onDoubleTap}
+        numberOfTaps={2}
       >
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          style={styles.messageList}
-          contentContainerStyle={{ paddingVertical: 20 }}
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          ListHeaderComponent={
-            isRecording ? (
-              <View style={styles.recordingIndicator}>
-                <Mic color={COLORS.primary} size={20} />
-                <Text style={styles.recordingText}>Recording...</Text>
-              </View>
-            ) : null
-          }
-        />
+        <View style={{ flex: 1 }}>
+          <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 90}
+          >
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              renderItem={renderItem}
+              keyExtractor={item => item.id}
+              style={styles.messageList}
+              contentContainerStyle={{ paddingVertical: 20 }}
+              keyboardShouldPersistTaps="handled"
+              onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+              ListHeaderComponent={
+                isRecording ? (
+                  <View style={styles.recordingIndicator}>
+                    <Mic color={COLORS.primary} size={20} />
+                    <Text style={styles.recordingText}>Recording...</Text>
+                  </View>
+                ) : null
+              }
+            />
 
-        <ReportUserModal
-          visible={isReportModalVisible}
-          onClose={() => setIsReportModalVisible(false)}
-          onReport={handleReport}
-          userName={name}
-        />
-        <GiftTray
-          visible={isGiftTrayVisible}
-          onClose={() => setIsGiftTrayVisible(false)}
-          onGiftSent={handleGiftSent}
-        />
-        <AnchoredMenu
-          visible={isMenuVisible}
-          onClose={() => setIsMenuVisible(false)}
-          options={menuOptions}
-          anchorPosition={menuPosition}
-        />
+            <ReportUserModal
+              visible={isReportModalVisible}
+              onClose={() => setIsReportModalVisible(false)}
+              onReport={handleReport}
+              userName={name}
+            />
+            <GiftTray
+              visible={isGiftTrayVisible}
+              onClose={() => setIsGiftTrayVisible(false)}
+              onGiftSent={handleGiftSent}
+            />
+            <AnchoredMenu
+              visible={isMenuVisible}
+              onClose={() => setIsMenuVisible(false)}
+              options={menuOptions}
+              anchorPosition={menuPosition}
+            />
 
-        <View style={styles.inputArea}>
-           {showIcebreakers && (
-             <View style={styles.icebreakerContainer}>
-               <ScrollView
-                 horizontal
-                 showsHorizontalScrollIndicator={false}
-                 style={styles.icebreakers}
-                 contentContainerStyle={{ paddingHorizontal: 10 }}
-               >
-                  {INITIAL_ICEBREAKERS.map((text, i) => (
-                    <TouchableOpacity key={i} style={styles.icebreakerChip} onPress={() => handleSend(text)}>
-                       <Text style={styles.icebreakerText}>{text}</Text>
+            <View style={styles.inputArea}>
+               {replyTo && (
+                 <View style={styles.replyBar}>
+                    <View style={styles.replyBarContent}>
+                       <Text style={styles.replyBarTitle}>Replying to {replyTo.sender === 'me' ? 'yourself' : name}</Text>
+                       <Text style={styles.replyBarText} numberOfLines={1}>{replyTo.text}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setReplyTo(null)}>
+                       <X size={20} color="#999" />
                     </TouchableOpacity>
-                  ))}
-               </ScrollView>
-               <TouchableOpacity style={styles.closeIcebreakers} onPress={() => setShowIcebreakers(false)}>
-                  <X size={14} color="#999" />
-               </TouchableOpacity>
-             </View>
-           )}
+                 </View>
+               )}
 
-           <View style={styles.inputBar}>
-            <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
-              <Plus color={COLORS.textSecondary} size={24} />
-            </TouchableOpacity>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Type a message..."
-                value={message}
-                onChangeText={(t) => {
-                  setMessage(t);
-                  if (t.length > 0) setShowIcebreakers(false);
-                }}
-                multiline
-              />
-            </View>
-            {message.trim() ? (
-              <TouchableOpacity style={styles.sendButton} onPress={() => handleSend()}>
-                <Send color={COLORS.white} size={20} />
-              </TouchableOpacity>
-            ) : (
-              <View style={{ flexDirection: 'row' }}>
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPressIn={() => setIsRecording(true)}
-                  onPressOut={() => setIsRecording(false)}
-                >
-                  <Mic color={isRecording ? COLORS.primary : COLORS.textSecondary} size={24} />
-                </TouchableOpacity>
+               {showIcebreakers && !replyTo && (
+                 <View style={styles.icebreakerContainer}>
+                   <ScrollView
+                     horizontal
+                     showsHorizontalScrollIndicator={false}
+                     style={styles.icebreakers}
+                     contentContainerStyle={{ paddingHorizontal: 10 }}
+                   >
+                      {INITIAL_ICEBREAKERS.map((text, i) => (
+                        <TouchableOpacity key={i} style={styles.icebreakerChip} onPress={() => handleSend(text)}>
+                           <Text style={styles.icebreakerText}>{text}</Text>
+                        </TouchableOpacity>
+                      ))}
+                   </ScrollView>
+                   <TouchableOpacity style={styles.closeIcebreakers} onPress={() => setShowIcebreakers(false)}>
+                      <X size={14} color="#999" />
+                   </TouchableOpacity>
+                 </View>
+               )}
+
+               <View style={styles.inputBar}>
                 <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
-                  <ImageIcon color={COLORS.textSecondary} size={24} />
+                  <Plus color={COLORS.textSecondary} size={24} />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.iconButton} onPress={() => setIsGiftTrayVisible(true)}>
-                  <Gift color={COLORS.primary} size={24} />
-                </TouchableOpacity>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    ref={textInputRef}
+                    style={styles.input}
+                    placeholder="Type a message..."
+                    value={message}
+                    onChangeText={(t) => {
+                      setMessage(t);
+                      if (t.length > 0) setShowIcebreakers(false);
+                    }}
+                    multiline
+                  />
+                </View>
+                {message.trim() ? (
+                  <TouchableOpacity style={styles.sendButton} onPress={() => handleSend()}>
+                    <Send color={COLORS.white} size={20} />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={{ flexDirection: 'row' }}>
+                    <TouchableOpacity
+                      style={styles.iconButton}
+                      onPressIn={() => setIsRecording(true)}
+                      onPressOut={() => setIsRecording(false)}
+                    >
+                      <Mic color={isRecording ? COLORS.primary : COLORS.textSecondary} size={24} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
+                      <ImageIcon color={COLORS.textSecondary} size={24} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.iconButton} onPress={() => {
+                      hapticService.lightImpact();
+                      setIsGiftTrayVisible(true);
+                    }}>
+                      <Gift color={COLORS.primary} size={24} />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
-            )}
-          </View>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </KeyboardAvoidingView>
-    </View>
+      </TapGestureHandler>
+    </GestureHandlerRootView>
   );
 };
 
@@ -381,6 +444,10 @@ const styles = StyleSheet.create({
   translationDivider: { height: 1, backgroundColor: 'rgba(0,0,0,0.1)', marginBottom: 5 },
   translatedText: { fontSize: 14, fontStyle: 'italic', opacity: 0.9 },
   timestamp: { fontSize: 10, color: COLORS.textSecondary, marginTop: 4 },
+
+  replyBubble: { backgroundColor: 'rgba(0,0,0,0.05)', padding: 8, borderRadius: 8, marginBottom: 5, borderLeftWidth: 3, borderLeftColor: COLORS.primary },
+  replyText: { fontSize: 12, color: '#666', fontStyle: 'italic' },
+
   recordingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -394,6 +461,11 @@ const styles = StyleSheet.create({
   recordingText: { color: COLORS.primary, fontWeight: 'bold', marginLeft: 10 },
 
   inputArea: { backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#EEE', paddingBottom: Platform.OS === 'ios' ? 30 : 10 },
+  replyBar: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#F9F9F9', borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  replyBarContent: { flex: 1, paddingLeft: 10, borderLeftWidth: 3, borderLeftColor: COLORS.primary },
+  replyBarTitle: { fontSize: 12, fontWeight: 'bold', color: COLORS.primary },
+  replyBarText: { fontSize: 12, color: '#666' },
+
   icebreakerContainer: { flexDirection: 'row', alignItems: 'center' },
   icebreakers: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   icebreakerChip: { backgroundColor: '#F0F0F0', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, marginRight: 10 },
@@ -427,6 +499,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center'
   },
+  swipeAction: { width: 50, justifyContent: 'center', alignItems: 'center' },
 });
 
 export default ChatDetailScreen;

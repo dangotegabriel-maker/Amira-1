@@ -6,6 +6,7 @@ import { moderationService } from '../../services/moderationService';
 import AnchoredMenu from '../../components/AnchoredMenu';
 import GlowAvatar from '../../components/GlowAvatar';
 import { useNavigation } from '@react-navigation/native';
+import { hapticService } from '../../services/hapticService';
 
 const { width } = Dimensions.get('window');
 
@@ -36,16 +37,19 @@ const DiscoverScreen = () => {
 
   const handleLike = () => {
     animateButton(likeScale);
+    hapticService.mediumImpact();
     console.log("Liked!");
   };
 
   const handleDislike = () => {
     animateButton(dislikeScale);
+    hapticService.lightImpact();
     console.log("Disliked!");
   };
 
   const handleSuperlike = () => {
     animateButton(superlikeScale);
+    hapticService.heavyImpact();
     console.log("Superliked!");
   };
 
@@ -61,11 +65,11 @@ const DiscoverScreen = () => {
 
   const stories = [
     { id: '1', name: 'My Story', isMe: true },
-    { id: '2', name: 'Jessica', isOnline: true },
-    { id: '3', name: 'Mark', isOnline: false },
-    { id: '4', name: 'Sarah', isOnline: true },
-    { id: '5', name: 'David', isOnline: false },
-    { id: '6', name: 'Emma', isOnline: true },
+    { id: '2', name: 'Jessica', isOnline: true, isBusy: false },
+    { id: '3', name: 'Mark', isOnline: true, isBusy: true },
+    { id: '4', name: 'Sarah', isOnline: true, isBusy: false },
+    { id: '5', name: 'David', isOnline: false, isBusy: false },
+    { id: '6', name: 'Emma', isOnline: true, isBusy: false },
   ];
 
   return (
@@ -76,10 +80,10 @@ const DiscoverScreen = () => {
             <TouchableOpacity
               key={story.id}
               style={styles.storyItem}
-              onPress={() => !story.isMe && navigation.navigate('UserProfile', { userId: story.id, name: story.name, isOnline: story.isOnline })}
+              onPress={() => !story.isMe && navigation.navigate('UserProfile', { userId: story.id, name: story.name, isOnline: story.isOnline, isBusy: story.isBusy })}
             >
               <View style={[styles.storyAvatar, story.isMe && styles.myStory]}>
-                <GlowAvatar size={56} isOnline={story.isOnline && !story.isMe}>
+                <GlowAvatar size={56} isOnline={story.isOnline && !story.isMe} isBusy={story.isBusy}>
                    {story.isMe && (
                       <View style={styles.addStoryBadge}>
                         <Plus color={COLORS.white} size={10} />
@@ -103,7 +107,7 @@ const DiscoverScreen = () => {
       <TouchableOpacity
         style={styles.card}
         activeOpacity={0.9}
-        onPress={() => navigation.navigate('UserProfile', { userId: '1', name: 'Jessica', totalSpent: 6000, isOnline: true, isRankOne: true })}
+        onPress={() => navigation.navigate('UserProfile', { userId: '1', name: 'Jessica', totalSpent: 6000, isOnline: true, isRankOne: true, isBusy: false })}
       >
         <View style={styles.imagePlaceholder}>
           <Text style={styles.placeholderText}>User Image</Text>
@@ -120,6 +124,7 @@ const DiscoverScreen = () => {
                 setMenuPosition({ x: pageX, y: pageY });
                 setSelectedUser({ name: 'Jessica', id: '1' });
                 setIsMenuVisible(true);
+                hapticService.lightImpact();
               }}
             >
               <MoreHorizontal color={COLORS.textSecondary} size={24} />

@@ -3,7 +3,7 @@ import React from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import { COLORS } from '../theme/COLORS';
 
-const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, children }) => {
+const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, isBusy = false, children }) => {
   const glowAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -27,6 +27,9 @@ const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, children }
     outputRange: [0.3, 0.7],
   });
 
+  // Determine dot color
+  const dotColor = isBusy ? '#F59E0B' : (isOnline ? '#22C55E' : 'transparent');
+
   return (
     <View style={[styles.container, { width: size, height: size }]}>
       {isRankOne && (
@@ -46,13 +49,14 @@ const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, children }
       <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
         {children || <View style={[styles.placeholder, { borderRadius: size / 2 }]} />}
       </View>
-      {isOnline && (
+      {(isOnline || isBusy) && (
         <View style={[
           styles.onlinePulse,
           {
             width: Math.max(12, size * 0.2),
             height: Math.max(12, size * 0.2),
-            borderRadius: Math.max(12, size * 0.2) / 2
+            borderRadius: Math.max(12, size * 0.2) / 2,
+            backgroundColor: dotColor
           }
         ]} />
       )}
@@ -88,11 +92,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#22C55E', // Vibrant Green (Tailwind green-500 equivalent)
     borderWidth: 2,
     borderColor: 'white',
     zIndex: 10,
-    // Add shadow to make it pop
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
