@@ -5,6 +5,7 @@ import { Search, UserPlus } from 'lucide-react-native';
 import { moderationService } from '../../services/moderationService';
 import VIPBadge from '../../components/VIPBadge';
 import GlowAvatar from '../../components/GlowAvatar';
+import NudgeInbox from '../../components/NudgeInbox';
 
 const { width } = Dimensions.get('window');
 
@@ -54,6 +55,7 @@ const MessageHomeScreen = ({ navigation }) => {
       <FlatList
         data={filteredActiveChats}
         keyExtractor={item => item.id}
+        ListHeaderComponent={<NudgeInbox navigation={navigation} />}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.listItem}

@@ -8,6 +8,7 @@ class SocketService {
     this.heartbeatTimer = null;
     this.userId = null;
     this.offlineGraceTimer = null;
+    this.pendingNotifications = {}; // { profileId: [viewerIds] }
 
     // Listen for AppState changes for background logic
     AppState.addEventListener('change', this.handleAppStateChange.bind(this));
@@ -56,7 +57,34 @@ class SocketService {
 
   broadcastStatus(status) {
     console.log(`Socket: Broadcasting status for ${this.userId}: ${status}`);
+    // If transitioning from BUSY to ONLINE, trigger notifications
+    if (status === 'ONLINE_STATUS' && this.lastStatus === 'STATUS_BUSY') {
+        this.triggerNotifyQueue(this.userId);
+    }
+    this.lastStatus = status;
     // socket.emit('status_update', { userId: this.userId, status });
+  }
+
+  addToNotifyQueue(profileId, viewerId) {
+    if (!this.pendingNotifications[profileId]) {
+        this.pendingNotifications[profileId] = [];
+    }
+    if (!this.pendingNotifications[profileId].includes(viewerId)) {
+        this.pendingNotifications[profileId].push(viewerId);
+        console.log(`Socket: Added ${viewerId} to notify queue for ${profileId}`);
+    }
+  }
+
+  triggerNotifyQueue(profileId) {
+    const viewers = this.pendingNotifications[profileId];
+    if (viewers && viewers.length > 0) {
+        console.log(`Socket: Notifying ${viewers.length} viewers that ${profileId} is free!`);
+        viewers.forEach(vid => {
+            // In a real app, this would be a server-side push
+            // this.emitToUser(vid, 'user_free', { profileId });
+        });
+        this.pendingNotifications[profileId] = [];
+    }
   }
 
   handleAppStateChange(nextAppState) {
@@ -83,6 +111,11 @@ class SocketService {
   sendGift(targetUserId, giftData) {
     console.log(`Socket: Sending gift to ${targetUserId}`, giftData);
     // socket.emit('send_gift', { targetUserId, ...giftData });
+  }
+
+  sendWhisper(targetUserId, senderName) {
+    console.log(`Socket: ${senderName} sent a whisper nudge to ${targetUserId}`);
+    // socket.emit('whisper_nudge', { targetUserId, senderName });
   }
 
   disconnect() {
