@@ -15,6 +15,7 @@ import ReportUserModal from '../../components/ReportUserModal';
 import GiftTray from '../../components/GiftTray';
 import AnchoredMenu from '../../components/AnchoredMenu';
 import VIPBadge from '../../components/VIPBadge';
+import CallWaitingOverlay from '../../components/CallWaitingOverlay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TapGestureHandler, State, GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 
@@ -27,7 +28,7 @@ const INITIAL_ICEBREAKERS = [
 ];
 
 const ChatDetailScreen = ({ route, navigation }) => {
-  const { name, userId = 'target_user_id', totalSpent = 0 } = route.params || { name: 'Chat' };
+  const { name, userId = 'target_user_id', totalSpent = 0, isBusy = false } = route.params || { name: 'Chat' };
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
@@ -36,6 +37,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [menuPosition, setMenuPosition] = useState(null);
   const [showIcebreakers, setShowIcebreakers] = useState(true);
   const [replyTo, setReplyTo] = useState(null);
+  const [isWaitingRoomVisible, setIsWaitingRoomVisible] = useState(false);
 
   const { triggerGiftOverlay } = useGifting();
 
@@ -111,7 +113,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity style={{ marginRight: 15 }} onPress={() => {}}>
+          <TouchableOpacity style={{ marginRight: 15 }} onPress={handleCallPress}>
             <Video color={COLORS.primary} size={24} />
           </TouchableOpacity>
           <TouchableOpacity
@@ -129,6 +131,15 @@ const ChatDetailScreen = ({ route, navigation }) => {
       ),
     });
   }, [navigation, name, totalSpent]);
+
+  const handleCallPress = () => {
+    hapticService.lightImpact();
+    if (isBusy) {
+      setIsWaitingRoomVisible(true);
+    } else {
+      navigation.navigate('VideoCall', { name, userId });
+    }
+  };
 
   const menuOptions = [
     { label: "Report User", onPress: () => setIsReportModalVisible(true) },
@@ -287,6 +298,22 @@ const ChatDetailScreen = ({ route, navigation }) => {
         numberOfTaps={2}
       >
         <View style={{ flex: 1 }}>
+          {isWaitingRoomVisible && (
+            <CallWaitingOverlay
+              user={{ id: userId, name }}
+              onCancel={() => setIsWaitingRoomVisible(false)}
+              onNotify={() => {
+                socketService.addToNotifyQueue(userId, 'current_user_id');
+                setIsWaitingRoomVisible(false);
+                alert("We'll let you know when they're free!");
+              }}
+              onWhisper={() => {
+                socketService.sendWhisper(userId, 'You');
+                setIsWaitingRoomVisible(false);
+                alert("Whisper nudge sent!");
+              }}
+            />
+          )}
           <KeyboardAvoidingView
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

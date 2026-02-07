@@ -17,6 +17,7 @@ import LocationPermissionScreen from '../screens/onboarding/LocationPermissionSc
 import MainTabNavigator from './MainTabNavigator';
 import ChatDetailScreen from '../screens/main/ChatDetailScreen';
 import UserProfileScreen from '../screens/main/UserProfileScreen';
+import VideoCallScreen from '../screens/main/VideoCallScreen';
 import WalletScreen from '../screens/main/WalletScreen';
 import VIPStoreScreen from '../screens/main/VIPStoreScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
@@ -50,6 +51,7 @@ const RootNavigator = () => {
       <Stack.Screen name="MainTabs" component={MainTabNavigator} />
       <Stack.Screen name="ChatDetail" component={ChatDetailScreen} options={{ headerShown: true, title: 'Chat' }} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+      <Stack.Screen name="VideoCall" component={VideoCallScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: true, title: 'Wallet' }} />
       <Stack.Screen name="VIPStore" component={VIPStoreScreen} options={{ headerShown: true, title: 'VIP Store' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} />
