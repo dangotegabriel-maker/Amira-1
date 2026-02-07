@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, FlatL
 import { COLORS } from '../../theme/COLORS';
 import { Search, UserPlus } from 'lucide-react-native';
 import { moderationService } from '../../services/moderationService';
+import VIPBadge from '../../components/VIPBadge';
+import GlowAvatar from '../../components/GlowAvatar';
 
 const { width } = Dimensions.get('window');
 
@@ -25,16 +27,14 @@ const MessageHomeScreen = ({ navigation }) => {
 
   // Mock Data
   const contactsData = [
-    { id: '1', name: 'Jessica', depth: 'Inner Circle', lastSeen: '2m ago' },
-    { id: '2', name: 'Mark', depth: 'Friends', lastSeen: '1h ago' },
-    { id: '3', name: 'Sarah', depth: 'Inner Circle', lastSeen: 'Now' },
-    { id: '4', name: 'David', depth: 'Friends', lastSeen: '3h ago' },
-    { id: '5', name: 'Emma', depth: 'Inner Circle', lastSeen: '5m ago' },
-    { id: '6', name: 'Michael', depth: 'Friends', lastSeen: 'Yesterday' },
+    { id: '1', name: 'Jessica', depth: 'Inner Circle', lastSeen: '2m ago', totalSpent: 6000, isRankOne: true },
+    { id: '2', name: 'Mark', depth: 'Friends', lastSeen: '1h ago', totalSpent: 1200 },
+    { id: '3', name: 'Sarah', depth: 'Inner Circle', lastSeen: 'Now', totalSpent: 500 },
+    { id: '4', name: 'David', depth: 'Friends', lastSeen: '3h ago', totalSpent: 0 },
   ];
 
   const activeChatsData = [
-    { id: '1', name: 'Jessica', msg: 'Hey!', time: '10:30 AM', userId: '1' }
+    { id: '1', name: 'Jessica', msg: 'Hey!', time: '10:30 AM', userId: '1', totalSpent: 6000, isRankOne: true }
   ];
 
   const [contactFilter, setContactFilter] = useState('All');
@@ -57,12 +57,15 @@ const MessageHomeScreen = ({ navigation }) => {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.listItem}
-            onPress={() => navigation.navigate('ChatDetail', { name: item.name })}
+            onPress={() => navigation.navigate('ChatDetail', { name: item.name, totalSpent: item.totalSpent })}
           >
-            <View style={styles.avatar} />
+            <GlowAvatar size={50} isRankOne={item.isRankOne} />
             <View style={styles.itemContent}>
               <View style={styles.itemHeader}>
-                <Text style={styles.itemName}>{item.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  <VIPBadge totalSpent={item.totalSpent} />
+                </View>
                 <Text style={styles.itemTime}>{item.time}</Text>
               </View>
               <Text style={styles.itemSubtext}>{item.msg}</Text>
@@ -91,9 +94,12 @@ const MessageHomeScreen = ({ navigation }) => {
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
           <View style={styles.listItem}>
-            <View style={styles.avatar} />
+            <GlowAvatar size={50} isRankOne={item.isRankOne} />
             <View style={styles.itemContent}>
-              <Text style={styles.itemName}>{item.name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.itemName}>{item.name}</Text>
+                <VIPBadge totalSpent={item.totalSpent} />
+              </View>
               <Text style={styles.itemSubtext}>{item.depth} • {item.lastSeen}</Text>
             </View>
             <TouchableOpacity style={styles.chatIcon}>

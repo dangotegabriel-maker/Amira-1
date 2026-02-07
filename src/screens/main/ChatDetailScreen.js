@@ -5,22 +5,27 @@ import { Video, Send, Mic, Plus, Image as ImageIcon, MoreVertical, Gift } from '
 import * as ImagePicker from 'expo-image-picker';
 import { moderationService } from '../../services/moderationService';
 import { translationService } from '../../services/translationService';
+import { socketService } from '../../services/socketService';
+import { soundService } from '../../services/soundService';
+import { getGiftAsset } from '../../services/giftingService';
+import { ledgerService } from '../../services/ledgerService';
+import { useGifting } from '../../context/GiftingContext';
 import ReportUserModal from '../../components/ReportUserModal';
 import GiftTray from '../../components/GiftTray';
 import AnchoredMenu from '../../components/AnchoredMenu';
-import GiftingOverlay from '../../components/GiftingOverlay';
+import VIPBadge from '../../components/VIPBadge';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
 
 const ChatDetailScreen = ({ route, navigation }) => {
-  const { name, userId = 'target_user_id' } = route.params || { name: 'Chat' };
+  const { name, userId = 'target_user_id', totalSpent = 0 } = route.params || { name: 'Chat' };
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [isGiftTrayVisible, setIsGiftTrayVisible] = useState(false);
-  const [activeGiftId, setActiveGiftId] = useState(null);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
+
+  const { triggerGiftOverlay } = useGifting();
 
   const flatListRef = useRef(null);
 
@@ -35,17 +40,36 @@ const ChatDetailScreen = ({ route, navigation }) => {
   useEffect(() => {
     checkAutoTranslate();
 
-    // Pre-load common sounds as requested
-    const loadSounds = async () => {
-      try {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-        });
-      } catch (e) {
-        console.log('Error setting audio mode', e);
-      }
+    // Initialize Zen Audio and preload common sounds
+    soundService.init();
+    soundService.preload([
+      'https://www.soundjay.com/nature/wind-chime-1.mp3',
+      'https://www.soundjay.com/magic/magic-chime-01.mp3',
+      'https://www.soundjay.com/magic/magic-chime-03.mp3'
+    ]);
+
+    // Connect to socket
+    socketService.connect('current_user_id');
+    const handleIncomingGift = async (data) => {
+      // Record the gift for the Trophy Cabinet
+      await ledgerService.recordReceivedGift(data.giftId);
+
+      const giftAsset = getGiftAsset(data.giftId);
+      const newMessage = {
+        id: Date.now().toString(),
+        text: `Received a ${giftAsset.name || 'gift'} 🎁`,
+        sender: 'them',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages(prev => [...prev, newMessage]);
     };
-    loadSounds();
+
+    socketService.on('gift_received', handleIncomingGift);
+
+    return () => {
+      socketService.off('gift_received', handleIncomingGift);
+      socketService.disconnect();
+    };
   }, []);
 
   const checkAutoTranslate = async () => {
@@ -69,6 +93,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
+      headerTitle: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text }}>{name}</Text>
+          <VIPBadge totalSpent={totalSpent} />
+        </View>
+      ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity style={{ marginRight: 15 }} onPress={() => {}}>
@@ -86,9 +116,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       ),
-      title: name,
     });
-  }, [navigation, name]);
+  }, [navigation, name, totalSpent]);
 
   const menuOptions = [
     { label: "Report User", onPress: () => setIsReportModalVisible(true) },
@@ -120,7 +149,13 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
   const handleGiftSent = (gift, combo) => {
     console.log(`Gift sent: ${gift.name} x${combo}`);
-    setActiveGiftId(gift.id);
+
+    // Trigger overlay via context
+    triggerGiftOverlay(gift.id, 'You', combo);
+
+    // Emit via socket
+    socketService.sendGift(userId, { giftId: gift.id, combo });
+
     if (combo === 1) {
        const newMessage = {
          id: Date.now().toString(),
@@ -206,12 +241,6 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
   return (
     <View style={{ flex: 1 }}>
-      {activeGiftId && (
-        <GiftingOverlay
-          giftId={activeGiftId}
-          onComplete={() => setActiveGiftId(null)}
-        />
-      )}
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
