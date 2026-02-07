@@ -1,8 +1,8 @@
 // src/screens/main/VideoCallScreen.js
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder, Alert, Modal } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { PhoneOff, Mic, MicOff, Camera, Video, Gift } from 'lucide-react-native';
+import { PhoneOff, Mic, MicOff, Camera, Video, Gift, Coins, X } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { hapticService } from '../../services/hapticService';
 import { agoraService } from '../../services/agoraService';
@@ -10,8 +10,10 @@ import { ledgerService } from '../../services/ledgerService';
 import { dbService } from '../../services/firebaseService';
 import GiftTray from '../../components/GiftTray';
 import GiftingOverlay from '../../components/GiftingOverlay';
+import RechargeHubScreen from './RechargeHubScreen';
 
 const { width, height } = Dimensions.get('window');
+const CALL_RATE = 50; // 50 coins per minute
 
 const VideoCallScreen = ({ route, navigation }) => {
   const { name, userId } = route.params;
@@ -22,6 +24,9 @@ const VideoCallScreen = ({ route, navigation }) => {
   const [isGiftTrayVisible, setIsGiftTrayVisible] = useState(false);
   const [activeGift, setActiveGift] = useState(null);
   const [duration, setDuration] = useState(0);
+  const [secondsInMinute, setSecondsInMinute] = useState(0);
+  const [balance, setBalance] = useState(0);
+  const [isRechargeVisible, setIsRechargeVisible] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pipPos = useRef(new Animated.ValueXY({ x: width - 120, y: 100 })).current;
@@ -40,6 +45,7 @@ const VideoCallScreen = ({ route, navigation }) => {
 
     const secondTimer = setInterval(() => {
        setDuration(prev => prev + 1);
+       setSecondsInMinute(prev => (prev + 1) % 60);
     }, 1000);
 
     return () => {
@@ -53,6 +59,19 @@ const VideoCallScreen = ({ route, navigation }) => {
      const profile = await dbService.getUserProfile('current_user_id');
      setCurrentUser(profile);
 
+     const currentBalance = await ledgerService.getBalance();
+     setBalance(currentBalance);
+
+     // Upfront Billing for the First Minute
+     if (profile.gender === 'male') {
+        if (currentBalance < CALL_RATE) {
+           Alert.alert("Low Balance", "You need at least 50 coins to start a call.");
+           navigation.goBack();
+           return;
+        }
+        await billMinute();
+     }
+
      // Cinematic Cross-Fade
      Animated.timing(fadeAnim, {
        toValue: 1,
@@ -65,18 +84,29 @@ const VideoCallScreen = ({ route, navigation }) => {
 
      agoraService.joinChannel(`call_${userId}`);
 
-     // Start Per-Minute Billing for Males
+     // Heartbeat Check: Every 60 seconds starting from now
      if (profile.gender === 'male') {
         billingTimer.current = setInterval(async () => {
-           try {
-              await ledgerService.billCallMinute(30, userId, name); // 30 coins/min
-              console.log("Call billed: 30 coins deducted.");
-           } catch (e) {
+           const latestBalance = await ledgerService.getBalance();
+           if (latestBalance < CALL_RATE) {
               hapticService.error();
-              Alert.alert("Low Balance", "You ran out of coins. The call has ended.");
+              Alert.alert("Low Balance", "The call has ended due to insufficient coins.");
               navigation.goBack();
+           } else {
+              await billMinute();
            }
         }, 60000);
+     }
+  };
+
+  const billMinute = async () => {
+     try {
+        await ledgerService.billCallMinute(CALL_RATE, userId, name);
+        const newBalance = await ledgerService.getBalance();
+        setBalance(newBalance);
+        console.log("Minute billed successfully.");
+     } catch (e) {
+        console.error("Billing failed", e);
      }
   };
 
@@ -92,6 +122,12 @@ const VideoCallScreen = ({ route, navigation }) => {
 
   const handleGiftSent = (gift, combo) => {
     setActiveGift({ id: gift.id, combo });
+    loadBalance(); // Refresh balance after gift
+  };
+
+  const loadBalance = async () => {
+     const b = await ledgerService.getBalance();
+     setBalance(b);
   };
 
   const formatDuration = (s) => {
@@ -99,6 +135,9 @@ const VideoCallScreen = ({ route, navigation }) => {
      const secs = s % 60;
      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
+
+  const isLowBalance = balance < CALL_RATE;
+  const showCountdown = secondsInMinute >= 50;
 
   return (
     <View style={styles.container}>
@@ -136,6 +175,20 @@ const VideoCallScreen = ({ route, navigation }) => {
         />
       )}
 
+      {/* Graceful Exit / Recharge UI */}
+      {currentUser?.gender === 'male' && showCountdown && (
+         <View style={styles.alertBar}>
+            {isLowBalance ? (
+               <TouchableOpacity style={styles.rechargeInline} onPress={() => setIsRechargeVisible(true)}>
+                  <Coins color="white" size={16} />
+                  <Text style={styles.rechargeInlineText}>Low Balance! Recharge now to stay connected</Text>
+               </TouchableOpacity>
+            ) : (
+               <Text style={styles.countdownText}>Next minute in {60 - secondsInMinute}s...</Text>
+            )}
+         </View>
+      )}
+
       <View style={styles.controlsContainer}>
          <View style={styles.glassBar}>
             <TouchableOpacity style={styles.controlButton} onPress={toggleMute}>
@@ -161,6 +214,19 @@ const VideoCallScreen = ({ route, navigation }) => {
         onClose={() => setIsGiftTrayVisible(false)}
         onGiftSent={handleGiftSent}
       />
+
+      <Modal visible={isRechargeVisible} animationType="slide">
+         <View style={{ flex: 1 }}>
+            <View style={styles.modalHeader}>
+               <TouchableOpacity onPress={() => { setIsRechargeVisible(false); loadBalance(); }}>
+                  <X color="black" size={28} />
+               </TouchableOpacity>
+               <Text style={styles.modalTitle}>Recharge Hub</Text>
+               <View style={{ width: 28 }} />
+            </View>
+            <RechargeHubScreen navigation={navigation} />
+         </View>
+      </Modal>
     </View>
   );
 };
@@ -173,6 +239,12 @@ const styles = StyleSheet.create({
   remoteStatus: { color: COLORS.primary, fontSize: 16, marginTop: 10 },
   pip: { position: 'absolute', width: 100, height: 150, borderRadius: 20, backgroundColor: '#333', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', overflow: 'hidden', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
   localPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  alertBar: { position: 'absolute', top: 100, left: 0, right: 0, alignItems: 'center', zIndex: 1000 },
+  rechargeInline: { backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
+  rechargeInlineText: { color: 'white', fontWeight: 'bold', marginLeft: 10, fontSize: 12 },
+  countdownText: { color: 'white', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 10, fontSize: 12 },
+
   controlsContainer: { position: 'absolute', bottom: 50, left: 0, right: 0, alignItems: 'center' },
   glassBar: {
     flexDirection: 'row',
@@ -186,6 +258,9 @@ const styles = StyleSheet.create({
   },
   controlButton: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginHorizontal: 10 },
   endCall: { backgroundColor: '#FF3B30', width: 60, height: 60, borderRadius: 30 },
+
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, paddingTop: 50, backgroundColor: 'white' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold' },
 });
 
 export default VideoCallScreen;

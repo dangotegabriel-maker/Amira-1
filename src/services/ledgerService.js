@@ -117,7 +117,6 @@ export const ledgerService = {
 
   spendCoins: async (amount, recipientId, giftId, recipientName) => {
     // Implement 60/40 Split: Receiver gets 60% in Diamonds
-    // Note: In a real app, this would happen server-side to the receiver's doc
     return await ledgerService.addTransaction('spend', amount, {
       recipientId,
       giftId,
@@ -129,12 +128,18 @@ export const ledgerService = {
 
   // Mock billing per minute for calls
   billCallMinute: async (rate, recipientId, recipientName) => {
-    return await ledgerService.addTransaction('spend', rate, {
+    const txn = await ledgerService.addTransaction('spend', rate, {
       recipientId,
       recipientName,
       category: 'Call',
       unit: 'minute'
     });
+
+    // In a real app, the server would credit the recipient.
+    // For local simulation, we can log it.
+    console.log(`Call billed: ${rate} coins. Recipient ${recipientName} earned ${Math.floor(rate * 0.6)} diamonds.`);
+
+    return txn;
   },
 
   recordReceivedGift: async (giftId, senderName, coinValue = 0) => {
