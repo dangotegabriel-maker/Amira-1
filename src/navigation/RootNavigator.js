@@ -23,6 +23,8 @@ import VIPStoreScreen from '../screens/main/VIPStoreScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import EditProfileScreen from '../screens/main/EditProfileScreen';
 import RechargeHubScreen from '../screens/main/RechargeHubScreen';
+import LeaderboardScreen from '../screens/main/LeaderboardScreen';
+import GiftLedgerScreen from '../screens/main/GiftLedgerScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -57,6 +59,8 @@ const RootNavigator = () => {
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Edit Profile' }} />
       <Stack.Screen name="RechargeHub" component={RechargeHubScreen} />
+      <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
+      <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };

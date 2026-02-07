@@ -21,6 +21,19 @@ export const authService = {
 
 export const dbService = {
   getUserProfile: async (uid) => {
-    return { uid, name: 'John', diamonds: 1200, isVip: false };
+    return {
+      uid,
+      name: 'John Doe',
+      diamonds: 1200,
+      isVip: true,
+      gender: 'male', // or 'female'
+      bio: 'Lover of luxury and high-stakes social flexing. 🥂',
+      photos: [
+        'https://via.placeholder.com/300x400?text=Photo+1',
+        'https://via.placeholder.com/300x400?text=Photo+2',
+        'https://via.placeholder.com/300x400?text=Photo+3',
+        'https://via.placeholder.com/300x400?text=Photo+4',
+      ]
+    };
   }
 };
