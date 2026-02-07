@@ -1,15 +1,32 @@
 // src/services/socketService.js
-import { EventEmitter } from 'events';
 
-class SocketService extends EventEmitter {
+class SocketService {
   constructor() {
-    super();
     this.connected = false;
+    this.listeners = {};
+  }
+
+  on(event, callback) {
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+    this.listeners[event].push(callback);
+  }
+
+  off(event, callback) {
+    if (!this.listeners[event]) return;
+    this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+  }
+
+  emit(event, data) {
+    if (!this.listeners[event]) return;
+    this.listeners[event].forEach(cb => cb(data));
   }
 
   connect(userId) {
     console.log(`Socket connecting for user: ${userId}`);
     this.connected = true;
+
     // Mock receiving a gift from another user after a delay for testing/demo
     /*
     setTimeout(() => {
