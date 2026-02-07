@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Alert, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Alert, ScrollView } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
 import { X, Heart, Star, MoreHorizontal, Plus } from 'lucide-react-native';
 import { moderationService } from '../../services/moderationService';
@@ -8,6 +8,7 @@ import AnchoredMenu from '../../components/AnchoredMenu';
 import GlowAvatar from '../../components/GlowAvatar';
 import { useNavigation } from '@react-navigation/native';
 import { hapticService } from '../../services/hapticService';
+import { Image } from 'expo-image';
 
 const { width } = Dimensions.get('window');
 
@@ -25,7 +26,7 @@ const DiscoverScreen = () => {
   const dislikeScale = useRef(new Animated.Value(1)).current;
   const superlikeScale = useRef(new Animated.Value(1)).current;
 
-  // Mock Discover Users
+  // Mock Discover Users (Females for Male view)
   const discoverUsers = [
     {
       id: 'f1',
@@ -34,9 +35,9 @@ const DiscoverScreen = () => {
       gender: 'female',
       bio: 'Loves hiking and coffee. Let\'s explore!',
       photos: [
-        'https://via.placeholder.com/400x600?text=Jessica+1',
-        'https://via.placeholder.com/400x600?text=Jessica+2',
-        'https://via.placeholder.com/400x600?text=Jessica+3',
+        'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=400&h=600',
+        'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&h=600',
+        'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=400&h=600',
       ],
       isOnline: true
     },
@@ -47,21 +48,10 @@ const DiscoverScreen = () => {
       gender: 'female',
       bio: 'Music is my life. 🎵',
       photos: [
-        'https://via.placeholder.com/400x600?text=Emma+1',
-        'https://via.placeholder.com/400x600?text=Emma+2',
+        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&h=600',
+        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=600',
       ],
       isOnline: true
-    },
-    {
-      id: 'm1',
-      name: 'Mark',
-      age: 27,
-      gender: 'male',
-      bio: 'Adventure seeker.',
-      photos: [
-        'https://via.placeholder.com/400x600?text=Mark+1',
-      ],
-      isOnline: false
     }
   ];
 
@@ -74,31 +64,27 @@ const DiscoverScreen = () => {
     setCurrentUser(profile);
   };
 
-  // Auto-rotating gallery logic
+  // Auto-rotating gallery logic with Cinematic Cross-Fade
   useEffect(() => {
+    if (!targetDisplayUser || targetDisplayUser.photos.length <= 1) return;
+
     const timer = setInterval(() => {
-      rotatePhoto();
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [currentPhotoIndex]);
-
-  const rotatePhoto = () => {
-    const targetUser = discoverUsers[0]; // For demo, focus on first user
-    if (!targetUser.photos || targetUser.photos.length <= 1) return;
-
-    Animated.timing(fadeAnim, {
-      toValue: 0,
-      duration: 500,
-      useNativeDriver: true,
-    }).start(() => {
-      setCurrentPhotoIndex((prev) => (prev + 1) % targetUser.photos.length);
       Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
+        toValue: 0,
+        duration: 800,
         useNativeDriver: true,
-      }).start();
-    });
-  };
+      }).start(() => {
+        setCurrentPhotoIndex((prev) => (prev + 1) % targetDisplayUser.photos.length);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }).start();
+      });
+    }, 4000); // 4 seconds total (3s visible + 1s fade)
+
+    return () => clearInterval(timer);
+  }, [currentUser, currentPhotoIndex]);
 
   const animateButton = (scaleValue) => {
     Animated.sequence([
@@ -134,6 +120,7 @@ const DiscoverScreen = () => {
 
   if (!currentUser) return null;
 
+  // Gender Filter: Show opposite gender
   const filteredUsers = discoverUsers.filter(u => u.gender !== currentUser.gender);
   const targetDisplayUser = filteredUsers[0] || discoverUsers[0];
 
@@ -186,10 +173,14 @@ const DiscoverScreen = () => {
            isOnline: targetDisplayUser.isOnline
         })}
       >
-        <Animated.Image
-          source={{ uri: targetDisplayUser.photos[currentPhotoIndex] }}
-          style={[styles.cardImage, { opacity: fadeAnim }]}
-        />
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}>
+           <Image
+             source={targetDisplayUser.photos[currentPhotoIndex]}
+             style={styles.cardImage}
+             contentFit="cover"
+             cachePolicy="memory-disk"
+           />
+        </Animated.View>
 
         <View style={styles.cardOverlay}>
            <View style={styles.cardInfo}>
@@ -263,10 +254,10 @@ const styles = StyleSheet.create({
   addStoryBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: COLORS.primary, borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: COLORS.white, zIndex: 10 },
   storyName: { fontSize: 11, color: COLORS.textSecondary, marginTop: 5 },
 
-  card: { width: width * 0.9, height: '60%', backgroundColor: '#DDD', borderRadius: 20, overflow: 'hidden', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 10, marginTop: 20, position: 'relative' },
+  card: { width: width * 0.9, height: '60%', backgroundColor: '#000', borderRadius: 20, overflow: 'hidden', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 10, marginTop: 20, position: 'relative' },
   cardImage: { width: '100%', height: '100%' },
   cardOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '40%', justifyContent: 'flex-end' },
-  cardInfo: { padding: 20, backgroundColor: 'rgba(0,0,0,0.3)' },
+  cardInfo: { padding: 20, backgroundColor: 'rgba(0,0,0,0.4)' },
   name: { fontSize: 24, fontWeight: 'bold', color: 'white', marginRight: 8 },
   onlineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#4CD964', marginTop: 5 },
   bio: { fontSize: 16, color: 'rgba(255,255,255,0.9)', marginTop: 5 },
