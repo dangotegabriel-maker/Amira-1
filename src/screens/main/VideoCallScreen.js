@@ -1,11 +1,13 @@
 // src/screens/main/VideoCallScreen.js
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder, Alert } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
 import { PhoneOff, Mic, MicOff, Camera, Video, Gift } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { hapticService } from '../../services/hapticService';
 import { agoraService } from '../../services/agoraService';
+import { ledgerService } from '../../services/ledgerService';
+import { dbService } from '../../services/firebaseService';
 import GiftTray from '../../components/GiftTray';
 import GiftingOverlay from '../../components/GiftingOverlay';
 
@@ -13,46 +15,70 @@ const { width, height } = Dimensions.get('window');
 
 const VideoCallScreen = ({ route, navigation }) => {
   const { name, userId } = route.params;
+  const [currentUser, setCurrentUser] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
   const [showSparkles, setShowSparkles] = useState(true);
   const [isGiftTrayVisible, setIsGiftTrayVisible] = useState(false);
   const [activeGift, setActiveGift] = useState(null);
+  const [duration, setDuration] = useState(0);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pipPos = useRef(new Animated.ValueXY({ x: width - 120, y: 100 })).current;
+  const billingTimer = useRef(null);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderMove: Animated.event([null, { dx: pipPos.x, dy: pipPos.y }], { useNativeDriver: false }),
-      onPanResponderRelease: () => {
-        // Simple snapping logic can be added here
-      },
+      onPanResponderRelease: () => {},
     })
   ).current;
 
   useEffect(() => {
-    // Cinematic Cross-Fade on connect
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
+    loadUserAndStartCall();
 
-    // Haptic on connection
-    hapticService.success();
-
-    // Sparkle effect for first 3 seconds
-    const timer = setTimeout(() => setShowSparkles(false), 3000);
-
-    agoraService.joinChannel(`call_${userId}`);
+    const secondTimer = setInterval(() => {
+       setDuration(prev => prev + 1);
+    }, 1000);
 
     return () => {
-      clearTimeout(timer);
+      clearInterval(secondTimer);
+      if (billingTimer.current) clearInterval(billingTimer.current);
       agoraService.leaveChannel();
     };
   }, []);
+
+  const loadUserAndStartCall = async () => {
+     const profile = await dbService.getUserProfile('current_user_id');
+     setCurrentUser(profile);
+
+     // Cinematic Cross-Fade
+     Animated.timing(fadeAnim, {
+       toValue: 1,
+       duration: 500,
+       useNativeDriver: true,
+     }).start();
+
+     hapticService.success();
+     const sparkleTimer = setTimeout(() => setShowSparkles(false), 3000);
+
+     agoraService.joinChannel(`call_${userId}`);
+
+     // Start Per-Minute Billing for Males
+     if (profile.gender === 'male') {
+        billingTimer.current = setInterval(async () => {
+           try {
+              await ledgerService.billCallMinute(30, userId, name); // 30 coins/min
+              console.log("Call billed: 30 coins deducted.");
+           } catch (e) {
+              hapticService.error();
+              Alert.alert("Low Balance", "You ran out of coins. The call has ended.");
+              navigation.goBack();
+           }
+        }, 60000);
+     }
+  };
 
   const handleEndCall = () => {
     hapticService.mediumImpact();
@@ -68,17 +94,21 @@ const VideoCallScreen = ({ route, navigation }) => {
     setActiveGift({ id: gift.id, combo });
   };
 
+  const formatDuration = (s) => {
+     const mins = Math.floor(s / 60);
+     const secs = s % 60;
+     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
   return (
     <View style={styles.container}>
-      {/* Remote Full-Screen Video Placeholder */}
       <Animated.View style={[styles.fullVideo, { opacity: fadeAnim }]}>
          <View style={styles.remotePlaceholder}>
             <Text style={styles.remoteName}>{name}</Text>
-            <Text style={styles.remoteStatus}>Connected</Text>
+            <Text style={styles.remoteStatus}>{formatDuration(duration)}</Text>
          </View>
       </Animated.View>
 
-      {/* Draggable Rounded PiP Local Feed */}
       <Animated.View
         {...panResponder.panHandlers}
         style={[styles.pip, { transform: pipPos.getTranslateTransform() }]}
@@ -88,7 +118,6 @@ const VideoCallScreen = ({ route, navigation }) => {
          </View>
       </Animated.View>
 
-      {/* Sparkle Lottie Overlay */}
       {showSparkles && (
         <LottieView
           source={{ uri: 'https://assets9.lottiefiles.com/private_files/lf30_shimmer.json' }}
@@ -99,7 +128,6 @@ const VideoCallScreen = ({ route, navigation }) => {
         />
       )}
 
-      {/* Gifting Overlay */}
       {activeGift && (
         <GiftingOverlay
            giftId={activeGift.id}
@@ -108,7 +136,6 @@ const VideoCallScreen = ({ route, navigation }) => {
         />
       )}
 
-      {/* Glassmorphism Controls */}
       <View style={styles.controlsContainer}>
          <View style={styles.glassBar}>
             <TouchableOpacity style={styles.controlButton} onPress={toggleMute}>

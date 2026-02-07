@@ -25,6 +25,7 @@ import EditProfileScreen from '../screens/main/EditProfileScreen';
 import RechargeHubScreen from '../screens/main/RechargeHubScreen';
 import LeaderboardScreen from '../screens/main/LeaderboardScreen';
 import GiftLedgerScreen from '../screens/main/GiftLedgerScreen';
+import WithdrawalScreen from '../screens/main/WithdrawalScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -61,6 +62,7 @@ const RootNavigator = () => {
       <Stack.Screen name="RechargeHub" component={RechargeHubScreen} />
       <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
       <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
     </Stack.Navigator>
   );
 };

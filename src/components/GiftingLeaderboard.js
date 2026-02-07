@@ -36,7 +36,7 @@ const GiftingLeaderboard = () => {
   const renderItem = ({ item }) => (
     <View style={styles.rankItem}>
       <Text style={styles.rankNumber}>{item.rank}</Text>
-      <GlowAvatar size={40} isRankOne={item.rank === 1} />
+      <GlowAvatar size={40} isRankOne={item.rank === 1} xp={item.spent} />
       <View style={styles.userInfo}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={styles.userName}>{item.name}</Text>
@@ -74,7 +74,7 @@ const GiftingLeaderboard = () => {
         data={mockData[period]}
         renderItem={renderItem}
         keyExtractor={item => item.id}
-        scrollEnabled={false} // Since it's embedded in a parent ScrollView/FlatList
+        scrollEnabled={false}
         initialNumToRender={5}
         windowSize={5}
       />

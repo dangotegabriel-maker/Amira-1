@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, Eye, Clock, User as UserIcon, X } from 'lucide-react-native';
+import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, Eye, Clock, User as UserIcon, X, DollarSign } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';
 import { dbService } from '../../services/firebaseService';
 import { getGiftAsset } from '../../services/giftingService';
@@ -17,6 +17,8 @@ const MyProfileScreen = ({ navigation }) => {
   const isFocused = useIsFocused();
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
+  const [diamondBalance, setDiamondBalance] = useState(0);
+  const [wealthXP, setWealthXP] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
   const [upvotes, setUpvotes] = useState(0);
   const [totalReceivedCount, setTotalReceivedCount] = useState(0);
@@ -38,6 +40,8 @@ const MyProfileScreen = ({ navigation }) => {
     const trc = await ledgerService.getTotalGiftsReceived();
     const v = await ledgerService.getProfileViews();
     const r = await ledgerService.getReceivedGifts();
+    const db = await ledgerService.getDiamondBalance();
+    const xp = await ledgerService.getWealthXP();
 
     setUser(profile);
     setBalance(b);
@@ -46,6 +50,8 @@ const MyProfileScreen = ({ navigation }) => {
     setTotalReceivedCount(trc);
     setProfileViews(v);
     setReceivedGifts(r);
+    setDiamondBalance(db);
+    setWealthXP(xp);
   };
 
   const trophyData = Object.entries(receivedGifts).map(([id, count]) => {
@@ -56,6 +62,7 @@ const MyProfileScreen = ({ navigation }) => {
   if (!user) return null;
 
   const isMale = user.gender === 'male';
+  const tier = ledgerService.getTier(wealthXP);
 
   const menuItems = [
     { icon: <Award size={20} color="#FFD700" />, label: 'Global Leaderboard', screen: 'Leaderboard' },
@@ -69,7 +76,7 @@ const MyProfileScreen = ({ navigation }) => {
     <View>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          <GlowAvatar size={100} isOnline={true} />
+          <GlowAvatar size={100} isOnline={true} xp={wealthXP} />
           <View style={styles.vipBadgeContainer}>
             <VIPBadge totalSpent={totalSpent} />
           </View>
@@ -78,6 +85,7 @@ const MyProfileScreen = ({ navigation }) => {
           <Text style={styles.name}>{user.name}</Text>
           <VIPBadge totalSpent={totalSpent} />
         </View>
+        {isMale && <Text style={styles.tierName}>{tier.name} Rank</Text>}
         <Text style={styles.bio}>{user.bio}</Text>
         <TouchableOpacity
           style={styles.editButton}
@@ -107,8 +115,8 @@ const MyProfileScreen = ({ navigation }) => {
       <View style={styles.dashboard}>
         <TouchableOpacity style={styles.dashItem} onPress={() => navigation.navigate('GiftLedger', { type: 'received' })}>
           <Gift color={COLORS.primary} size={24} />
-          <Text style={styles.dashValue}>{totalReceivedCount}</Text>
-          <Text style={styles.dashLabel}>{isMale ? 'Gifts Received' : 'Total Love'}</Text>
+          <Text style={styles.dashValue}>{isMale ? totalReceivedCount : diamondBalance}</Text>
+          <Text style={styles.dashLabel}>{isMale ? 'Gifts Received' : 'Diamond Balance'}</Text>
         </TouchableOpacity>
         <View style={styles.dashItem}>
           <ArrowUpCircle color="#4CD964" size={24} />
@@ -117,9 +125,66 @@ const MyProfileScreen = ({ navigation }) => {
         </View>
         <TouchableOpacity style={styles.dashItem} onPress={() => navigation.navigate('GiftLedger', { type: 'sent' })}>
           <ArrowUpCircle color="#007AFF" size={24} style={{ transform: [{ rotate: '180deg' }] }} />
-          <Text style={styles.dashValue}>{totalSpent}</Text>
+          <Text style={styles.dashValue}>{isMale ? wealthXP : totalSpent}</Text>
           <Text style={styles.dashLabel}>{isMale ? 'Total Contributed' : 'Gifts Sent'}</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Female Withdrawal Section */}
+      {!isMale && (
+        <View style={styles.earningSection}>
+           <View style={styles.earningHeader}>
+              <Text style={styles.earningTitle}>Total Earnings</Text>
+              <Text style={styles.earningValue}>${(diamondBalance * 0.05).toFixed(2)}</Text>
+           </View>
+           <TouchableOpacity
+             style={styles.withdrawButton}
+             onPress={() => { hapticService.mediumImpact(); navigation.navigate('Withdrawal'); }}
+           >
+              <DollarSign color="white" size={18} />
+              <Text style={styles.withdrawText}>Withdraw Income</Text>
+           </TouchableOpacity>
+        </View>
+      )}
+
+      <View style={styles.stats}>
+        {isMale && (
+          <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('RechargeHub')}>
+            <Coins color="#FFD700" size={24} />
+            <Text style={styles.statValue}>{balance}</Text>
+            <Text style={styles.statLabel}>Recharge</Text>
+          </TouchableOpacity>
+        )}
+        {!isMale && (
+           <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('Wallet')}>
+              <Coins color="#FFD700" size={24} />
+              <Text style={styles.statValue}>{balance}</Text>
+              <Text style={styles.statLabel}>Diamonds</Text>
+           </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('VIPStore')}>
+          <Award color="#FFD700" size={24} />
+          <Text style={styles.statValue}>{totalSpent > 5000 ? 'Gold' : totalSpent > 1000 ? 'Silver' : 'Member'}</Text>
+          <Text style={styles.statLabel}>Status</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Trophy Cabinet */}
+      <View style={styles.trophySection}>
+        <Text style={styles.sectionTitle}>Trophy Cabinet</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trophyCabinet}>
+          {trophyData.length > 0 ? trophyData.map((item) => (
+            <View key={item.id} style={styles.trophyItem}>
+              <View style={styles.trophyIcon}>
+                <Award color={COLORS.primary} size={32} />
+              </View>
+              <Text style={styles.trophyCount}>x{item.count}</Text>
+              <Text style={styles.trophyName} numberOfLines={1}>{item.name || 'Gift'}</Text>
+            </View>
+          )) : (
+            <Text style={styles.emptyTrophyText}>No gifts received yet.</Text>
+          )}
+        </ScrollView>
       </View>
 
       {/* Menu List */}
@@ -178,6 +243,7 @@ const styles = StyleSheet.create({
   },
   nameContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
   name: { fontSize: 24, fontWeight: 'bold', marginRight: 5 },
+  tierName: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary, marginBottom: 5 },
   bio: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 15, paddingHorizontal: 40, textAlign: 'center' },
   editButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
   editButtonText: { color: COLORS.textSecondary },
@@ -193,12 +259,31 @@ const styles = StyleSheet.create({
   dashValue: { fontSize: 18, fontWeight: 'bold', marginVertical: 4 },
   dashLabel: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '500' },
 
-  menuSection: { marginTop: 10, backgroundColor: COLORS.white },
+  earningSection: { backgroundColor: 'white', marginTop: 10, padding: 20, alignItems: 'center' },
+  earningHeader: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 15 },
+  earningTitle: { fontSize: 16, fontWeight: '600' },
+  earningValue: { fontSize: 18, fontWeight: 'bold', color: '#4CD964' },
+  withdrawButton: { backgroundColor: COLORS.primary, width: '100%', height: 45, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  withdrawText: { color: 'white', fontWeight: 'bold', marginLeft: 8 },
+
+  stats: { flexDirection: 'row', backgroundColor: COLORS.white, marginTop: 10, paddingVertical: 20 },
+  statItem: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 18, fontWeight: 'bold', marginTop: 5 },
+  statLabel: { color: COLORS.textSecondary, fontSize: 12 },
+
+  trophySection: { marginTop: 10, backgroundColor: COLORS.white, padding: 20 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 15 },
+  trophyCabinet: { flexDirection: 'row' },
+  trophyItem: { alignItems: 'center', marginRight: 20, width: 80 },
+  trophyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FFF5F7', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
+  trophyCount: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary },
+  trophyName: { fontSize: 12, color: COLORS.textSecondary },
+  emptyTrophyText: { color: COLORS.textSecondary, fontStyle: 'italic' },
+
+  menuSection: { marginTop: 20, backgroundColor: COLORS.white },
   menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   menuItemLeft: { flexDirection: 'row', alignItems: 'center' },
   menuItemLabel: { marginLeft: 15, fontSize: 16, fontWeight: '500', color: COLORS.text },
-
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 15 },
 
   lightbox: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeLightbox: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
