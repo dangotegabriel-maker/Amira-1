@@ -2,12 +2,16 @@
 import React from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
 import { COLORS } from '../theme/COLORS';
+import { ledgerService } from '../services/ledgerService';
 
-const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, isBusy = false, children }) => {
+const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, isBusy = false, xp = 0, children }) => {
   const glowAnim = React.useRef(new Animated.Value(0)).current;
 
+  const tier = ledgerService.getTier(xp);
+  const showGlow = isRankOne || xp >= 1000; // Show glow for Noble and above
+
   React.useEffect(() => {
-    if (isRankOne) {
+    if (showGlow) {
       Animated.loop(
         Animated.sequence([
           Animated.timing(glowAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
@@ -15,7 +19,7 @@ const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, isBusy = f
         ])
       ).start();
     }
-  }, [isRankOne]);
+  }, [showGlow]);
 
   const scale = glowAnim.interpolate({
     inputRange: [0, 1],
@@ -30,9 +34,12 @@ const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, isBusy = f
   // Determine dot color
   const dotColor = isBusy ? '#F59E0B' : (isOnline ? '#22C55E' : 'transparent');
 
+  // Determine glow color: #1 rank gets Gold pulse, others get Tier color
+  const glowColor = isRankOne ? '#FFD700' : tier.color;
+
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      {isRankOne && (
+      {showGlow && (
         <Animated.View
           style={[
             styles.glow,
@@ -41,7 +48,9 @@ const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, isBusy = f
               height: size,
               borderRadius: size / 2,
               transform: [{ scale }],
-              opacity
+              opacity,
+              backgroundColor: glowColor,
+              shadowColor: glowColor,
             }
           ]}
         />
@@ -72,8 +81,6 @@ const styles = StyleSheet.create({
   },
   glow: {
     position: 'absolute',
-    backgroundColor: '#FFD700',
-    shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 10,

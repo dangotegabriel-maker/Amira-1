@@ -8,7 +8,9 @@ export const ledgerService = {
   upvotes: 0,
   receivedGifts: {}, // { giftId: count }
   profileViews: 0,
-  detailedGifts: [], // Array of { id, type, giftId, amount, name, timestamp, otherUser }
+  detailedGifts: [],
+  diamondBalance: 0, // For females (withdrawal currency)
+  wealthXP: 0, // For males (ranking currency)
   isInitialized: false,
 
   init: async () => {
@@ -21,6 +23,8 @@ export const ledgerService = {
       const upvotes = await AsyncStorage.getItem('upvotes_count');
       const views = await AsyncStorage.getItem('profile_views_count');
       const detailed = await AsyncStorage.getItem('detailed_gifts');
+      const diamonds = await AsyncStorage.getItem('diamond_balance');
+      const xp = await AsyncStorage.getItem('wealth_xp');
 
       if (balance) ledgerService.currentBalance = parseInt(balance);
       if (txns) ledgerService.transactions = JSON.parse(txns);
@@ -29,6 +33,8 @@ export const ledgerService = {
       if (upvotes) ledgerService.upvotes = parseInt(upvotes);
       if (views) ledgerService.profileViews = parseInt(views);
       if (detailed) ledgerService.detailedGifts = JSON.parse(detailed);
+      if (diamonds) ledgerService.diamondBalance = parseInt(diamonds);
+      if (xp) ledgerService.wealthXP = parseInt(xp);
 
       ledgerService.isInitialized = true;
     } catch (e) {
@@ -36,9 +42,11 @@ export const ledgerService = {
     }
   },
 
-  getTransactions: async () => {
-    await ledgerService.init();
-    return ledgerService.transactions;
+  getTier: (xp) => {
+    if (xp >= 10000) return { name: 'Emperor', color: '#B9F2FF' }; // Diamond
+    if (xp >= 5000) return { name: 'Royalty', color: '#FFD700' }; // Gold
+    if (xp >= 1000) return { name: 'Noble', color: '#C0C0C0' }; // Silver
+    return { name: 'Commoner', color: '#CD7F32' }; // Bronze
   },
 
   getBalance: async () => {
@@ -46,34 +54,14 @@ export const ledgerService = {
     return ledgerService.currentBalance;
   },
 
-  getTotalSpent: async () => {
+  getDiamondBalance: async () => {
     await ledgerService.init();
-    return ledgerService.totalSpent;
+    return ledgerService.diamondBalance;
   },
 
-  getUpvotes: async () => {
+  getWealthXP: async () => {
     await ledgerService.init();
-    return ledgerService.upvotes;
-  },
-
-  getProfileViews: async () => {
-    await ledgerService.init();
-    return ledgerService.profileViews;
-  },
-
-  getReceivedGifts: async () => {
-    await ledgerService.init();
-    return ledgerService.receivedGifts;
-  },
-
-  getDetailedGifts: async () => {
-    await ledgerService.init();
-    return ledgerService.detailedGifts;
-  },
-
-  getTotalGiftsReceived: async () => {
-    await ledgerService.init();
-    return Object.values(ledgerService.receivedGifts).reduce((a, b) => a + b, 0);
+    return ledgerService.wealthXP;
   },
 
   addTransaction: async (type, amount, metadata = {}) => {
@@ -99,13 +87,14 @@ export const ledgerService = {
 
     if (type === 'spend') {
       ledgerService.totalSpent += amount;
-      // Record detailed sent gift
+      ledgerService.wealthXP += amount; // 1 Coin = 1 XP
+
       if (metadata.category === 'Gifting') {
         const detailedEntry = {
           id: transaction.id,
           type: 'sent',
           giftId: metadata.giftId,
-          amount: 1, // Assuming 1 per tap in this mock
+          amount: 1,
           timestamp: transaction.timestamp,
           otherUser: metadata.recipientName || 'User'
         };
@@ -118,6 +107,7 @@ export const ledgerService = {
       await AsyncStorage.setItem('coin_transactions', JSON.stringify(ledgerService.transactions));
       await AsyncStorage.setItem('total_spent', ledgerService.totalSpent.toString());
       await AsyncStorage.setItem('detailed_gifts', JSON.stringify(ledgerService.detailedGifts));
+      await AsyncStorage.setItem('wealth_xp', ledgerService.wealthXP.toString());
     } catch (e) {
       console.error('Ledger save error:', e);
     }
@@ -125,18 +115,40 @@ export const ledgerService = {
     return transaction;
   },
 
-  buyCoins: async (amount, tierId) => {
-    return await ledgerService.addTransaction('buy', amount, { tierId, source: 'IAP' });
-  },
-
   spendCoins: async (amount, recipientId, giftId, recipientName) => {
-    return await ledgerService.addTransaction('spend', amount, { recipientId, giftId, recipientName, category: 'Gifting' });
+    // Implement 60/40 Split: Receiver gets 60% in Diamonds
+    return await ledgerService.addTransaction('spend', amount, {
+      recipientId,
+      giftId,
+      recipientName,
+      category: 'Gifting',
+      platformCommission: 0.4
+    });
   },
 
-  // Mock receiving a gift (for the Trophy Cabinet and Ledger)
-  recordReceivedGift: async (giftId, senderName) => {
+  // Mock billing per minute for calls
+  billCallMinute: async (rate, recipientId, recipientName) => {
+    const txn = await ledgerService.addTransaction('spend', rate, {
+      recipientId,
+      recipientName,
+      category: 'Call',
+      unit: 'minute'
+    });
+
+    // In a real app, the server would credit the recipient.
+    // For local simulation, we can log it.
+    console.log(`Call billed: ${rate} coins. Recipient ${recipientName} earned ${Math.floor(rate * 0.6)} diamonds.`);
+
+    return txn;
+  },
+
+  recordReceivedGift: async (giftId, senderName, coinValue = 0) => {
     await ledgerService.init();
     ledgerService.receivedGifts[giftId] = (ledgerService.receivedGifts[giftId] || 0) + 1;
+
+    // Female receives 60% of coin value as Diamonds
+    const diamondCut = Math.floor(coinValue * 0.6);
+    ledgerService.diamondBalance += diamondCut;
 
     const detailedEntry = {
       id: `recv_${Date.now()}`,
@@ -144,37 +156,28 @@ export const ledgerService = {
       giftId: giftId,
       amount: 1,
       timestamp: new Date(),
-      otherUser: senderName || 'User'
+      otherUser: senderName || 'User',
+      diamondsEarned: diamondCut
     };
     ledgerService.detailedGifts.unshift(detailedEntry);
 
     try {
       await AsyncStorage.setItem('received_gifts', JSON.stringify(ledgerService.receivedGifts));
       await AsyncStorage.setItem('detailed_gifts', JSON.stringify(ledgerService.detailedGifts));
+      await AsyncStorage.setItem('diamond_balance', ledgerService.diamondBalance.toString());
     } catch (e) {
       console.error('Ledger record gift error:', e);
     }
   },
 
-  // Mock receiving an upvote
-  recordUpvote: async () => {
+  withdrawDiamonds: async (amount, method) => {
     await ledgerService.init();
-    ledgerService.upvotes += 1;
-    try {
-      await AsyncStorage.setItem('upvotes_count', ledgerService.upvotes.toString());
-    } catch (e) {
-      console.error('Ledger record upvote error:', e);
-    }
-  },
+    if (ledgerService.diamondBalance < amount) throw new Error('Insufficient diamonds');
 
-  // Mock profile view
-  recordProfileView: async () => {
-    await ledgerService.init();
-    ledgerService.profileViews += 1;
-    try {
-      await AsyncStorage.setItem('profile_views_count', ledgerService.profileViews.toString());
-    } catch (e) {
-      console.error('Ledger record profile view error:', e);
-    }
+    ledgerService.diamondBalance -= amount;
+    await AsyncStorage.setItem('diamond_balance', ledgerService.diamondBalance.toString());
+
+    console.log(`Withdrawn ${amount} diamonds via ${method}`);
+    return { success: true };
   }
 };

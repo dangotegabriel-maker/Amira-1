@@ -28,7 +28,7 @@ const INITIAL_ICEBREAKERS = [
 ];
 
 const ChatDetailScreen = ({ route, navigation }) => {
-  const { name, userId = 'target_user_id', totalSpent = 0, isBusy = false } = route.params || { name: 'Chat' };
+  const { name, userId = 'target_user_id', totalSpent = 0, isBusy = false, otherXP = 0 } = route.params || { name: 'Chat' };
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
@@ -38,6 +38,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [showIcebreakers, setShowIcebreakers] = useState(true);
   const [replyTo, setReplyTo] = useState(null);
   const [isWaitingRoomVisible, setIsWaitingRoomVisible] = useState(false);
+  const [entranceNotification, setEntranceNotification] = useState(null);
 
   const { triggerGiftOverlay } = useGifting();
 
@@ -63,10 +64,20 @@ const ChatDetailScreen = ({ route, navigation }) => {
     ]);
 
     socketService.connect('current_user_id');
+
+    // Emperor Entrance Logic
+    const tier = ledgerService.getTier(otherXP);
+    if (tier.name === 'Emperor') {
+       setEntranceNotification(`👑 The Emperor has entered the room.`);
+       setTimeout(() => setEntranceNotification(null), 5000);
+    }
+
     const handleIncomingGift = async (data) => {
-      await ledgerService.recordReceivedGift(data.giftId);
-      hapticService.longVibration();
+      // Receiver gets 60% in Diamonds
       const giftAsset = getGiftAsset(data.giftId);
+      await ledgerService.recordReceivedGift(data.giftId, data.senderName, giftAsset.cost);
+
+      hapticService.longVibration();
       const newMessage = {
         id: Date.now().toString(),
         text: `Received a ${giftAsset.name || 'gift'} 🎁`,
@@ -314,6 +325,13 @@ const ChatDetailScreen = ({ route, navigation }) => {
               }}
             />
           )}
+
+          {entranceNotification && (
+            <View style={styles.entranceBanner}>
+               <Text style={styles.entranceText}>{entranceNotification}</Text>
+            </View>
+          )}
+
           <KeyboardAvoidingView
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -486,6 +504,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center'
   },
   recordingText: { color: COLORS.primary, fontWeight: 'bold', marginLeft: 10 },
+
+  entranceBanner: { backgroundColor: '#F0F9FF', padding: 10, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#BAE6FD' },
+  entranceText: { color: '#0369A1', fontWeight: 'bold', fontSize: 12 },
 
   inputArea: { backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#EEE', paddingBottom: Platform.OS === 'ios' ? 30 : 10 },
   replyBar: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#F9F9F9', borderBottomWidth: 1, borderBottomColor: '#EEE' },
