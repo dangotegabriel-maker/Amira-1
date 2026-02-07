@@ -5,6 +5,7 @@ export const ledgerService = {
   transactions: [],
   currentBalance: 0,
   totalSpent: 0,
+  upvotes: 0,
   receivedGifts: {}, // { giftId: count }
   isInitialized: false,
 
@@ -15,11 +16,13 @@ export const ledgerService = {
       const txns = await AsyncStorage.getItem('coin_transactions');
       const spent = await AsyncStorage.getItem('total_spent');
       const received = await AsyncStorage.getItem('received_gifts');
+      const upvotes = await AsyncStorage.getItem('upvotes_count');
 
       if (balance) ledgerService.currentBalance = parseInt(balance);
       if (txns) ledgerService.transactions = JSON.parse(txns);
       if (spent) ledgerService.totalSpent = parseInt(spent);
       if (received) ledgerService.receivedGifts = JSON.parse(received);
+      if (upvotes) ledgerService.upvotes = parseInt(upvotes);
 
       ledgerService.isInitialized = true;
     } catch (e) {
@@ -42,9 +45,19 @@ export const ledgerService = {
     return ledgerService.totalSpent;
   },
 
+  getUpvotes: async () => {
+    await ledgerService.init();
+    return ledgerService.upvotes;
+  },
+
   getReceivedGifts: async () => {
     await ledgerService.init();
     return ledgerService.receivedGifts;
+  },
+
+  getTotalGiftsReceived: async () => {
+    await ledgerService.init();
+    return Object.values(ledgerService.receivedGifts).reduce((a, b) => a + b, 0);
   },
 
   addTransaction: async (type, amount, metadata = {}) => {
@@ -99,6 +112,17 @@ export const ledgerService = {
       await AsyncStorage.setItem('received_gifts', JSON.stringify(ledgerService.receivedGifts));
     } catch (e) {
       console.error('Ledger record gift error:', e);
+    }
+  },
+
+  // Mock receiving an upvote
+  recordUpvote: async () => {
+    await ledgerService.init();
+    ledgerService.upvotes += 1;
+    try {
+      await AsyncStorage.setItem('upvotes_count', ledgerService.upvotes.toString());
+    } catch (e) {
+      console.error('Ledger record upvote error:', e);
     }
   }
 };

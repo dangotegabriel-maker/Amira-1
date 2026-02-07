@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Settings, Award, ChevronRight, Coins } from 'lucide-react-native';
+import { Settings, Award, ChevronRight, Coins, Heart, Gift, ArrowUpCircle } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';
 import { getGiftAsset } from '../../services/giftingService';
 import { useIsFocused } from '@react-navigation/native';
 import VIPBadge from '../../components/VIPBadge';
+import GiftingLeaderboard from '../../components/GiftingLeaderboard';
+
+const { width } = Dimensions.get('window');
 
 const MyProfileScreen = ({ navigation }) => {
   const isFocused = useIsFocused();
   const [balance, setBalance] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
+  const [upvotes, setUpvotes] = useState(0);
+  const [totalReceivedCount, setTotalReceivedCount] = useState(0);
   const [receivedGifts, setReceivedGifts] = useState({});
 
   useEffect(() => {
@@ -22,9 +27,14 @@ const MyProfileScreen = ({ navigation }) => {
   const loadData = async () => {
     const b = await ledgerService.getBalance();
     const s = await ledgerService.getTotalSpent();
+    const u = await ledgerService.getUpvotes();
+    const trc = await ledgerService.getTotalGiftsReceived();
     const r = await ledgerService.getReceivedGifts();
+
     setBalance(b);
     setTotalSpent(s);
+    setUpvotes(u);
+    setTotalReceivedCount(trc);
     setReceivedGifts(r);
   };
 
@@ -33,8 +43,8 @@ const MyProfileScreen = ({ navigation }) => {
     return { id, count, name: asset.name };
   });
 
-  return (
-    <ScrollView style={styles.container}>
+  const renderHeader = () => (
+    <View>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
           <View style={styles.avatar} />
@@ -46,12 +56,31 @@ const MyProfileScreen = ({ navigation }) => {
           <Text style={styles.name}>John Doe</Text>
           <VIPBadge totalSpent={totalSpent} />
         </View>
+        <Text style={styles.bio}>Lover of luxury and high-stakes social flexing. 🥂</Text>
         <TouchableOpacity
           style={styles.editButton}
           onPress={() => navigation.navigate('EditProfile')}
         >
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.dashboard}>
+        <View style={styles.dashItem}>
+          <Gift color={COLORS.primary} size={24} />
+          <Text style={styles.dashValue}>{totalReceivedCount}</Text>
+          <Text style={styles.dashLabel}>Gifts Received</Text>
+        </View>
+        <View style={styles.dashItem}>
+          <ArrowUpCircle color="#4CD964" size={24} />
+          <Text style={styles.dashValue}>{upvotes}</Text>
+          <Text style={styles.dashLabel}>Upvotes</Text>
+        </View>
+        <View style={styles.dashItem}>
+          <ArrowUpCircle color="#007AFF" size={24} style={{ transform: [{ rotate: '180deg' }] }} />
+          <Text style={styles.dashValue}>{totalSpent}</Text>
+          <Text style={styles.dashLabel}>Gifts Sent</Text>
+        </View>
       </View>
 
       <View style={styles.stats}>
@@ -85,6 +114,8 @@ const MyProfileScreen = ({ navigation }) => {
         </ScrollView>
       </View>
 
+      <GiftingLeaderboard />
+
       <View style={styles.menu}>
         {[
           { icon: <Settings size={20} />, label: 'Settings', screen: 'Settings' },
@@ -104,12 +135,23 @@ const MyProfileScreen = ({ navigation }) => {
           </TouchableOpacity>
         ))}
       </View>
-    </ScrollView>
+      <View style={{ height: 50 }} />
+    </View>
+  );
+
+  return (
+    <FlatList
+      data={[]}
+      renderItem={null}
+      ListHeaderComponent={renderHeader}
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 20 }}
+    />
   );
 };
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F8F8' },
-  header: { alignItems: 'center', paddingVertical: 40, backgroundColor: COLORS.white },
+  header: { alignItems: 'center', paddingVertical: 30, backgroundColor: COLORS.white },
   avatarContainer: { position: 'relative', marginBottom: 15 },
   avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#EEE' },
   vipBadgeContainer: {
@@ -125,14 +167,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 1,
   },
-  nameContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  nameContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
   name: { fontSize: 24, fontWeight: 'bold', marginRight: 5 },
+  bio: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 15, paddingHorizontal: 40, textAlign: 'center' },
   editButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
   editButtonText: { color: COLORS.textSecondary },
+
+  dashboard: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingVertical: 20 },
+  dashItem: { flex: 1, alignItems: 'center' },
+  dashValue: { fontSize: 18, fontWeight: 'bold', marginVertical: 4 },
+  dashLabel: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '500' },
+
   stats: { flexDirection: 'row', backgroundColor: COLORS.white, marginTop: 10, paddingVertical: 20 },
   statItem: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 18, fontWeight: 'bold', marginTop: 5 },
   statLabel: { color: COLORS.textSecondary, fontSize: 12 },
+
   trophySection: { marginTop: 10, backgroundColor: COLORS.white, padding: 20 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
   trophyCabinet: { flexDirection: 'row' },
@@ -141,6 +191,7 @@ const styles = StyleSheet.create({
   trophyCount: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary },
   trophyName: { fontSize: 12, color: COLORS.textSecondary },
   emptyTrophyText: { color: COLORS.textSecondary, fontStyle: 'italic' },
+
   menu: { marginTop: 10, backgroundColor: COLORS.white },
   menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   menuItemLeft: { flexDirection: 'row', alignItems: 'center' },
