@@ -4,9 +4,9 @@ export const GIFT_ASSETS = {
   // Popular
   'p1': { // Rose
     name: 'Rose',
-    lottie: require('../../assets/animations/sparkles.json'),
+    // lottie: require('../../assets/animations/sparkles.json'), // Disabled local require to prevent build break
     lottieUrl: 'https://assets9.lottiefiles.com/packages/lf20_mr67vnu6.json',
-    sfx: require('../../assets/sounds/chime.mp3'),
+    // sfx: require('../../assets/sounds/chime.mp3'), // Disabled local require to prevent build break
     sfxUrl: 'https://www.soundjay.com/nature/wind-chime-1.mp3'
   },
   'p2': { // Finger Heart

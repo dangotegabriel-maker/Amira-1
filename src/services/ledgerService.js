@@ -1,12 +1,11 @@
 // src/services/ledgerService.js
-// Service for secure double-entry transaction tracking for coins
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const ledgerService = {
-  // Mock double-entry ledger
-  // Each entry has: id, type (buy/spend), amount, balanceAfter, timestamp
   transactions: [],
   currentBalance: 0,
+  totalSpent: 0,
+  receivedGifts: {}, // { giftId: count }
   isInitialized: false,
 
   init: async () => {
@@ -14,8 +13,14 @@ export const ledgerService = {
     try {
       const balance = await AsyncStorage.getItem('coin_balance');
       const txns = await AsyncStorage.getItem('coin_transactions');
+      const spent = await AsyncStorage.getItem('total_spent');
+      const received = await AsyncStorage.getItem('received_gifts');
+
       if (balance) ledgerService.currentBalance = parseInt(balance);
       if (txns) ledgerService.transactions = JSON.parse(txns);
+      if (spent) ledgerService.totalSpent = parseInt(spent);
+      if (received) ledgerService.receivedGifts = JSON.parse(received);
+
       ledgerService.isInitialized = true;
     } catch (e) {
       console.error('Ledger init error:', e);
@@ -30,6 +35,16 @@ export const ledgerService = {
   getBalance: async () => {
     await ledgerService.init();
     return ledgerService.currentBalance;
+  },
+
+  getTotalSpent: async () => {
+    await ledgerService.init();
+    return ledgerService.totalSpent;
+  },
+
+  getReceivedGifts: async () => {
+    await ledgerService.init();
+    return ledgerService.receivedGifts;
   },
 
   addTransaction: async (type, amount, metadata = {}) => {
@@ -53,14 +68,18 @@ export const ledgerService = {
     ledgerService.transactions.unshift(transaction);
     ledgerService.currentBalance = newBalance;
 
+    if (type === 'spend') {
+      ledgerService.totalSpent += amount;
+    }
+
     try {
       await AsyncStorage.setItem('coin_balance', newBalance.toString());
       await AsyncStorage.setItem('coin_transactions', JSON.stringify(ledgerService.transactions));
+      await AsyncStorage.setItem('total_spent', ledgerService.totalSpent.toString());
     } catch (e) {
       console.error('Ledger save error:', e);
     }
 
-    console.log(`Transaction successful: ${type} ${amount}. New balance: ${newBalance}`);
     return transaction;
   },
 
@@ -70,5 +89,16 @@ export const ledgerService = {
 
   spendCoins: async (amount, recipientId, giftId) => {
     return await ledgerService.addTransaction('spend', amount, { recipientId, giftId, category: 'Gifting' });
+  },
+
+  // Mock receiving a gift (for the Trophy Cabinet)
+  recordReceivedGift: async (giftId) => {
+    await ledgerService.init();
+    ledgerService.receivedGifts[giftId] = (ledgerService.receivedGifts[giftId] || 0) + 1;
+    try {
+      await AsyncStorage.setItem('received_gifts', JSON.stringify(ledgerService.receivedGifts));
+    } catch (e) {
+      console.error('Ledger record gift error:', e);
+    }
   }
 };

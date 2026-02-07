@@ -12,6 +12,7 @@ const GiftingOverlay = ({ giftId, senderName, combo = 1, onComplete }) => {
   useEffect(() => {
     const asset = getGiftAsset(giftId);
     if (asset && asset.sfxUrl) {
+      // Trigger sound simultaneously with the animation start
       soundService.play(asset.sfxUrl);
     }
   }, []);
@@ -48,7 +49,7 @@ const GiftingOverlay = ({ giftId, senderName, combo = 1, onComplete }) => {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 9999,
+    zIndex: 99999, // Max zIndex for Authority Phase
     backgroundColor: 'transparent',
   },
   content: {
@@ -69,7 +70,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 10000
+    zIndex: 100000
   },
   bannerText: {
     color: '#FFF',

@@ -8,14 +8,16 @@ import { translationService } from '../../services/translationService';
 import { socketService } from '../../services/socketService';
 import { soundService } from '../../services/soundService';
 import { getGiftAsset } from '../../services/giftingService';
+import { ledgerService } from '../../services/ledgerService';
 import { useGifting } from '../../context/GiftingContext';
 import ReportUserModal from '../../components/ReportUserModal';
 import GiftTray from '../../components/GiftTray';
 import AnchoredMenu from '../../components/AnchoredMenu';
+import VIPBadge from '../../components/VIPBadge';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ChatDetailScreen = ({ route, navigation }) => {
-  const { name, userId = 'target_user_id' } = route.params || { name: 'Chat' };
+  const { name, userId = 'target_user_id', totalSpent = 0 } = route.params || { name: 'Chat' };
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
@@ -48,7 +50,10 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
     // Connect to socket
     socketService.connect('current_user_id');
-    const handleIncomingGift = (data) => {
+    const handleIncomingGift = async (data) => {
+      // Record the gift for the Trophy Cabinet
+      await ledgerService.recordReceivedGift(data.giftId);
+
       const giftAsset = getGiftAsset(data.giftId);
       const newMessage = {
         id: Date.now().toString(),
@@ -88,6 +93,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
+      headerTitle: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text }}>{name}</Text>
+          <VIPBadge totalSpent={totalSpent} />
+        </View>
+      ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity style={{ marginRight: 15 }} onPress={() => {}}>
@@ -105,9 +116,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       ),
-      title: name,
     });
-  }, [navigation, name]);
+  }, [navigation, name, totalSpent]);
 
   const menuOptions = [
     { label: "Report User", onPress: () => setIsReportModalVisible(true) },
