@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, Alert, Keyboard, ScrollView } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Video, Send, Mic, Plus, Image as ImageIcon, MoreVertical, Gift } from 'lucide-react-native';
+import { Video, Send, Mic, Plus, Image as ImageIcon, MoreVertical, Gift, X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { moderationService } from '../../services/moderationService';
 import { translationService } from '../../services/translationService';
@@ -16,11 +16,11 @@ import AnchoredMenu from '../../components/AnchoredMenu';
 import VIPBadge from '../../components/VIPBadge';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const ICEBREAKERS = [
+const INITIAL_ICEBREAKERS = [
   "Hey! 👋",
-  "You look great today! ✨",
-  "Send me a gift? 🎁",
-  "Want to chat? 😊",
+  "Your profile is 🔥",
+  "Wanna chat? 😊",
+  "Gift for you? 🎁",
   "Hello from the other side! 🌎"
 ];
 
@@ -32,6 +32,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [isGiftTrayVisible, setIsGiftTrayVisible] = useState(false);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
+  const [showIcebreakers, setShowIcebreakers] = useState(true);
 
   const { triggerGiftOverlay } = useGifting();
 
@@ -179,6 +180,9 @@ const ChatDetailScreen = ({ route, navigation }) => {
       };
       setMessages([...messages, newMessage]);
       setMessage('');
+      if (typeof textToSend === 'string') {
+        setShowIcebreakers(false); // Clear the chip row after quick reply
+      }
     }
   };
 
@@ -282,18 +286,25 @@ const ChatDetailScreen = ({ route, navigation }) => {
         />
 
         <View style={styles.inputArea}>
-           <ScrollView
-             horizontal
-             showsHorizontalScrollIndicator={false}
-             style={styles.icebreakers}
-             contentContainerStyle={{ paddingHorizontal: 10 }}
-           >
-              {ICEBREAKERS.map((text, i) => (
-                <TouchableOpacity key={i} style={styles.icebreakerChip} onPress={() => handleSend(text)}>
-                   <Text style={styles.icebreakerText}>{text}</Text>
-                </TouchableOpacity>
-              ))}
-           </ScrollView>
+           {showIcebreakers && (
+             <View style={styles.icebreakerContainer}>
+               <ScrollView
+                 horizontal
+                 showsHorizontalScrollIndicator={false}
+                 style={styles.icebreakers}
+                 contentContainerStyle={{ paddingHorizontal: 10 }}
+               >
+                  {INITIAL_ICEBREAKERS.map((text, i) => (
+                    <TouchableOpacity key={i} style={styles.icebreakerChip} onPress={() => handleSend(text)}>
+                       <Text style={styles.icebreakerText}>{text}</Text>
+                    </TouchableOpacity>
+                  ))}
+               </ScrollView>
+               <TouchableOpacity style={styles.closeIcebreakers} onPress={() => setShowIcebreakers(false)}>
+                  <X size={14} color="#999" />
+               </TouchableOpacity>
+             </View>
+           )}
 
            <View style={styles.inputBar}>
             <TouchableOpacity style={styles.iconButton} onPress={pickImage}>
@@ -304,7 +315,10 @@ const ChatDetailScreen = ({ route, navigation }) => {
                 style={styles.input}
                 placeholder="Type a message..."
                 value={message}
-                onChangeText={setMessage}
+                onChangeText={(t) => {
+                  setMessage(t);
+                  if (t.length > 0) setShowIcebreakers(false);
+                }}
                 multiline
               />
             </View>
@@ -380,9 +394,11 @@ const styles = StyleSheet.create({
   recordingText: { color: COLORS.primary, fontWeight: 'bold', marginLeft: 10 },
 
   inputArea: { backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#EEE', paddingBottom: Platform.OS === 'ios' ? 30 : 10 },
+  icebreakerContainer: { flexDirection: 'row', alignItems: 'center' },
   icebreakers: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   icebreakerChip: { backgroundColor: '#F0F0F0', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, marginRight: 10 },
   icebreakerText: { color: COLORS.text, fontSize: 13, fontWeight: '500' },
+  closeIcebreakers: { padding: 10 },
 
   inputBar: {
     flexDirection: 'row',

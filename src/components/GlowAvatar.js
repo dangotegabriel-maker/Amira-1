@@ -47,7 +47,14 @@ const GlowAvatar = ({ size = 60, isRankOne = false, isOnline = false, children }
         {children || <View style={[styles.placeholder, { borderRadius: size / 2 }]} />}
       </View>
       {isOnline && (
-        <View style={[styles.onlinePulse, { width: size * 0.25, height: size * 0.25, borderRadius: (size * 0.25) / 2 }]} />
+        <View style={[
+          styles.onlinePulse,
+          {
+            width: Math.max(12, size * 0.2),
+            height: Math.max(12, size * 0.2),
+            borderRadius: Math.max(12, size * 0.2) / 2
+          }
+        ]} />
       )}
     </View>
   );
@@ -79,11 +86,18 @@ const styles = StyleSheet.create({
   },
   onlinePulse: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    backgroundColor: '#4CD964',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#22C55E', // Vibrant Green (Tailwind green-500 equivalent)
     borderWidth: 2,
     borderColor: 'white',
+    zIndex: 10,
+    // Add shadow to make it pop
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
   }
 });
 
