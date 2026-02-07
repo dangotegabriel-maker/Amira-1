@@ -4,6 +4,7 @@ import { View, StyleSheet, Dimensions, Text } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { getGiftAsset } from '../services/giftingService';
 import { soundService } from '../services/soundService';
+import { hapticService } from '../services/hapticService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -14,6 +15,9 @@ const GiftingOverlay = ({ giftId, senderName, combo = 1, onComplete }) => {
     if (asset && asset.sfxUrl) {
       // Trigger sound simultaneously with the animation start
       soundService.play(asset.sfxUrl);
+
+      // Trigger long vibration for premium feel
+      hapticService.longVibration();
     }
   }, []);
 
@@ -49,7 +53,7 @@ const GiftingOverlay = ({ giftId, senderName, combo = 1, onComplete }) => {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 99999, // Max zIndex for Authority Phase
+    zIndex: 99999,
     backgroundColor: 'transparent',
   },
   content: {

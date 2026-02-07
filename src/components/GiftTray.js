@@ -5,6 +5,7 @@ import { COLORS } from '../theme/COLORS';
 import { X, Coins, PlusCircle } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { ledgerService } from '../services/ledgerService';
+import { hapticService } from '../services/hapticService';
 import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
@@ -72,6 +73,7 @@ const GiftTray = ({ visible, onClose, onGiftSent }) => {
 
   const handleGiftTap = async (gift) => {
     if (balance < gift.cost) {
+      hapticService.error();
       alert("Insufficient coins! Please recharge.");
       return;
     }
@@ -79,6 +81,7 @@ const GiftTray = ({ visible, onClose, onGiftSent }) => {
     // Spend coins
     await ledgerService.spendCoins(gift.cost, 'target_user_id', gift.id);
     loadBalance();
+    hapticService.mediumImpact();
 
     // Combo Logic
     if (lastGiftId === gift.id) {
@@ -105,6 +108,7 @@ const GiftTray = ({ visible, onClose, onGiftSent }) => {
   };
 
   const handleRecharge = () => {
+    hapticService.lightImpact();
     onClose();
     navigation.navigate('RechargeHub');
   };
@@ -124,7 +128,7 @@ const GiftTray = ({ visible, onClose, onGiftSent }) => {
               <Text style={styles.balanceText}>{balance}</Text>
             </View>
             <Text style={styles.title}>Send Gift</Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={() => { hapticService.lightImpact(); onClose(); }}>
               <X color={COLORS.white} size={24} />
             </TouchableOpacity>
           </View>
@@ -133,7 +137,7 @@ const GiftTray = ({ visible, onClose, onGiftSent }) => {
             {Object.keys(GIFTS).map(cat => (
               <TouchableOpacity
                 key={cat}
-                onPress={() => setCategory(cat)}
+                onPress={() => { hapticService.lightImpact(); setCategory(cat); }}
                 style={[styles.tab, category === cat && styles.activeTab]}
               >
                 <Text style={[styles.tabText, category === cat && styles.activeTabText]}>{cat}</Text>

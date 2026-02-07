@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, Eye } from 'lucide-react-native';
+import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, Eye, Clock } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';
 import { getGiftAsset } from '../../services/giftingService';
 import { useIsFocused } from '@react-navigation/native';
 import VIPBadge from '../../components/VIPBadge';
 import GiftingLeaderboard from '../../components/GiftingLeaderboard';
+import GlowAvatar from '../../components/GlowAvatar';
 
 const { width } = Dimensions.get('window');
 
@@ -18,6 +19,13 @@ const MyProfileScreen = ({ navigation }) => {
   const [totalReceivedCount, setTotalReceivedCount] = useState(0);
   const [profileViews, setProfileViews] = useState(0);
   const [receivedGifts, setReceivedGifts] = useState({});
+
+  const [visitors, setVisitors] = useState([
+    { id: '1', name: 'Jessica', time: '2m ago', isOnline: true },
+    { id: '2', name: 'Mark', time: '15m ago', isOnline: false },
+    { id: '3', name: 'Sarah', time: '1h ago', isOnline: true },
+    { id: '4', name: 'David', time: '3h ago', isOnline: false },
+  ]);
 
   useEffect(() => {
     if (isFocused) {
@@ -68,20 +76,6 @@ const MyProfileScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.visitorSection}>
-         <TouchableOpacity style={styles.visitorCard} onPress={() => {}}>
-            <View style={styles.visitorLeft}>
-               <View style={styles.visitorIcon}>
-                  <Eye color={COLORS.primary} size={20} />
-               </View>
-               <Text style={styles.visitorText}>
-                  <Text style={{ fontWeight: 'bold' }}>{profileViews}</Text> people viewed your profile today!
-               </Text>
-            </View>
-            <ChevronRight color="#CCC" size={20} />
-         </TouchableOpacity>
-      </View>
-
       <View style={styles.dashboard}>
         <View style={styles.dashItem}>
           <Gift color={COLORS.primary} size={24} />
@@ -111,6 +105,33 @@ const MyProfileScreen = ({ navigation }) => {
           <Text style={styles.statValue}>{totalSpent > 5000 ? 'Gold' : totalSpent > 1000 ? 'Silver' : 'Member'}</Text>
           <Text style={styles.statLabel}>Status</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Visitor Log Section */}
+      <View style={styles.visitorSection}>
+         <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Who Viewed Me</Text>
+            <View style={styles.viewCountBadge}>
+               <Eye color="white" size={12} />
+               <Text style={styles.viewCountText}>{profileViews}</Text>
+            </View>
+         </View>
+         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.visitorList}>
+            {visitors.map(visitor => (
+              <TouchableOpacity
+                key={visitor.id}
+                style={styles.visitorItem}
+                onPress={() => navigation.navigate('UserProfile', { userId: visitor.id, name: visitor.name, isOnline: visitor.isOnline })}
+              >
+                <GlowAvatar size={50} isOnline={visitor.isOnline} />
+                <Text style={styles.visitorName} numberOfLines={1}>{visitor.name}</Text>
+                <View style={styles.timeRow}>
+                   <Clock size={10} color="#999" />
+                   <Text style={styles.visitorTime}>{visitor.time}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+         </ScrollView>
       </View>
 
       {/* Trophy Cabinet */}
@@ -193,12 +214,6 @@ const styles = StyleSheet.create({
   editButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
   editButtonText: { color: COLORS.textSecondary },
 
-  visitorSection: { padding: 15 },
-  visitorCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF5F7', padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#FFE0E5' },
-  visitorLeft: { flexDirection: 'row', alignItems: 'center' },
-  visitorIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  visitorText: { color: COLORS.text, fontSize: 14 },
-
   dashboard: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingVertical: 20 },
   dashItem: { flex: 1, alignItems: 'center' },
   dashValue: { fontSize: 18, fontWeight: 'bold', marginVertical: 4 },
@@ -208,6 +223,16 @@ const styles = StyleSheet.create({
   statItem: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 18, fontWeight: 'bold', marginTop: 5 },
   statLabel: { color: COLORS.textSecondary, fontSize: 12 },
+
+  visitorSection: { marginTop: 10, backgroundColor: COLORS.white, paddingVertical: 20 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
+  viewCountBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  viewCountText: { color: 'white', fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
+  visitorList: { paddingHorizontal: 20 },
+  visitorItem: { alignItems: 'center', marginRight: 20, width: 60 },
+  visitorName: { fontSize: 11, color: COLORS.text, marginTop: 8, fontWeight: '500' },
+  timeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  visitorTime: { fontSize: 9, color: '#999', marginLeft: 3 },
 
   trophySection: { marginTop: 10, backgroundColor: COLORS.white, padding: 20 },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 10, marginTop: 10 },

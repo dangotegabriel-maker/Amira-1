@@ -1,9 +1,16 @@
 // src/services/socketService.js
+import { AppState } from 'react-native';
 
 class SocketService {
   constructor() {
     this.connected = false;
     this.listeners = {};
+    this.heartbeatTimer = null;
+    this.userId = null;
+    this.offlineGraceTimer = null;
+
+    // Listen for AppState changes for background logic
+    AppState.addEventListener('change', this.handleAppStateChange.bind(this));
   }
 
   on(event, callback) {
@@ -24,14 +31,48 @@ class SocketService {
   }
 
   connect(userId) {
+    if (this.connected && this.userId === userId) return;
+
     console.log(`Socket connecting for user: ${userId}`);
+    this.userId = userId;
     this.connected = true;
-    this.broadcastPresence(userId, true);
+
+    // Broadcast Online immediately
+    this.broadcastStatus('ONLINE_STATUS');
+
+    // Start Heartbeat (every 60s)
+    this.startHeartbeat();
   }
 
-  broadcastPresence(userId, isOnline) {
-    console.log(`Socket: Broadcasting presence for ${userId}: ${isOnline ? 'Online' : 'Offline'}`);
-    // socket.emit('presence_update', { userId, isOnline });
+  startHeartbeat() {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = setInterval(() => {
+      if (this.connected) {
+        console.log("Socket: Sending Heartbeat 💓");
+        // socket.emit('heartbeat', { userId: this.userId });
+      }
+    }, 60000);
+  }
+
+  broadcastStatus(status) {
+    console.log(`Socket: Broadcasting status for ${this.userId}: ${status}`);
+    // socket.emit('status_update', { userId: this.userId, status });
+  }
+
+  handleAppStateChange(nextAppState) {
+    if (nextAppState === 'background' || nextAppState === 'inactive') {
+      console.log("Socket: App went to background. Starting 30s offline grace period...");
+      // Wait 30 seconds before broadcasting OFFLINE
+      this.offlineGraceTimer = setTimeout(() => {
+        this.broadcastStatus('OFFLINE_STATUS');
+      }, 30000);
+    } else if (nextAppState === 'active') {
+      if (this.offlineGraceTimer) {
+        clearTimeout(this.offlineGraceTimer);
+        this.offlineGraceTimer = null;
+      }
+      this.broadcastStatus('ONLINE_STATUS');
+    }
   }
 
   emitProfileView(viewerId, profileId) {
@@ -44,9 +85,14 @@ class SocketService {
     // socket.emit('send_gift', { targetUserId, ...giftData });
   }
 
-  disconnect(userId) {
-    this.broadcastPresence(userId, false);
+  disconnect() {
+    if (this.userId) {
+      this.broadcastStatus('OFFLINE_STATUS');
+    }
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.connected = false;
+    this.userId = null;
+    console.log("Socket: Disconnected.");
   }
 }
 
