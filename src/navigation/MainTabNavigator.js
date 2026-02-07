@@ -1,12 +1,11 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, Compass, MessageCircle, User, Trophy } from 'lucide-react-native';
+import { Home, Compass, MessageCircle, User } from 'lucide-react-native';
 
 import DiscoverScreen from '../screens/main/DiscoverScreen';
 import MomentsScreen from '../screens/main/MomentsScreen';
 import MessageHomeScreen from '../screens/main/MessageHomeScreen';
 import MyProfileScreen from '../screens/main/MyProfileScreen';
-import LeaderboardScreen from '../screens/main/LeaderboardScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -19,8 +18,6 @@ const MainTabNavigator = () => {
             return <Compass color={color} size={size} />;
           } else if (route.name === 'Moments') {
             return <Home color={color} size={size} />;
-          } else if (route.name === 'Leaderboard') {
-            return <Trophy color={color} size={size} />;
           } else if (route.name === 'Messages') {
             return <MessageCircle color={color} size={size} />;
           } else if (route.name === 'Profile') {
@@ -34,7 +31,6 @@ const MainTabNavigator = () => {
     >
       <Tab.Screen name="Discover" component={DiscoverScreen} />
       <Tab.Screen name="Moments" component={MomentsScreen} />
-      <Tab.Screen name="Leaderboard" component={LeaderboardScreen} />
       <Tab.Screen name="Messages" component={MessageHomeScreen} />
       <Tab.Screen name="Profile" component={MyProfileScreen} />
     </Tab.Navigator>
