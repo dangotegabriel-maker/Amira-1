@@ -1,31 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Image, Modal } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, Eye, Clock } from 'lucide-react-native';
+import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, Eye, Clock, User, X } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';
+import { dbService } from '../../services/firebaseService';
 import { getGiftAsset } from '../../services/giftingService';
 import { useIsFocused } from '@react-navigation/native';
 import VIPBadge from '../../components/VIPBadge';
-import GiftingLeaderboard from '../../components/GiftingLeaderboard';
 import GlowAvatar from '../../components/GlowAvatar';
 
 const { width } = Dimensions.get('window');
 
 const MyProfileScreen = ({ navigation }) => {
   const isFocused = useIsFocused();
+  const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
   const [upvotes, setUpvotes] = useState(0);
   const [totalReceivedCount, setTotalReceivedCount] = useState(0);
   const [profileViews, setProfileViews] = useState(0);
   const [receivedGifts, setReceivedGifts] = useState({});
-
-  const [visitors, setVisitors] = useState([
-    { id: '1', name: 'Jessica', time: '2m ago', isOnline: true },
-    { id: '2', name: 'Mark', time: '15m ago', isOnline: false },
-    { id: '3', name: 'Sarah', time: '1h ago', isOnline: true },
-    { id: '4', name: 'David', time: '3h ago', isOnline: false },
-  ]);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
 
   useEffect(() => {
     if (isFocused) {
@@ -34,6 +29,7 @@ const MyProfileScreen = ({ navigation }) => {
   }, [isFocused]);
 
   const loadData = async () => {
+    const profile = await dbService.getUserProfile('current_user_id');
     const b = await ledgerService.getBalance();
     const s = await ledgerService.getTotalSpent();
     const u = await ledgerService.getUpvotes();
@@ -41,6 +37,7 @@ const MyProfileScreen = ({ navigation }) => {
     const v = await ledgerService.getProfileViews();
     const r = await ledgerService.getReceivedGifts();
 
+    setUser(profile);
     setBalance(b);
     setTotalSpent(s);
     setUpvotes(u);
@@ -54,20 +51,24 @@ const MyProfileScreen = ({ navigation }) => {
     return { id, count, name: asset.name };
   });
 
+  if (!user) return null;
+
+  const isMale = user.gender === 'male';
+
   const renderHeader = () => (
     <View>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          <View style={styles.avatar} />
+          <GlowAvatar size={100} isOnline={true} />
           <View style={styles.vipBadgeContainer}>
             <VIPBadge totalSpent={totalSpent} />
           </View>
         </View>
         <View style={styles.nameContainer}>
-          <Text style={styles.name}>John Doe</Text>
+          <Text style={styles.name}>{user.name}</Text>
           <VIPBadge totalSpent={totalSpent} />
         </View>
-        <Text style={styles.bio}>Lover of luxury and high-stakes social flexing. 🥂</Text>
+        <Text style={styles.bio}>{user.bio}</Text>
         <TouchableOpacity
           style={styles.editButton}
           onPress={() => navigation.navigate('EditProfile')}
@@ -76,62 +77,61 @@ const MyProfileScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
+      {/* Gallery Grid */}
+      <View style={styles.galleryContainer}>
+         <Text style={styles.sectionTitle}>Gallery</Text>
+         <View style={styles.photoGrid}>
+            {user.photos?.map((photo, index) => (
+              <TouchableOpacity key={index} style={styles.photoWrapper} onPress={() => setSelectedPhoto(photo)}>
+                 <Image source={{ uri: photo }} style={styles.photo} />
+              </TouchableOpacity>
+            ))}
+            {[...Array(Math.max(0, 9 - (user.photos?.length || 0)))].map((_, i) => (
+               <View key={`empty-${i}`} style={[styles.photoWrapper, styles.emptyPhoto]}>
+                  <User color="#DDD" size={24} />
+               </View>
+            ))}
+         </View>
+      </View>
+
       <View style={styles.dashboard}>
-        <View style={styles.dashItem}>
+        <TouchableOpacity style={styles.dashItem} onPress={() => navigation.navigate('GiftLedger', { type: 'received' })}>
           <Gift color={COLORS.primary} size={24} />
           <Text style={styles.dashValue}>{totalReceivedCount}</Text>
-          <Text style={styles.dashLabel}>Gifts Received</Text>
-        </View>
+          <Text style={styles.dashLabel}>{isMale ? 'Gifts Received' : 'Total Earnings'}</Text>
+        </TouchableOpacity>
         <View style={styles.dashItem}>
           <ArrowUpCircle color="#4CD964" size={24} />
           <Text style={styles.dashValue}>{upvotes}</Text>
           <Text style={styles.dashLabel}>Upvotes</Text>
         </View>
-        <View style={styles.dashItem}>
+        <TouchableOpacity style={styles.dashItem} onPress={() => navigation.navigate('GiftLedger', { type: 'sent' })}>
           <ArrowUpCircle color="#007AFF" size={24} style={{ transform: [{ rotate: '180deg' }] }} />
           <Text style={styles.dashValue}>{totalSpent}</Text>
-          <Text style={styles.dashLabel}>Gifts Sent</Text>
-        </View>
+          <Text style={styles.dashLabel}>{isMale ? 'Total Contribution' : 'Gifts Sent'}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.stats}>
-        <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('Wallet')}>
-          <Coins color="#FFD700" size={24} />
-          <Text style={styles.statValue}>{balance}</Text>
-          <Text style={styles.statLabel}>Coins</Text>
-        </TouchableOpacity>
+        {isMale && (
+          <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('RechargeHub')}>
+            <Coins color="#FFD700" size={24} />
+            <Text style={styles.statValue}>{balance}</Text>
+            <Text style={styles.statLabel}>Recharge</Text>
+          </TouchableOpacity>
+        )}
+        {!isMale && (
+           <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('Wallet')}>
+              <Coins color="#FFD700" size={24} />
+              <Text style={styles.statValue}>{balance}</Text>
+              <Text style={styles.statLabel}>Diamonds</Text>
+           </TouchableOpacity>
+        )}
         <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('VIPStore')}>
           <Award color="#FFD700" size={24} />
           <Text style={styles.statValue}>{totalSpent > 5000 ? 'Gold' : totalSpent > 1000 ? 'Silver' : 'Member'}</Text>
           <Text style={styles.statLabel}>Status</Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Visitor Log Section */}
-      <View style={styles.visitorSection}>
-         <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Who Viewed Me</Text>
-            <View style={styles.viewCountBadge}>
-               <Eye color="white" size={12} />
-               <Text style={styles.viewCountText}>{profileViews}</Text>
-            </View>
-         </View>
-         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.visitorList}>
-            {visitors.map(visitor => (
-              <TouchableOpacity
-                key={visitor.id}
-                style={styles.visitorItem}
-                onPress={() => navigation.navigate('UserProfile', { userId: visitor.id, name: visitor.name, isOnline: visitor.isOnline })}
-              >
-                <GlowAvatar size={50} isOnline={visitor.isOnline} />
-                <Text style={styles.visitorName} numberOfLines={1}>{visitor.name}</Text>
-                <View style={styles.timeRow}>
-                   <Clock size={10} color="#999" />
-                   <Text style={styles.visitorTime}>{visitor.time}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-         </ScrollView>
       </View>
 
       {/* Trophy Cabinet */}
@@ -147,21 +147,16 @@ const MyProfileScreen = ({ navigation }) => {
               <Text style={styles.trophyName} numberOfLines={1}>{item.name || 'Gift'}</Text>
             </View>
           )) : (
-            <Text style={styles.emptyTrophyText}>No gifts received yet. Start social flexing!</Text>
+            <Text style={styles.emptyTrophyText}>No gifts received yet.</Text>
           )}
         </ScrollView>
       </View>
 
-      <View style={{ paddingHorizontal: 10 }}>
-         <Text style={styles.sectionTitle}>Top Gifters</Text>
-         <GiftingLeaderboard />
-      </View>
-
       <View style={styles.menu}>
         {[
-          { icon: <Settings size={20} />, label: 'Settings', screen: 'Settings' },
-          { icon: <Coins size={20} />, label: 'Recharge Hub', screen: 'RechargeHub' },
-          { icon: <Award size={20} />, label: 'VIP Store', screen: 'VIPStore' },
+          { icon: <Award size={20} color="#FFD700" />, label: 'Leaderboard', screen: 'Leaderboard' },
+          { icon: <Settings size={20} color="#666" />, label: 'Settings', screen: 'Settings' },
+          { icon: <Coins size={20} color="#FFD700" />, label: 'Recharge Hub', screen: 'RechargeHub' },
         ].map((item, i) => (
           <TouchableOpacity
             key={i}
@@ -177,6 +172,16 @@ const MyProfileScreen = ({ navigation }) => {
         ))}
       </View>
       <View style={{ height: 50 }} />
+
+      {/* Lightbox Modal */}
+      <Modal visible={!!selectedPhoto} transparent animationType="fade">
+         <View style={styles.lightbox}>
+            <TouchableOpacity style={styles.closeLightbox} onPress={() => setSelectedPhoto(null)}>
+               <X color="white" size={32} />
+            </TouchableOpacity>
+            <Image source={{ uri: selectedPhoto }} style={styles.lightboxImage} resizeMode="contain" />
+         </View>
+      </Modal>
     </View>
   );
 
@@ -194,7 +199,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F8F8' },
   header: { alignItems: 'center', paddingVertical: 30, backgroundColor: COLORS.white },
   avatarContainer: { position: 'relative', marginBottom: 15 },
-  avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#EEE' },
   vipBadgeContainer: {
     position: 'absolute',
     bottom: 0,
@@ -203,16 +207,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 2,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
   },
   nameContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
   name: { fontSize: 24, fontWeight: 'bold', marginRight: 5 },
   bio: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 15, paddingHorizontal: 40, textAlign: 'center' },
   editButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
   editButtonText: { color: COLORS.textSecondary },
+
+  galleryContainer: { backgroundColor: 'white', marginTop: 10, paddingVertical: 20 },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10 },
+  photoWrapper: { width: (width - 40) / 3, height: (width - 40) / 3, margin: 5, borderRadius: 10, overflow: 'hidden' },
+  photo: { width: '100%', height: '100%' },
+  emptyPhoto: { backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#EEE', borderStyle: 'dashed' },
 
   dashboard: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingVertical: 20 },
   dashItem: { flex: 1, alignItems: 'center' },
@@ -224,18 +230,8 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 18, fontWeight: 'bold', marginTop: 5 },
   statLabel: { color: COLORS.textSecondary, fontSize: 12 },
 
-  visitorSection: { marginTop: 10, backgroundColor: COLORS.white, paddingVertical: 20 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
-  viewCountBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
-  viewCountText: { color: 'white', fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
-  visitorList: { paddingHorizontal: 20 },
-  visitorItem: { alignItems: 'center', marginRight: 20, width: 60 },
-  visitorName: { fontSize: 11, color: COLORS.text, marginTop: 8, fontWeight: '500' },
-  timeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  visitorTime: { fontSize: 9, color: '#999', marginLeft: 3 },
-
   trophySection: { marginTop: 10, backgroundColor: COLORS.white, padding: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 10, marginTop: 10 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 15 },
   trophyCabinet: { flexDirection: 'row' },
   trophyItem: { alignItems: 'center', marginRight: 20, width: 80 },
   trophyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FFF5F7', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
@@ -247,5 +243,9 @@ const styles = StyleSheet.create({
   menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   menuItemLeft: { flexDirection: 'row', alignItems: 'center' },
   menuItemLabel: { marginLeft: 15, fontSize: 16 },
+
+  lightbox: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  closeLightbox: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
+  lightboxImage: { width: width, height: height * 0.8 }
 });
 export default MyProfileScreen;
