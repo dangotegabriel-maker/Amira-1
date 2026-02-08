@@ -26,7 +26,7 @@ const DiscoverScreen = () => {
   const dislikeScale = useRef(new Animated.Value(1)).current;
   const superlikeScale = useRef(new Animated.Value(1)).current;
 
-  // Mock Discover Users (Females for Male view)
+  // Mock Discover Users with priority data
   const discoverUsers = [
     {
       id: 'f1',
@@ -39,7 +39,9 @@ const DiscoverScreen = () => {
         'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&h=600',
         'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=400&h=600',
       ],
-      isOnline: true
+      isOnline: true,
+      responseRate: 98,
+      giftsReceived: 450
     },
     {
       id: 'f2',
@@ -51,7 +53,9 @@ const DiscoverScreen = () => {
         'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&h=600',
         'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&h=600',
       ],
-      isOnline: true
+      isOnline: true,
+      responseRate: 92,
+      giftsReceived: 210
     }
   ];
 
@@ -81,7 +85,7 @@ const DiscoverScreen = () => {
           useNativeDriver: true,
         }).start();
       });
-    }, 4000); // 4 seconds total (3s visible + 1s fade)
+    }, 4000);
 
     return () => clearInterval(timer);
   }, [currentUser, currentPhotoIndex]);
@@ -120,9 +124,12 @@ const DiscoverScreen = () => {
 
   if (!currentUser) return null;
 
-  // Gender Filter: Show opposite gender
-  const filteredUsers = discoverUsers.filter(u => u.gender !== currentUser.gender);
-  const targetDisplayUser = filteredUsers[0] || discoverUsers[0];
+  // PRIORITY ALGORITHM: For Males, show females with highest giftsReceived/responseRate first
+  const sortedUsers = [...discoverUsers]
+    .filter(u => u.gender !== currentUser.gender)
+    .sort((a, b) => (b.giftsReceived + b.responseRate) - (a.giftsReceived + a.responseRate));
+
+  const targetDisplayUser = sortedUsers[0] || discoverUsers[0];
 
   const stories = [
     { id: '1', name: 'My Story', isMe: true },
