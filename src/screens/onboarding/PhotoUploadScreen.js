@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from '../../theme/COLORS';
 import { Camera, X } from 'lucide-react-native';

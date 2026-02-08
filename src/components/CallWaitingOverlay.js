@@ -1,6 +1,6 @@
 // src/components/CallWaitingOverlay.js
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, Dimensions } from "react-native";
 import { BlurView } from 'expo-blur';
 import { Phone, Bell, MessageSquare, X } from 'lucide-react-native';
 import { COLORS } from '../theme/COLORS';

@@ -1,6 +1,6 @@
 // src/components/VIPBadge.js
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Dimensions } from "react-native";
 import { Award, Sparkles } from 'lucide-react-native';
 
 const VIPBadge = ({ totalSpent }) => {

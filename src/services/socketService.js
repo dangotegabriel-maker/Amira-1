@@ -1,31 +1,17 @@
 // src/services/socketService.js
-import { AppState } from 'react-native';
+import { AppState } from "react-native";
+import EventEmitter from 'eventemitter3';
 
-class SocketService {
+class SocketService extends EventEmitter {
   constructor() {
+    super();
     this.connected = false;
-    this.listeners = {};
     this.heartbeatTimer = null;
     this.userId = null;
     this.offlineGraceTimer = null;
     this.pendingNotifications = {};
 
     AppState.addEventListener('change', this.handleAppStateChange.bind(this));
-  }
-
-  on(event, callback) {
-    if (!this.listeners[event]) this.listeners[event] = [];
-    this.listeners[event].push(callback);
-  }
-
-  off(event, callback) {
-    if (!this.listeners[event]) return;
-    this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
-  }
-
-  emit(event, data) {
-    if (!this.listeners[event]) return;
-    this.listeners[event].forEach(cb => cb(data));
   }
 
   connect(userId) {

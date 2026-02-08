@@ -1,6 +1,6 @@
 // src/components/GiftTray.js
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, Animated, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, Animated, Dimensions, Platform } from "react-native";
 import { COLORS } from '../theme/COLORS';
 import { X, Coins, PlusCircle } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';

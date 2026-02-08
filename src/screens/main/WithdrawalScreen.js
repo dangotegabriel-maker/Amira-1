@@ -1,6 +1,6 @@
 // src/screens/main/WithdrawalScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { ChevronLeft, DollarSign, CreditCard } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';

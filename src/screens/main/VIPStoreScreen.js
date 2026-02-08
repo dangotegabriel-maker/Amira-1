@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { Check } from 'lucide-react-native';
 

@@ -1,6 +1,6 @@
 // src/screens/main/UserProfileScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { Award, ChevronLeft, Gift, ArrowUpCircle, MessageCircle, Phone, Heart, X, User as UserIcon } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';

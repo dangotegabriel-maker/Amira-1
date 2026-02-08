@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Alert, ScrollView } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { X, Heart, Star, MoreHorizontal, Plus } from 'lucide-react-native';
 import { moderationService } from '../../services/moderationService';
@@ -9,12 +9,13 @@ import GlowAvatar from '../../components/GlowAvatar';
 import { useNavigation } from '@react-navigation/native';
 import { hapticService } from '../../services/hapticService';
 import { Image } from 'expo-image';
+import { useUser } from '../../context/UserContext';
 
 const { width } = Dimensions.get('window');
 
 const DiscoverScreen = () => {
   const navigation = useNavigation();
-  const [currentUser, setCurrentUser] = useState(null);
+  const { user: currentUser } = useUser();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -59,14 +60,6 @@ const DiscoverScreen = () => {
     }
   ];
 
-  useEffect(() => {
-    loadUser();
-  }, []);
-
-  const loadUser = async () => {
-    const profile = await dbService.getUserProfile('current_user_id');
-    setCurrentUser(profile);
-  };
 
   // Auto-rotating gallery logic with Cinematic Cross-Fade
   useEffect(() => {
@@ -85,7 +78,7 @@ const DiscoverScreen = () => {
           useNativeDriver: true,
         }).start();
       });
-    }, 4000);
+    }, 3000);
 
     return () => clearInterval(timer);
   }, [currentUser, currentPhotoIndex]);

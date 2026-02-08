@@ -1,6 +1,6 @@
 // src/screens/main/LeaderboardScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import GlowAvatar from '../../components/GlowAvatar';
 import VIPBadge from '../../components/VIPBadge';

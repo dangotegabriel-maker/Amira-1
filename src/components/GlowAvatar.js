@@ -1,6 +1,6 @@
 // src/components/GlowAvatar.js
 import React from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions } from "react-native";
 import { COLORS } from '../theme/COLORS';
 import { ledgerService } from '../services/ledgerService';
 

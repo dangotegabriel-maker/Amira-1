@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, FlatList } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { Search, UserPlus } from 'lucide-react-native';
 import { moderationService } from '../../services/moderationService';
