@@ -11,6 +11,7 @@ import { hapticService } from '../../services/hapticService';
 import VIPBadge from '../../components/VIPBadge';
 import GiftingLeaderboard from '../../components/GiftingLeaderboard';
 import GlowAvatar from '../../components/GlowAvatar';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { Image } from 'expo-image';
 
 const { width, height } = Dimensions.get('window');
@@ -48,7 +49,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     hapticService.success();
   };
 
-  if (!currentUser) return null;
+  if (!currentUser) return <LoadingSpinner />;
 
   const isFemaleProfile = profileData.gender === 'female';
   const isMaleViewer = currentUser.gender === 'male';

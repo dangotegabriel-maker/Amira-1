@@ -9,12 +9,15 @@ import { hapticService } from '../../services/hapticService';
 import { useIsFocused } from '@react-navigation/native';
 import VIPBadge from '../../components/VIPBadge';
 import GlowAvatar from '../../components/GlowAvatar';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { useUser } from '../../context/UserContext';
 import { Image } from 'expo-image';
 
 const { width, height } = Dimensions.get('window');
 
 const MyProfileScreen = ({ navigation }) => {
   const isFocused = useIsFocused();
+  const { user: contextUser, loading: contextLoading } = useUser();
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [diamondBalance, setDiamondBalance] = useState(0);
@@ -34,7 +37,7 @@ const MyProfileScreen = ({ navigation }) => {
   }, [isFocused]);
 
   const loadData = async () => {
-    const profile = await dbService.getUserProfile('current_user_id');
+    const profile = contextUser || await dbService.getUserProfile('current_user_id');
     const b = await ledgerService.getBalance();
     const s = await ledgerService.getTotalSpent();
     const u = await ledgerService.getUpvotes();
@@ -62,9 +65,10 @@ const MyProfileScreen = ({ navigation }) => {
     return { id, count, name: asset.name };
   });
 
-  if (!user) return null;
+  if (contextLoading || !user) return <LoadingSpinner />;
 
   const isMale = user.gender === 'male';
+  const hasGender = !!user.gender;
   const tier = ledgerService.getTier(wealthXP);
 
   const menuItems = [
@@ -85,11 +89,19 @@ const MyProfileScreen = ({ navigation }) => {
           </View>
         </View>
         <View style={styles.nameContainer}>
-          <Text style={styles.name}>{user.name}</Text>
+          <Text style={styles.name}>{user.name || 'Amira User'}</Text>
           <VIPBadge totalSpent={totalSpent} />
         </View>
+        {!hasGender && (
+           <TouchableOpacity
+             style={styles.completePrompt}
+             onPress={() => navigation.navigate('GenderSetup')}
+           >
+              <Text style={styles.completePromptText}>⚠️ Please complete your profile</Text>
+           </TouchableOpacity>
+        )}
         {isMale && <Text style={styles.tierName}>{tier.name} Rank</Text>}
-        <Text style={styles.bio}>{user.bio}</Text>
+        <Text style={styles.bio}>{user.bio || 'No bio yet'}</Text>
         <TouchableOpacity
           style={styles.editButton}
           onPress={() => { hapticService.lightImpact(); navigation.navigate('EditProfile'); }}
@@ -260,6 +272,8 @@ const styles = StyleSheet.create({
   },
   nameContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
   name: { fontSize: 24, fontWeight: 'bold', marginRight: 5 },
+  completePrompt: { backgroundColor: '#FFFBEB', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10, marginVertical: 10, borderWidth: 1, borderColor: '#FEF3C7' },
+  completePromptText: { color: '#92400E', fontSize: 13, fontWeight: 'bold' },
   tierName: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary, marginBottom: 5 },
   bio: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 15, paddingHorizontal: 40, textAlign: 'center' },
   editButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
