@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, Eye, Clock, User as UserIcon, X, DollarSign } from 'lucide-react-native';
+import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, Eye, Clock, User as UserIcon, X, DollarSign, Wallet } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';
 import { dbService } from '../../services/firebaseService';
 import { getGiftAsset } from '../../services/giftingService';
@@ -18,6 +18,7 @@ const MyProfileScreen = ({ navigation }) => {
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [diamondBalance, setDiamondBalance] = useState(0);
+  const [todayDiamonds, setTodayDiamonds] = useState(0);
   const [wealthXP, setWealthXP] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
   const [upvotes, setUpvotes] = useState(0);
@@ -41,6 +42,7 @@ const MyProfileScreen = ({ navigation }) => {
     const v = await ledgerService.getProfileViews();
     const r = await ledgerService.getReceivedGifts();
     const db = await ledgerService.getDiamondBalance();
+    const td = await ledgerService.getTodayDiamonds();
     const xp = await ledgerService.getWealthXP();
 
     setUser(profile);
@@ -51,6 +53,7 @@ const MyProfileScreen = ({ navigation }) => {
     setProfileViews(v);
     setReceivedGifts(r);
     setDiamondBalance(db);
+    setTodayDiamonds(td);
     setWealthXP(xp);
   };
 
@@ -66,7 +69,7 @@ const MyProfileScreen = ({ navigation }) => {
 
   const menuItems = [
     { icon: <Award size={20} color="#FFD700" />, label: 'Global Leaderboard', screen: 'Leaderboard' },
-    { icon: <Gift size={20} color={COLORS.primary} />, label: 'My Gift Cabinet', screen: 'GiftLedger', params: { type: 'received' } },
+    { icon: <Gift size={20} color={COLORS.primary} />, label: isMale ? 'Gifts Sent' : 'My Gift Cabinet', screen: 'GiftLedger', params: { type: isMale ? 'sent' : 'received' } },
     ...(isMale ? [{ icon: <Coins size={20} color="#FFD700" />, label: 'Recharge Hub', screen: 'RechargeHub' }] : []),
     { icon: <Award size={20} color={COLORS.primary} />, label: 'VIP Store', screen: 'VIPStore' },
     { icon: <Settings size={20} color="#666" />, label: 'Settings', screen: 'Settings' },
@@ -76,7 +79,7 @@ const MyProfileScreen = ({ navigation }) => {
     <View>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          <GlowAvatar size={100} isOnline={true} xp={wealthXP} />
+          <GlowAvatar size={100} isOnline={true} xp={isMale ? wealthXP : 0} />
           <View style={styles.vipBadgeContainer}>
             <VIPBadge totalSpent={totalSpent} />
           </View>
@@ -130,20 +133,34 @@ const MyProfileScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Female Withdrawal Section */}
+      {/* Female Earnings Portfolio Section */}
       {!isMale && (
-        <View style={styles.earningSection}>
-           <View style={styles.earningHeader}>
-              <Text style={styles.earningTitle}>Total Earnings</Text>
-              <Text style={styles.earningValue}>${(diamondBalance * 0.05).toFixed(2)}</Text>
+        <View style={styles.portfolioContainer}>
+           <Text style={styles.sectionTitle}>Earnings Portfolio</Text>
+           <View style={styles.portfolioCard}>
+              <View style={styles.portfolioRow}>
+                 <View>
+                    <Text style={styles.portLabel}>Today's Diamonds</Text>
+                    <Text style={styles.portValue}>💎 {todayDiamonds}</Text>
+                 </View>
+                 <View>
+                    <Text style={styles.portLabel}>Total Diamonds</Text>
+                    <Text style={styles.portValue}>💎 {diamondBalance}</Text>
+                 </View>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.usdRow}>
+                 <Text style={styles.usdLabel}>Estimated USD Value</Text>
+                 <Text style={styles.usdValue}>${(diamondBalance * 0.05).toFixed(2)}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.withdrawAction}
+                onPress={() => { hapticService.mediumImpact(); navigation.navigate('Withdrawal'); }}
+              >
+                 <Wallet color="white" size={18} />
+                 <Text style={styles.withdrawActionText}>Withdraw Earnings</Text>
+              </TouchableOpacity>
            </View>
-           <TouchableOpacity
-             style={styles.withdrawButton}
-             onPress={() => { hapticService.mediumImpact(); navigation.navigate('Withdrawal'); }}
-           >
-              <DollarSign color="white" size={18} />
-              <Text style={styles.withdrawText}>Withdraw Income</Text>
-           </TouchableOpacity>
         </View>
       )}
 
@@ -259,12 +276,17 @@ const styles = StyleSheet.create({
   dashValue: { fontSize: 18, fontWeight: 'bold', marginVertical: 4 },
   dashLabel: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '500' },
 
-  earningSection: { backgroundColor: 'white', marginTop: 10, padding: 20, alignItems: 'center' },
-  earningHeader: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 15 },
-  earningTitle: { fontSize: 16, fontWeight: '600' },
-  earningValue: { fontSize: 18, fontWeight: 'bold', color: '#4CD964' },
-  withdrawButton: { backgroundColor: COLORS.primary, width: '100%', height: 45, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  withdrawText: { color: 'white', fontWeight: 'bold', marginLeft: 8 },
+  portfolioContainer: { backgroundColor: 'white', marginTop: 10, paddingVertical: 20 },
+  portfolioCard: { backgroundColor: '#1A1A1A', marginHorizontal: 20, borderRadius: 20, padding: 20, elevation: 5 },
+  portfolioRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  portLabel: { color: '#888', fontSize: 12, marginBottom: 5 },
+  portValue: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  divider: { height: 1, backgroundColor: '#333', marginBottom: 15 },
+  usdRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  usdLabel: { color: '#888', fontSize: 14 },
+  usdValue: { color: '#4CD964', fontSize: 20, fontWeight: 'bold' },
+  withdrawAction: { backgroundColor: COLORS.primary, height: 45, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  withdrawActionText: { color: 'white', fontWeight: 'bold', marginLeft: 8 },
 
   stats: { flexDirection: 'row', backgroundColor: COLORS.white, marginTop: 10, paddingVertical: 20 },
   statItem: { flex: 1, alignItems: 'center' },
