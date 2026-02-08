@@ -1,6 +1,6 @@
 // src/services/hapticService.js
 import * as Haptics from 'expo-haptics';
-import { Platform } from 'react-native';
+import { Platform } from "react-native";
 
 export const hapticService = {
   lightImpact: () => {

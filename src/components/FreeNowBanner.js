@@ -1,6 +1,6 @@
 // src/components/FreeNowBanner.js
 import React, { useState, useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View, Dimensions } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity, View, Dimensions } from "react-native";
 import { COLORS } from '../theme/COLORS';
 import { socketService } from '../services/socketService';
 import { useNavigation } from '@react-navigation/native';

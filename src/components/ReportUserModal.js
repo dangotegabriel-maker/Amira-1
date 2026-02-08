@@ -1,6 +1,6 @@
 // src/components/ReportUserModal.js
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, Dimensions } from "react-native";
 import { COLORS } from '../theme/COLORS';
 import { X } from 'lucide-react-native';
 

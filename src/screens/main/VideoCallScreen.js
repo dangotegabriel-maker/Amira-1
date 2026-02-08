@@ -1,6 +1,6 @@
 // src/screens/main/VideoCallScreen.js
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder, Alert, Modal } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { PhoneOff, Mic, MicOff, Camera, Video, Gift, Coins, X, DollarSign, Heart } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';

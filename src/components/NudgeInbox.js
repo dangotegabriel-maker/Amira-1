@@ -1,6 +1,6 @@
 // src/components/NudgeInbox.js
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions } from "react-native";
 import { COLORS } from '../theme/COLORS';
 import { MessageSquare, ChevronRight } from 'lucide-react-native';
 import { hapticService } from '../services/hapticService';

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, Alert, Keyboard, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, Alert, Keyboard, ScrollView, Dimensions } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { Video, Send, Mic, Plus, Image as ImageIcon, MoreVertical, Gift, X, Reply } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';

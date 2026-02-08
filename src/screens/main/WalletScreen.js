@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 
 const WalletScreen = () => {

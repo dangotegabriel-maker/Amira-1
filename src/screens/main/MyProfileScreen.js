@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, Eye, Clock, User as UserIcon, X, DollarSign, Wallet } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';

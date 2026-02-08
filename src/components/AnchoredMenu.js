@@ -1,6 +1,6 @@
 // src/components/AnchoredMenu.js
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback, Dimensions } from "react-native";
 import { COLORS } from '../theme/COLORS';
 
 const { width, height } = Dimensions.get('window');

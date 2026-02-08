@@ -1,6 +1,6 @@
 // src/components/GiftingLeaderboard.js
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
 import { COLORS } from '../theme/COLORS';
 import GlowAvatar from './GlowAvatar';
 import VIPBadge from './VIPBadge';
