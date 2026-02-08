@@ -6,6 +6,7 @@ import { moderationService } from '../../services/moderationService';
 import { dbService } from '../../services/firebaseService';
 import AnchoredMenu from '../../components/AnchoredMenu';
 import GlowAvatar from '../../components/GlowAvatar';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { useNavigation } from '@react-navigation/native';
 import { hapticService } from '../../services/hapticService';
 import { Image } from 'expo-image';
@@ -115,7 +116,7 @@ const DiscoverScreen = () => {
     { label: "Block", onPress: () => handleBlock(selectedUser.name, selectedUser.id), destructive: true },
   ] : [];
 
-  if (!currentUser) return null;
+  if (!currentUser) return <LoadingSpinner />;
 
   // PRIORITY ALGORITHM: For Males, show females with highest giftsReceived/responseRate first
   const sortedUsers = [...discoverUsers]
