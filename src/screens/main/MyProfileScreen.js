@@ -11,7 +11,7 @@ import VIPBadge from '../../components/VIPBadge';
 import GlowAvatar from '../../components/GlowAvatar';
 import { Image } from 'expo-image';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const MyProfileScreen = ({ navigation }) => {
   const isFocused = useIsFocused();
