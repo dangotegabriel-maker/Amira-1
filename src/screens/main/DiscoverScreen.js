@@ -16,7 +16,7 @@ const { width } = Dimensions.get('window');
 
 const DiscoverScreen = () => {
   const navigation = useNavigation();
-  const { user: currentUser } = useUser();
+  const { user: currentUser, loading } = useUser();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -116,7 +116,13 @@ const DiscoverScreen = () => {
     { label: "Block", onPress: () => handleBlock(selectedUser.name, selectedUser.id), destructive: true },
   ] : [];
 
-  if (!currentUser) return <LoadingSpinner />;
+  useEffect(() => {
+    if (!loading && currentUser && !currentUser.gender) {
+      navigation.navigate('GenderSetup');
+    }
+  }, [loading, currentUser]);
+
+  if (loading || !currentUser) return <LoadingSpinner />;
 
   // PRIORITY ALGORITHM: For Males, show females with highest giftsReceived/responseRate first
   const sortedUsers = [...discoverUsers]
