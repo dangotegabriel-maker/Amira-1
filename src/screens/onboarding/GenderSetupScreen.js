@@ -1,9 +1,25 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
+import { dbService } from '../../services/firebaseService';
+import { useUser } from '../../context/UserContext';
 
 const GenderSetupScreen = ({ navigation }) => {
   const [gender, setGender] = useState(null);
+  const { refreshUser } = useUser();
+
+  const handleContinue = async () => {
+    if (!gender) return;
+    try {
+      const g = gender === 'Woman' ? 'female' : 'male';
+      await dbService.updateUserProfile('current_user_id', { gender: g });
+      await refreshUser();
+      navigation.navigate('PhotoUpload');
+    } catch (e) {
+      Alert.alert("Error", "Failed to save gender preference.");
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>I am a</Text>
@@ -20,7 +36,7 @@ const GenderSetupScreen = ({ navigation }) => {
       </View>
       <TouchableOpacity
         style={[styles.button, !gender && styles.buttonDisabled]}
-        onPress={() => navigation.navigate('PhotoUpload')}
+        onPress={handleContinue}
         disabled={!gender}
       >
         <Text style={styles.buttonText}>Continue</Text>

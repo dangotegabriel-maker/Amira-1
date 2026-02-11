@@ -52,7 +52,17 @@ const MyProfileScreen = ({ navigation }) => {
     setTotalMinutes(Math.floor(Math.random() * 500)); // Mocked minutes
   };
 
-  if (loading || !user) return <LoadingSpinner />;
+  if (loading) return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#FFD700" />
+    </View>
+  );
+
+  if (!user) return (
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorText}>Error: Profile not found. Please re-login.</Text>
+    </View>
+  );
 
   const trophyData = Object.entries(receivedGifts).map(([id, count]) => {
     const asset = getGiftAsset(id);
@@ -208,7 +218,10 @@ const styles = StyleSheet.create({
 
   lightbox: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeLightbox: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
-  lightboxImage: { width: width, height: height * 0.8 }
+  lightboxImage: { width: width, height: height * 0.8 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F8F8' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  errorText: { color: COLORS.primary, fontSize: 16, textAlign: 'center' }
 });
 
 export default MyProfileScreen;

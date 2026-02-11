@@ -1,6 +1,6 @@
 // src/screens/main/UserProfileScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { Award, ChevronLeft, Gift, ArrowUpCircle, MessageCircle, Phone, Heart, X, User as UserIcon } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';
@@ -11,7 +11,6 @@ import { hapticService } from '../../services/hapticService';
 import VIPBadge from '../../components/VIPBadge';
 import GiftingLeaderboard from '../../components/GiftingLeaderboard';
 import GlowAvatar from '../../components/GlowAvatar';
-import LoadingSpinner from '../../components/LoadingSpinner';
 import { Image } from 'expo-image';
 
 const { width, height } = Dimensions.get('window');
@@ -49,7 +48,11 @@ const UserProfileScreen = ({ route, navigation }) => {
     hapticService.success();
   };
 
-  if (!currentUser) return <LoadingSpinner />;
+  if (!currentUser) return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#FFD700" />
+    </View>
+  );
 
   const isFemaleProfile = profileData.gender === 'female';
   const isMaleViewer = currentUser.gender === 'male';
@@ -189,7 +192,8 @@ const styles = StyleSheet.create({
 
   lightbox: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   closeLightbox: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
-  lightboxImage: { width: width, height: height * 0.8 }
+  lightboxImage: { width: width, height: height * 0.8 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F8F8' }
 });
 
 export default UserProfileScreen;
