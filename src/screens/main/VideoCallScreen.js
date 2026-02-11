@@ -74,6 +74,11 @@ const VideoCallScreen = ({ route, navigation }) => {
 
   const loadUserAndStartCall = async () => {
      const profile = await dbService.getUserProfile('current_user_id');
+     if (profile.is_verified === false && profile.defaultAvatar === true) {
+        Alert.alert("Verification Required", "Please upload a profile photo to initiate or receive calls.");
+        navigation.goBack();
+        return;
+     }
      setCurrentUser(profile);
 
      const currentBalance = await ledgerService.getBalance();

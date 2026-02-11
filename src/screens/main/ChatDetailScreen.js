@@ -180,7 +180,14 @@ const ChatDetailScreen = ({ route, navigation }) => {
     Alert.alert("Report Sent", "Our moderation team will review your report shortly.");
   };
 
-  const handleGiftSent = (gift, combo) => {
+  const handleGiftSent = async (gift, combo) => {
+    // Check if target user is verified (mocked)
+    const target = await dbService.getUserProfile(userId);
+    if (target.is_verified === false && target.defaultAvatar === true) {
+       Alert.alert("Recipient Restricted", "This user must verify their profile before they can receive gifts.");
+       return;
+    }
+
     triggerGiftOverlay(gift.id, 'You', combo);
     socketService.sendGift(userId, { giftId: gift.id, combo });
     hapticService.mediumImpact();
