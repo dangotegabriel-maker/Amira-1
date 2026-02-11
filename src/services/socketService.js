@@ -15,6 +15,7 @@ class SocketService extends EventEmitter {
   }
 
   connect(userId) {
+    if (!userId) return;
     if (this.connected && this.userId === userId) return;
     console.log(`Socket connecting for user: ${userId}`);
     this.userId = userId;
@@ -33,6 +34,7 @@ class SocketService extends EventEmitter {
   }
 
   broadcastStatus(status) {
+    if (!this.userId) return;
     console.log(`Socket: Broadcasting status for ${this.userId}: ${status}`);
     if (status === 'ONLINE_STATUS' && this.lastStatus === 'STATUS_BUSY') {
         this.triggerNotifyQueue(this.userId);

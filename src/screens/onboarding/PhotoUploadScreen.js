@@ -5,7 +5,7 @@ import { COLORS } from '../../theme/COLORS';
 import { Camera, X } from 'lucide-react-native';
 
 const PhotoUploadScreen = ({ navigation }) => {
-  const [photos, setPhotos] = useState(Array(6).fill(null));
+  const [photos, setPhotos] = useState(Array(9).fill(null));
 
   const pickImage = async (index) => {
     Alert.alert(

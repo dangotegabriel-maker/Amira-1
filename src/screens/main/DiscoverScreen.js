@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Alert, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Alert, ScrollView, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { X, Heart, Star, MoreHorizontal, Plus } from 'lucide-react-native';
 import { moderationService } from '../../services/moderationService';
@@ -16,7 +16,7 @@ const { width } = Dimensions.get('window');
 
 const DiscoverScreen = () => {
   const navigation = useNavigation();
-  const { user: currentUser } = useUser();
+  const { user: currentUser, loading } = useUser();
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -116,7 +116,23 @@ const DiscoverScreen = () => {
     { label: "Block", onPress: () => handleBlock(selectedUser.name, selectedUser.id), destructive: true },
   ] : [];
 
-  if (!currentUser) return <LoadingSpinner />;
+  useEffect(() => {
+    if (!loading && currentUser && !currentUser.gender) {
+      navigation.navigate('GenderSetup');
+    }
+  }, [loading, currentUser]);
+
+  if (loading) return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#FFD700" />
+    </View>
+  );
+
+  if (!currentUser) return (
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorText}>Error: Profile not found. Please re-login.</Text>
+    </View>
+  );
 
   // PRIORITY ALGORITHM: For Males, show females with highest giftsReceived/responseRate first
   const sortedUsers = [...discoverUsers]
@@ -268,6 +284,9 @@ const styles = StyleSheet.create({
   dislike: { borderColor: '#FF3B30', borderWidth: 1 },
   superlike: { borderColor: '#007AFF', borderWidth: 1, width: 50, height: 50 },
   like: { borderColor: '#4CD964', borderWidth: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F8F8' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  errorText: { color: COLORS.primary, fontSize: 16, textAlign: 'center' }
 });
 
 export default DiscoverScreen;

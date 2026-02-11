@@ -35,5 +35,9 @@ export const dbService = {
         'https://via.placeholder.com/300x400?text=Photo+4',
       ]
     };
+  },
+  updateUserProfile: async (uid, data) => {
+    console.log("Mock Updating User Profile:", uid, data);
+    return { success: true };
   }
 };

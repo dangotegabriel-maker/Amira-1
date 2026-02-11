@@ -23,7 +23,7 @@ export const UserProvider = ({ children }) => {
   };
 
   return (
-    <UserContext.Provider value={{ user, setUser, loading, isMale: user?.gender === 'male' }}>
+    <UserContext.Provider value={{ user, setUser, loading, isMale: user?.gender === 'male', refreshUser: loadUser }}>
       {children}
     </UserContext.Provider>
   );
