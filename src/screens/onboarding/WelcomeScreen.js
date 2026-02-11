@@ -26,6 +26,21 @@ const WelcomeScreen = ({ navigation }) => {
         >
           <Text style={styles.secondaryButtonText}>Login with Phone</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.secondaryButton, { marginTop: 12, borderColor: '#DDD' }]}
+          onPress={() => {
+             // Mock Google Age Check
+             const isUnderage = false; // Mocked check
+             if (isUnderage) {
+                navigation.navigate('AccountNotAllowed');
+             } else {
+                navigation.navigate('MainTabs');
+             }
+          }}
+        >
+          <Text style={[styles.secondaryButtonText, { color: '#444' }]}>Continue with Google</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
