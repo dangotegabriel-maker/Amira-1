@@ -3,12 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image } fr
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from '../../theme/COLORS';
 import { Camera, X } from 'lucide-react-native';
-import { dbService } from '../../services/firebaseService';
-import { useUser } from '../../context/UserContext';
 
 const PhotoUploadScreen = ({ navigation }) => {
   const [photos, setPhotos] = useState(Array(9).fill(null));
-  const { refreshUser } = useUser();
 
   const pickImage = async (index) => {
     Alert.alert(
@@ -65,37 +62,12 @@ const PhotoUploadScreen = ({ navigation }) => {
     setPhotos(newPhotos);
   };
 
-  const handleContinue = async () => {
-    const photoCount = photos.filter(p => p !== null).length;
-    await dbService.updateUserProfile('current_user_id', {
-        photos: photos.filter(p => p !== null),
-        is_verified: photoCount >= 2,
-        defaultAvatar: photoCount === 0
-    });
-    await refreshUser();
-    navigation.navigate('Interests');
-  };
-
-  const handleSkip = async () => {
-    await dbService.updateUserProfile('current_user_id', {
-        is_verified: false,
-        defaultAvatar: true
-    });
-    await refreshUser();
-    navigation.navigate('Interests');
-  };
-
   const photoCount = photos.filter(p => p !== null).length;
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Add Photos</Text>
-        <TouchableOpacity onPress={handleSkip}>
-           <Text style={styles.skipText}>Skip</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.subtitle}>Add at least 2 photos to be verified</Text>
+      <Text style={styles.title}>Add Photos</Text>
+      <Text style={styles.subtitle}>Add at least 2 photos to continue</Text>
       <View style={styles.grid}>
         {photos.map((photo, i) => (
           <TouchableOpacity
@@ -118,9 +90,9 @@ const PhotoUploadScreen = ({ navigation }) => {
         ))}
       </View>
       <TouchableOpacity
-        style={[styles.button, photoCount < 1 && styles.buttonDisabled]}
-        onPress={handleContinue}
-        disabled={photoCount < 1}
+        style={[styles.button, photoCount < 2 && styles.buttonDisabled]}
+        onPress={() => navigation.navigate('Interests')}
+        disabled={photoCount < 2}
       >
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>
@@ -130,9 +102,7 @@ const PhotoUploadScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background, padding: 20, paddingTop: 60 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  title: { fontSize: 32, fontWeight: 'bold' },
-  skipText: { color: COLORS.textSecondary, fontSize: 16, fontWeight: '600' },
+  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 10 },
   subtitle: { fontSize: 16, color: COLORS.textSecondary, marginBottom: 30 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 40 },
   photoPlaceholder: {

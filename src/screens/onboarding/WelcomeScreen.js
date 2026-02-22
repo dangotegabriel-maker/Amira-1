@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 
 const WelcomeScreen = ({ navigation }) => {
@@ -29,15 +29,7 @@ const WelcomeScreen = ({ navigation }) => {
 
         <TouchableOpacity
           style={[styles.secondaryButton, { marginTop: 12, borderColor: '#DDD' }]}
-          onPress={() => {
-             // Mock Google Age Check
-             const isUnderage = false; // Mocked check
-             if (isUnderage) {
-                navigation.navigate('AccountNotAllowed');
-             } else {
-                navigation.navigate('MainTabs');
-             }
-          }}
+          onPress={() => navigation.navigate('MainTabs')}
         >
           <Text style={[styles.secondaryButtonText, { color: '#444' }]}>Continue with Google</Text>
         </TouchableOpacity>

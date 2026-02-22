@@ -12,7 +12,6 @@ import GenderSetupScreen from '../screens/onboarding/GenderSetupScreen';
 import PhotoUploadScreen from '../screens/onboarding/PhotoUploadScreen';
 import InterestsScreen from '../screens/onboarding/InterestsScreen';
 import LocationPermissionScreen from '../screens/onboarding/LocationPermissionScreen';
-import AccountNotAllowedScreen from '../screens/onboarding/AccountNotAllowedScreen';
 
 // Main App Screens
 import MainTabNavigator from './MainTabNavigator';
@@ -51,7 +50,6 @@ const RootNavigator = () => {
       <Stack.Screen name="PhotoUpload" component={PhotoUploadScreen} />
       <Stack.Screen name="Interests" component={InterestsScreen} />
       <Stack.Screen name="LocationPermission" component={LocationPermissionScreen} />
-      <Stack.Screen name="AccountNotAllowed" component={AccountNotAllowedScreen} />
 
       {/* Main App */}
       <Stack.Screen name="MainTabs" component={MainTabNavigator} />

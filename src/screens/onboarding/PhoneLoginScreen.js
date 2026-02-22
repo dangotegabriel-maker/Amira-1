@@ -1,31 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import CountryPicker from 'react-native-country-picker-modal';
-import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 const PhoneLoginScreen = ({ navigation }) => {
   const [countryCode, setCountryCode] = useState('US');
   const [callingCode, setCallingCode] = useState('1');
   const [phone, setPhone] = useState('');
-  const [isValid, setIsValid] = useState(false);
-
-  useEffect(() => {
-    validatePhone(phone);
-  }, [phone, countryCode]);
-
-  const validatePhone = (text) => {
-    const phoneNumber = parsePhoneNumberFromString(text, countryCode);
-    if (phoneNumber && phoneNumber.isValid()) {
-      setIsValid(true);
-    } else {
-      setIsValid(false);
-    }
-  };
 
   const handleContinue = () => {
-    if (isValid) {
+    if (phone.length > 5) {
       navigation.navigate('OTP', { phone: `+${callingCode}${phone}` });
+    } else {
+      Alert.alert("Invalid Phone", "Please enter a valid phone number.");
     }
   };
 
@@ -57,9 +44,9 @@ const PhoneLoginScreen = ({ navigation }) => {
       </View>
 
       <TouchableOpacity
-        style={[styles.button, !isValid && styles.buttonDisabled]}
+        style={[styles.button, phone.length < 6 && styles.buttonDisabled]}
         onPress={handleContinue}
-        disabled={!isValid}
+        disabled={phone.length < 6}
       >
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>
