@@ -13,6 +13,13 @@ export const UserProvider = ({ children }) => {
 
   const loadUser = async () => {
     try {
+      // Mock user for sprint demo/pivot
+      // setUser({
+      //   id: 'u1',
+      //   name: 'John Doe',
+      //   gender: 'male',
+      //   is_verified: true
+      // });
       const profile = await dbService.getUserProfile('current_user_id');
       setUser(profile);
     } catch (error) {
