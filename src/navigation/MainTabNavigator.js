@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, Compass, MessageCircle, User } from 'lucide-react-native';
+import { Home, Compass, MessageCircle, User, Sparkles } from 'lucide-react-native';
 import { socketService } from '../services/socketService';
 import { useNavigation } from '@react-navigation/native';
 
+import HomeScreen from '../screens/main/HomeScreen';
 import DiscoverScreen from '../screens/main/DiscoverScreen';
 import MomentsScreen from '../screens/main/MomentsScreen';
 import MessageHomeScreen from '../screens/main/MessageHomeScreen';
@@ -30,10 +31,12 @@ const MainTabNavigator = () => {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ color, size }) => {
-          if (route.name === 'Discover') {
+          if (route.name === 'Home') {
+            return <Home color={color} size={size} />;
+          } else if (route.name === 'Cards') {
             return <Compass color={color} size={size} />;
           } else if (route.name === 'Moments') {
-            return <Home color={color} size={size} />;
+            return <Sparkles color={color} size={size} />;
           } else if (route.name === 'Messages') {
             return <MessageCircle color={color} size={size} />;
           } else if (route.name === 'Profile') {
@@ -45,7 +48,8 @@ const MainTabNavigator = () => {
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Discover" component={DiscoverScreen} />
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Cards" component={DiscoverScreen} />
       <Tab.Screen name="Moments" component={MomentsScreen} />
       <Tab.Screen name="Messages" component={MessageHomeScreen} />
       <Tab.Screen name="Profile" component={MyProfileScreen} />
