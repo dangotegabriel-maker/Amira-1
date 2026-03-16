@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { Award, ChevronLeft, Gift, ArrowUpCircle, MessageCircle, Phone, Heart, X } from 'lucide-react-native';
+import { Award, ChevronLeft, Gift, ArrowUpCircle, MessageCircle, Phone, Heart, X, Coins, ChevronRight } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';
 import { dbService } from '../../services/firebaseService';
 import { socketService } from '../../services/socketService';
@@ -13,11 +13,39 @@ import { Image } from 'expo-image';
 
 const { width, height } = Dimensions.get('window');
 
+const LowBalanceSheet = ({ visible, onClose, navigation, required }) => (
+  <Modal visible={visible} transparent animationType="slide">
+     <View style={styles.sheetOverlay}>
+        <View style={styles.sheetContent}>
+           <View style={styles.sheetHandle} />
+           <View style={styles.sheetIconBox}>
+              <Coins color="#FFD700" size={40} />
+           </View>
+           <Text style={styles.sheetTitle}>Oops! Low Balance.</Text>
+           <Text style={styles.sheetSubtitle}>You need at least {required} coins to start this call. Top up now to connect.</Text>
+
+           <TouchableOpacity
+             style={styles.rechargeCTA}
+             onPress={() => { onClose(); navigation.navigate('RechargeHub'); }}
+           >
+              <Text style={styles.rechargeCTAText}>Go to Coin Store</Text>
+              <ChevronRight color="white" size={20} />
+           </TouchableOpacity>
+
+           <TouchableOpacity style={styles.closeSheetBtn} onPress={onClose}>
+              <Text style={styles.closeSheetText}>Maybe later</Text>
+           </TouchableOpacity>
+        </View>
+     </View>
+  </Modal>
+);
+
 const UserProfileScreen = ({ route, navigation }) => {
   const { userId, name } = route.params;
   const [currentUser, setCurrentUser] = useState(null);
   const [targetUser, setTargetUser] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [showLowBalance, setShowLowBalance] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -58,7 +86,15 @@ const UserProfileScreen = ({ route, navigation }) => {
         <View style={styles.actionRow}>
            {isMaleViewer && isFemaleProfile ? (
              <>
-               <TouchableOpacity style={styles.primaryAction} onPress={() => navigation.navigate('VideoCall', { name: targetUser.name, userId: targetUser.uid })}>
+               <TouchableOpacity style={styles.primaryAction} onPress={async () => {
+                 const currentCoins = await ledgerService.getBalance();
+                 const price = targetUser.call_price || 50;
+                 if (currentCoins < price) {
+                   setShowLowBalance(true);
+                   return;
+                 }
+                 navigation.navigate('VideoCall', { name: targetUser.name, userId: targetUser.uid });
+               }}>
                   <Phone color="white" size={20} />
                   <Text style={styles.primaryActionText}>Call Now</Text>
                </TouchableOpacity>
@@ -98,12 +134,20 @@ const UserProfileScreen = ({ route, navigation }) => {
   );
 
   return (
-    <FlatList
-      data={[]}
-      renderItem={null}
-      ListHeaderComponent={renderHeader}
-      style={styles.container}
-    />
+    <View style={{ flex: 1 }}>
+      <FlatList
+        data={[]}
+        renderItem={null}
+        ListHeaderComponent={renderHeader}
+        style={styles.container}
+      />
+      <LowBalanceSheet
+        visible={showLowBalance}
+        onClose={() => setShowLowBalance(false)}
+        navigation={navigation}
+        required={targetUser?.call_price || 50}
+      />
+    </View>
   );
 };
 
@@ -124,7 +168,17 @@ const styles = StyleSheet.create({
   photoWrapper: { width: (width - 40) / 3, height: (width - 40) / 3, margin: 5, borderRadius: 10, overflow: 'hidden' },
   photo: { width: '100%', height: '100%' },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 15 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F8F8' }
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F8F8' },
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  sheetContent: { backgroundColor: 'white', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 30, alignItems: 'center' },
+  sheetHandle: { width: 40, height: 5, backgroundColor: '#EEE', borderRadius: 3, marginBottom: 20 },
+  sheetIconBox: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FFF9E6', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  sheetTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.text, marginBottom: 10 },
+  sheetSubtitle: { fontSize: 16, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 30, paddingHorizontal: 20 },
+  rechargeCTA: { width: '100%', height: 55, backgroundColor: COLORS.primary, borderRadius: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  rechargeCTAText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginRight: 10 },
+  closeSheetBtn: { marginTop: 20, padding: 10 },
+  closeSheetText: { color: COLORS.textSecondary, fontWeight: '600' }
 });
 
 export default UserProfileScreen;

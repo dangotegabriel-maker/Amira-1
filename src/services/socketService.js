@@ -89,6 +89,11 @@ class SocketService extends EventEmitter {
      // socket.emit('call_extending', { targetId });
   }
 
+  emitEndCall(targetId, reason) {
+    console.log(`Socket: Ending call with ${targetId}. Reason: ${reason}`);
+    this.emit('call_ended', { targetId, reason });
+  }
+
   disconnect() {
     if (this.userId) this.broadcastStatus('OFFLINE_STATUS');
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);

@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, Animated, Easing, Modal } from 'react-native';
 import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import { Phone } from 'lucide-react-native';
+import { Phone, Coins, ChevronRight } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { hapticService } from '../../services/hapticService';
 import { socketService } from '../../services/socketService';
+import { ledgerService } from '../../services/ledgerService';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 30) / 2;
@@ -53,12 +54,41 @@ const LiveBadge = () => {
   );
 };
 
+const LowBalanceSheet = ({ visible, onClose, navigation, required }) => (
+  <Modal visible={visible} transparent animationType="slide">
+     <View style={styles.sheetOverlay}>
+        <View style={styles.sheetContent}>
+           <View style={styles.sheetHandle} />
+           <View style={styles.sheetIconBox}>
+              <Coins color="#FFD700" size={40} />
+           </View>
+           <Text style={styles.sheetTitle}>Oops! Low Balance.</Text>
+           <Text style={styles.sheetSubtitle}>You need at least {required} coins to start this call. Top up now to connect.</Text>
+
+           <TouchableOpacity
+             style={styles.rechargeCTA}
+             onPress={() => { onClose(); navigation.navigate('RechargeHub'); }}
+           >
+              <Text style={styles.rechargeCTAText}>Go to Coin Store</Text>
+              <ChevronRight color="white" size={20} />
+           </TouchableOpacity>
+
+           <TouchableOpacity style={styles.closeSheetBtn} onPress={onClose}>
+              <Text style={styles.closeSheetText}>Maybe later</Text>
+           </TouchableOpacity>
+        </View>
+     </View>
+  </Modal>
+);
+
 const HomeScreen = () => {
   const navigation = useNavigation();
-  const { user, loading } = useUser();
+  const { user, loading, isMale } = useUser();
   const [activeTab, setActiveTab] = useState('online'); // 'online' or 'live'
   const [selectedContinent, setSelectedContinent] = useState('All');
   const [allUsers, setAllUsers] = useState([]);
+  const [showLowBalance, setShowLowBalance] = useState(false);
+  const [requiredCoins, setRequiredCoins] = useState(50);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef(null);
 
@@ -141,8 +171,17 @@ const HomeScreen = () => {
       </View>
       <TouchableOpacity
         style={styles.callButton}
-        onPress={() => {
+        onPress={async () => {
           hapticService.mediumImpact();
+          if (isMale) {
+            const currentCoins = await ledgerService.getBalance();
+            const price = item.call_price || 50;
+            if (currentCoins < price) {
+              setRequiredCoins(price);
+              setShowLowBalance(true);
+              return;
+            }
+          }
           navigation.navigate('VideoCall', { name: item.name, userId: item.id });
         }}
       >
@@ -274,6 +313,13 @@ const HomeScreen = () => {
           />
         </View>
       </Animated.ScrollView>
+
+      <LowBalanceSheet
+        visible={showLowBalance}
+        onClose={() => setShowLowBalance(false)}
+        navigation={navigation}
+        required={requiredCoins}
+      />
     </View>
   );
 };
@@ -361,7 +407,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2
   },
-  emptyText: { textAlign: 'center', marginTop: 50, color: COLORS.textSecondary, fontSize: 16 }
+  emptyText: { textAlign: 'center', marginTop: 50, color: COLORS.textSecondary, fontSize: 16 },
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  sheetContent: { backgroundColor: 'white', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 30, alignItems: 'center' },
+  sheetHandle: { width: 40, height: 5, backgroundColor: '#EEE', borderRadius: 3, marginBottom: 20 },
+  sheetIconBox: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FFF9E6', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  sheetTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.text, marginBottom: 10 },
+  sheetSubtitle: { fontSize: 16, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 30, paddingHorizontal: 20 },
+  rechargeCTA: { width: '100%', height: 55, backgroundColor: COLORS.primary, borderRadius: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  rechargeCTAText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginRight: 10 },
+  closeSheetBtn: { marginTop: 20, padding: 10 },
+  closeSheetText: { color: COLORS.textSecondary, fontWeight: '600' }
 });
 
 export default HomeScreen;
