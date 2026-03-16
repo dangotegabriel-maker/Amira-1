@@ -9,6 +9,7 @@ export const ledgerService = {
   receivedGifts: {}, // { giftId: count }
   profileViews: 0,
   detailedGifts: [],
+  withdrawalHistory: [],
   diamondBalance: 0, // Total withdrawal currency
   todayDiamonds: 0, // Earnings for the current day
   wealthXP: 0, // For males
@@ -24,6 +25,7 @@ export const ledgerService = {
       const upvotes = await AsyncStorage.getItem('upvotes_count');
       const views = await AsyncStorage.getItem('profile_views_count');
       const detailed = await AsyncStorage.getItem('detailed_gifts');
+      const withdrawals = await AsyncStorage.getItem('withdrawal_history');
       const diamonds = await AsyncStorage.getItem('diamond_balance');
       const today = await AsyncStorage.getItem('today_diamonds');
       const xp = await AsyncStorage.getItem('wealth_xp');
@@ -36,6 +38,7 @@ export const ledgerService = {
       if (upvotes) ledgerService.upvotes = parseInt(upvotes);
       if (views) ledgerService.profileViews = parseInt(views);
       if (detailed) ledgerService.detailedGifts = JSON.parse(detailed);
+      if (withdrawals) ledgerService.withdrawalHistory = JSON.parse(withdrawals);
       if (diamonds) ledgerService.diamondBalance = parseInt(diamonds);
       if (xp) ledgerService.wealthXP = parseInt(xp);
 
@@ -80,6 +83,11 @@ export const ledgerService = {
   getWealthXP: async () => {
     await ledgerService.init();
     return ledgerService.wealthXP;
+  },
+
+  getWithdrawalHistory: async () => {
+    await ledgerService.init();
+    return ledgerService.withdrawalHistory;
   },
 
   addTransaction: async (type, amount, metadata = {}) => {
@@ -197,12 +205,27 @@ export const ledgerService = {
     }
   },
 
-  withdrawDiamonds: async (amount, method) => {
+  withdrawDiamonds: async (amount, metadata) => {
     await ledgerService.init();
     if (ledgerService.diamondBalance < amount) throw new Error('Insufficient diamonds');
 
     ledgerService.diamondBalance -= amount;
+
+    const request = {
+      id: `wd_${Date.now()}`,
+      amount,
+      timestamp: new Date(),
+      ...metadata
+    };
+
+    ledgerService.withdrawalHistory.unshift(request);
+
     await AsyncStorage.setItem('diamond_balance', ledgerService.diamondBalance.toString());
+    await AsyncStorage.setItem('withdrawal_history', JSON.stringify(ledgerService.withdrawalHistory));
+
+    // Simulate API call to admin panel
+    console.log("POST /withdrawals/request", request);
+
     return { success: true };
   }
 };

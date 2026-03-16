@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ScrollView, Dimensions } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Dimensions } from "react-native";
+import { Image } from 'expo-image';
 import { COLORS } from '../../theme/COLORS';
 import { Heart, MessageCircle, Share2, EyeOff, Plus } from 'lucide-react-native';
 import { TapGestureHandler, State, GestureHandlerRootView } from 'react-native-gesture-handler';

@@ -61,13 +61,21 @@ const VideoCallScreen = ({ route, navigation }) => {
        setExtendingCall(true);
        setTimeout(() => setExtendingCall(false), 3000);
     };
+    const onCallEnded = (data) => {
+       if (data.reason === 'low_balance') {
+          Alert.alert("Call Ended", "The call ended due to low balance.");
+       }
+       navigation.goBack();
+    };
     socketService.on('call_extending', onCallExtending);
+    socketService.on('call_ended', onCallEnded);
 
     return () => {
       clearInterval(secondTimer);
       if (billingTimer.current) clearInterval(billingTimer.current);
       agoraService.leaveChannel();
       socketService.off('call_extending', onCallExtending);
+      socketService.off('call_ended', onCallEnded);
       ScreenCapture.allowScreenCaptureAsync();
     };
   }, []);
@@ -103,8 +111,7 @@ const VideoCallScreen = ({ route, navigation }) => {
            const latestBalance = await ledgerService.getBalance();
            if (latestBalance < CALL_RATE) {
               hapticService.error();
-              Alert.alert("Low Balance", "The call has ended.");
-              navigation.goBack();
+              socketService.emitEndCall(userId, 'low_balance');
            } else {
               await billMinute();
            }
