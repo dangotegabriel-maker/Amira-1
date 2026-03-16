@@ -7,7 +7,8 @@ import { hapticService } from '../../services/hapticService';
 import { useGifting } from '../../context/GiftingContext';
 import { socketService } from '../../services/socketService';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+const POST_IMAGE_HEIGHT = height * 0.5;
 
 const MomentsScreen = () => {
   const { triggerGiftOverlay } = useGifting();
@@ -100,7 +101,8 @@ const MomentsScreen = () => {
         <TouchableOpacity key={item.id} style={styles.statusItem} onPress={() => hapticService.lightImpact()}>
           <View style={[
             styles.avatarContainer,
-            item.hasStory && !item.isMe && styles.storyRing
+            item.hasStory && !item.isMe && styles.storyRing,
+            item.isOnline && styles.onlineGlow
           ]}>
             {item.isMe ? (
               <View style={styles.myStatusPlaceholder}>
@@ -188,6 +190,13 @@ const styles = StyleSheet.create({
   statusItem: { alignItems: 'center', marginRight: 20, width: 65 },
   avatarContainer: { width: 56, height: 56, borderRadius: 28, padding: 2, justifyContent: 'center', alignItems: 'center' },
   storyRing: { borderWidth: 2, borderColor: '#FF2D55' }, // Amira Pink for stories
+  onlineGlow: {
+    shadowColor: '#4CD964',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 5,
+  },
   statusAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#EEE' },
   myStatusPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#CCC', justifyContent: 'center', alignItems: 'center' },
   statusOnlineDot: { position: 'absolute', bottom: 2, right: 2, width: 14, height: 14, borderRadius: 7, backgroundColor: '#4CD964', borderWidth: 2, borderColor: 'white' },
@@ -200,7 +209,7 @@ const styles = StyleSheet.create({
   headerText: { marginLeft: 12 },
   username: { fontWeight: 'bold', fontSize: 16, color: COLORS.text },
   timeAgo: { fontSize: 12, color: COLORS.textSecondary },
-  imagePlaceholder: { width: '100%', height: 400, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  imagePlaceholder: { width: '100%', height: POST_IMAGE_HEIGHT, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   postImage: { width: '100%', height: '100%', opacity: 0.7 },
   imageOverlay: { position: 'absolute', padding: 20 },
   content: { fontSize: 22, color: 'white', fontWeight: 'bold', textAlign: 'center' },
