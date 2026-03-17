@@ -26,6 +26,7 @@ import RechargeHubScreen from '../screens/main/RechargeHubScreen';
 import LeaderboardScreen from '../screens/main/LeaderboardScreen';
 import GiftLedgerScreen from '../screens/main/GiftLedgerScreen';
 import WithdrawalScreen from '../screens/main/WithdrawalScreen';
+import CallSummaryScreen from '../screens/main/CallSummaryScreen';
 import HelpSupportScreen from '../screens/main/HelpSupportScreen';
 
 const Stack = createNativeStackNavigator();
@@ -64,6 +65,7 @@ const RootNavigator = () => {
       <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
       <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
+      <Stack.Screen name="CallSummary" component={CallSummaryScreen} />
       <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ headerShown: true, title: 'Help & Support' }} />
     </Stack.Navigator>
   );

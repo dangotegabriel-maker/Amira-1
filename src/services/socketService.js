@@ -91,6 +91,8 @@ class SocketService extends EventEmitter {
 
   emitEndCall(targetId, reason) {
     console.log(`Socket: Ending call with ${targetId}. Reason: ${reason}`);
+    // Simulate network emission to remote party
+    // this.socket.emit('end_call', { targetId, reason });
     this.emit('call_ended', { targetId, reason });
   }
 

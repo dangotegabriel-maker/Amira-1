@@ -1,11 +1,11 @@
 // Firebase initialization and service methods
 export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "amira-app.firebaseapp.com",
-  projectId: "amira-app",
-  storageBucket: "amira-app.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyB_Mock_Key_For_Production",
+  authDomain: "amira-social.firebaseapp.com",
+  projectId: "amira-social",
+  storageBucket: "amira-social.appspot.com",
+  messagingSenderId: "777888999000",
+  appId: "1:777888999000:android:abc123xyz"
 };
 
 export const authService = {
