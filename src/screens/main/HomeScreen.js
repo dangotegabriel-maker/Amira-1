@@ -87,12 +87,14 @@ const HomeScreen = () => {
   const [activeTab, setActiveTab] = useState('online'); // 'online' or 'live'
   const [selectedContinent, setSelectedContinent] = useState('All');
   const [allUsers, setAllUsers] = useState([]);
+  const [isFetching, setIsFetching] = useState(false);
   const [showLowBalance, setShowLowBalance] = useState(false);
   const [requiredCoins, setRequiredCoins] = useState(50);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef(null);
 
   useEffect(() => {
+    setIsFetching(true);
     // Mock data with required flags (gender, country_code, and viewer_count added)
     const mockUsers = [
       { id: 'f1', name: 'Jessica', photo: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=400&h=600', isOnline: true, isLive: false, call_price: 60, country_code: 'US', country_flag: '🇺🇸', gender: 'female' },
@@ -103,11 +105,16 @@ const HomeScreen = () => {
       { id: 'f6', name: 'Isabella', photo: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=400&h=600', isOnline: true, isLive: true, call_price: 65, country_code: 'BR', country_flag: '🇧🇷', gender: 'female', viewer_count: '2.4k' },
       { id: 'm1', name: 'David', photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&h=600', isOnline: true, isLive: false, call_price: null, country_code: 'FR', country_flag: '🇫🇷', gender: 'male' },
     ];
-    setAllUsers(mockUsers);
+
+    // Simulate loading delay for responsive UI feel
+    setTimeout(() => {
+      setAllUsers(mockUsers);
+      setIsFetching(false);
+    }, 1000);
 
     // Socket listener for real-time live updates
     const handleUserWentLive = (data) => {
-      console.log('Socket: User went live', data);
+       // console.log('Socket: User went live', data);
       setAllUsers(prev => prev.map(u => u.id === data.userId ? { ...u, isLive: true } : u));
     };
 
@@ -118,7 +125,7 @@ const HomeScreen = () => {
     };
   }, []);
 
-  if (loading || !user) {
+  if (loading || !user || isFetching) {
     return <LoadingSpinner />;
   }
 
@@ -299,7 +306,12 @@ const HomeScreen = () => {
             estimatedItemSize={ITEM_HEIGHT}
             numColumns={2}
             contentContainerStyle={styles.listContent}
-            ListEmptyComponent={<Text style={styles.emptyText}>No users online in this region</Text>}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyTitle}>Quiet in here!</Text>
+                <Text style={styles.emptyText}>No users are online in this region right now. Check back in a few minutes!</Text>
+              </View>
+            }
           />
         </View>
         <View style={{ width }}>
@@ -309,7 +321,12 @@ const HomeScreen = () => {
             estimatedItemSize={ITEM_HEIGHT}
             numColumns={2}
             contentContainerStyle={styles.listContent}
-            ListEmptyComponent={<Text style={styles.emptyText}>No live streams in this region</Text>}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyTitle}>Stage is Empty</Text>
+                <Text style={styles.emptyText}>No live streams available in this region. Swipe back to Active users!</Text>
+              </View>
+            }
           />
         </View>
       </Animated.ScrollView>
@@ -391,6 +408,9 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center' },
   username: { color: 'white', fontWeight: 'bold', fontSize: 14, flex: 1 },
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CD964', marginLeft: 5 },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 100, paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 10 },
+  emptyText: { textAlign: 'center', color: COLORS.textSecondary, fontSize: 16, lineHeight: 22 },
   callButton: {
     position: 'absolute',
     top: 10,

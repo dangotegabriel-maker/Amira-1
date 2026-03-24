@@ -1,12 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, PanResponder } from "react-native";
+import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, PanResponder, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { X, Heart, MoreHorizontal } from 'lucide-react-native';
+import { X, Heart, MoreHorizontal, ShieldAlert } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { hapticService } from '../../services/hapticService';
 import { useUser } from '../../context/UserContext';
 import { Image } from 'expo-image';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import ReportUserModal from '../../components/ReportUserModal';
 
 const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 0.25 * width;
@@ -14,6 +15,7 @@ const SWIPE_THRESHOLD = 0.25 * width;
 const DiscoverScreen = () => {
   const navigation = useNavigation();
   const { user: currentUser, loading } = useUser();
+  const [showReport, setShowReport] = useState(false);
   const [users, setUsers] = useState([
     {
       id: 'f1', name: 'Jessica', age: 24, gender: 'female', bio: 'Loves hiking and coffee. Let\'s explore!',
@@ -32,6 +34,24 @@ const DiscoverScreen = () => {
     }
   ]);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  const handleBlock = () => {
+    Alert.alert(
+      "Block User",
+      `Are you sure you want to block ${users[currentIndex]?.name}? You will no longer see their profile or receive calls from them.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: () => {
+            hapticService.mediumImpact();
+            forceSwipe('left');
+          }
+        }
+      ]
+    );
+  };
 
   const position = useRef(new Animated.ValueXY()).current;
   const rotate = position.x.interpolate({
@@ -152,12 +172,29 @@ const DiscoverScreen = () => {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={[styles.actionButton, styles.report]}
+          onPress={() => setShowReport(true)}
+        >
+          <ShieldAlert color="#FF9500" size={28} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.actionButton, styles.like]}
           onPress={() => forceSwipe('right')}
         >
           <Heart color="#4CD964" size={32} fill="#4CD964" />
         </TouchableOpacity>
       </View>
+
+      <ReportUserModal
+        visible={showReport}
+        onClose={() => setShowReport(false)}
+        userName={users[currentIndex]?.name}
+        onReport={(reason) => {
+          Alert.alert("Report Received", "Thank you for keeping Amira safe. Our moderation team will review this user.");
+          forceSwipe('left');
+        }}
+      />
     </View>
   );
 };
@@ -201,6 +238,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3
   },
   dislike: { borderColor: '#FF3B30', borderWidth: 1 },
+  report: { width: 50, height: 50, borderRadius: 25, borderColor: '#FF9500', borderWidth: 1, marginHorizontal: 10 },
   like: { borderColor: '#4CD964', borderWidth: 1 },
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   noMoreCards: { alignItems: 'center' },

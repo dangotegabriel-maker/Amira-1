@@ -17,7 +17,7 @@ class SocketService extends EventEmitter {
   connect(userId) {
     if (!userId) return;
     if (this.connected && this.userId === userId) return;
-    console.log(`Socket connecting for user: ${userId}`);
+     // console.log(`Socket connecting for user: ${userId}`);
     this.userId = userId;
     this.connected = true;
     this.broadcastStatus('ONLINE_STATUS');
@@ -28,14 +28,14 @@ class SocketService extends EventEmitter {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = setInterval(() => {
       if (this.connected) {
-        console.log("Socket: Sending Heartbeat 💓");
+         // console.log("Socket: Sending Heartbeat 💓");
       }
     }, 60000);
   }
 
   broadcastStatus(status) {
     if (!this.userId) return;
-    console.log(`Socket: Broadcasting status for ${this.userId}: ${status}`);
+     // console.log(`Socket: Broadcasting status for ${this.userId}: ${status}`);
     if (status === 'ONLINE_STATUS' && this.lastStatus === 'STATUS_BUSY') {
         this.triggerNotifyQueue(this.userId);
     }
@@ -52,7 +52,7 @@ class SocketService extends EventEmitter {
   triggerNotifyQueue(profileId) {
     const viewers = this.pendingNotifications[profileId];
     if (viewers && viewers.length > 0) {
-        console.log(`Socket: Notifying ${viewers.length} viewers that ${profileId} is free!`);
+         // console.log(`Socket: Notifying ${viewers.length} viewers that ${profileId} is free!`);
         this.pendingNotifications[profileId] = [];
     }
   }
@@ -72,25 +72,27 @@ class SocketService extends EventEmitter {
   }
 
   emitProfileView(viewerId, profileId) {
-    console.log(`Socket: ${viewerId} viewed profile of ${profileId}`);
+     // console.log(`Socket: ${viewerId} viewed profile of ${profileId}`);
   }
 
   sendGift(targetUserId, giftData) {
-    console.log(`Socket: Sending gift to ${targetUserId}`, giftData);
+     // console.log(`Socket: Sending gift to ${targetUserId}`, giftData);
   }
 
   sendWhisper(targetUserId, senderName) {
-    console.log(`Socket: ${senderName} sent a whisper nudge to ${targetUserId}`);
+     // console.log(`Socket: ${senderName} sent a whisper nudge to ${targetUserId}`);
   }
 
   // New for Call Extending
   signalCallExtension(targetId) {
-     console.log(`Socket: Signaling call extension to ${targetId}`);
+      // console.log(`Socket: Signaling call extension to ${targetId}`);
      // socket.emit('call_extending', { targetId });
   }
 
   emitEndCall(targetId, reason) {
-    console.log(`Socket: Ending call with ${targetId}. Reason: ${reason}`);
+     // console.log(`Socket: Ending call with ${targetId}. Reason: ${reason}`);
+    // Simulate network emission to remote party
+    // this.socket.emit('end_call', { targetId, reason });
     this.emit('call_ended', { targetId, reason });
   }
 

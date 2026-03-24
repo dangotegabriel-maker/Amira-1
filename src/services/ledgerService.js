@@ -224,7 +224,7 @@ export const ledgerService = {
     await AsyncStorage.setItem('withdrawal_history', JSON.stringify(ledgerService.withdrawalHistory));
 
     // Simulate API call to admin panel
-    console.log("POST /withdrawals/request", request);
+     // console.log("POST /withdrawals/request", request);
 
     return { success: true };
   }

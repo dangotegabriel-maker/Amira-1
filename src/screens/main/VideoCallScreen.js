@@ -65,7 +65,7 @@ const VideoCallScreen = ({ route, navigation }) => {
        if (data.reason === 'low_balance') {
           Alert.alert("Call Ended", "The call ended due to low balance.");
        }
-       navigation.goBack();
+       navigateToSummary();
     };
     socketService.on('call_extending', onCallExtending);
     socketService.on('call_ended', onCallEnded);
@@ -79,6 +79,18 @@ const VideoCallScreen = ({ route, navigation }) => {
       ScreenCapture.allowScreenCaptureAsync();
     };
   }, []);
+
+   const navigateToSummary = () => {
+      navigation.navigate('CallSummary', {
+         duration,
+         coinsSpent: currentUser?.gender === 'male' ? (Math.ceil(duration / 60) * CALL_RATE) : 0,
+         diamondsEarned: currentUser?.gender === 'female' ? diamondsEarned : 0,
+         targetUserId: userId,
+         targetUserName: name,
+         targetUserPhoto: `https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200`, // In real app, pass actual photo
+         isMale: currentUser?.gender === 'male'
+      });
+   };
 
   const loadUserAndStartCall = async () => {
      const profile = await dbService.getUserProfile('current_user_id');
@@ -128,7 +140,7 @@ const VideoCallScreen = ({ route, navigation }) => {
         // Signal extension to female
         socketService.signalCallExtension(userId);
 
-        console.log("Minute billed successfully.");
+         // console.log("Minute billed successfully.");
      } catch (e) {
         console.error("Billing failed", e);
      }
@@ -202,7 +214,7 @@ const VideoCallScreen = ({ route, navigation }) => {
       <View style={styles.controlsContainer}>
          <View style={styles.glassBar}>
             <TouchableOpacity style={styles.controlButton} onPress={() => setIsMuted(!isMuted)}>{isMuted ? <MicOff color="white" size={24} /> : <Mic color="white" size={24} />}</TouchableOpacity>
-            <TouchableOpacity style={[styles.controlButton, styles.endCall]} onPress={() => navigation.goBack()}><PhoneOff color="white" size={28} /></TouchableOpacity>
+            <TouchableOpacity style={[styles.controlButton, styles.endCall]} onPress={navigateToSummary}><PhoneOff color="white" size={28} /></TouchableOpacity>
             <TouchableOpacity style={styles.controlButton} onPress={() => setIsFrontCamera(!isFrontCamera)}><Video color="white" size={24} /></TouchableOpacity>
             <TouchableOpacity style={styles.controlButton} onPress={() => setIsGiftTrayVisible(true)}><Gift color="#FFD700" size={24} /></TouchableOpacity>
          </View>
