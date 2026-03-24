@@ -1,6 +1,6 @@
 // src/screens/main/RechargeHubScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, SafeAreaView } from "react-native";
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { Coins, ChevronLeft, TrendingUp, Zap, Trophy, Crown } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';
@@ -44,15 +44,30 @@ const BUNDLES = [
   },
 ];
 
-const RechargeHubScreen = ({ navigation }) => {
+const RechargeHubScreen = ({ navigation, route }) => {
   const [balance, setBalance] = useState(0);
+  const [loading, setLoading] = useState(false);
   const isFocused = useIsFocused();
 
   useEffect(() => {
     if (isFocused) {
       loadBalance();
+
+      // Handle return from payment screen
+      if (route.params?.paymentStatus === 'success') {
+        const { coins, bundleId } = route.params;
+        ledgerService.buyCoins(coins, bundleId).then(() => {
+           loadBalance();
+           Alert.alert("Success", "Payment confirmed! Coins added.");
+           // Clear params to avoid multiple alerts
+           navigation.setParams({ paymentStatus: null, coins: null, bundleId: null });
+        });
+      } else if (route.params?.paymentStatus === 'failed') {
+        Alert.alert("Payment Failed", "Transaction was unsuccessful. Please try again.");
+        navigation.setParams({ paymentStatus: null });
+      }
     }
-  }, [isFocused]);
+  }, [isFocused, route.params]);
 
   const loadBalance = async () => {
     const b = await ledgerService.getBalance();
@@ -60,21 +75,26 @@ const RechargeHubScreen = ({ navigation }) => {
   };
 
   const handlePurchase = async (bundle) => {
-    Alert.alert(
-      "Confirm Purchase",
-      `Buy ${bundle.name} (${bundle.coins} coins) for ${bundle.price}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Purchase",
-          onPress: async () => {
-            await ledgerService.buyCoins(bundle.coins, bundle.id);
-            loadBalance();
-            Alert.alert("Success", "Coins added to your account.");
-          }
-        }
-      ]
-    );
+    setLoading(true);
+    try {
+      // MOCK BACKEND CALL: In production, call your server to initialize transaction
+      // This returns a Paystack Checkout URL
+      // Mocking a successful init response
+      setTimeout(() => {
+        setLoading(false);
+        const mockPaystackUrl = `https://checkout.paystack.com/mock-session-${Math.random().toString(36).substr(7)}`;
+
+        navigation.navigate('Payment', {
+          checkoutUrl: mockPaystackUrl,
+          bundleId: bundle.id,
+          coins: bundle.coins
+        });
+      }, 1000);
+
+    } catch (error) {
+      setLoading(false);
+      Alert.alert("Error", "Could not initiate payment. Please check your connection.");
+    }
   };
 
   return (
@@ -94,6 +114,13 @@ const RechargeHubScreen = ({ navigation }) => {
           <Text style={styles.balanceValue}>{balance}</Text>
         </View>
       </View>
+
+      {loading && (
+        <View style={styles.globalLoading}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Connecting to Payment Gateway...</Text>
+        </View>
+      )}
 
       <FlatList
         data={BUNDLES}
@@ -185,7 +212,23 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10
   },
-  priceText: { color: COLORS.white, fontWeight: 'bold' }
+  priceText: { color: COLORS.white, fontWeight: 'bold' },
+  globalLoading: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#FFFBE6',
+    marginHorizontal: 15,
+    marginTop: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FFE58F'
+  },
+  loadingText: {
+    marginTop: 8,
+    color: '#856404',
+    fontSize: 14,
+    fontWeight: '500'
+  }
 });
 
 export default RechargeHubScreen;

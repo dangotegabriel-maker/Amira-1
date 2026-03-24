@@ -28,6 +28,7 @@ import GiftLedgerScreen from '../screens/main/GiftLedgerScreen';
 import WithdrawalScreen from '../screens/main/WithdrawalScreen';
 import CallSummaryScreen from '../screens/main/CallSummaryScreen';
 import HelpSupportScreen from '../screens/main/HelpSupportScreen';
+import PaymentScreen from '../screens/main/PaymentScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -40,6 +41,8 @@ const RootNavigator = () => {
         gestureEnabled: true,
       }}
     >
+      {/* Main App */}
+      <Stack.Screen name="MainTabs" component={MainTabNavigator} />
       {/* Onboarding Stack */}
       <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
@@ -52,8 +55,6 @@ const RootNavigator = () => {
       <Stack.Screen name="Interests" component={InterestsScreen} />
       <Stack.Screen name="LocationPermission" component={LocationPermissionScreen} />
 
-      {/* Main App */}
-      <Stack.Screen name="MainTabs" component={MainTabNavigator} />
       <Stack.Screen name="ChatDetail" component={ChatDetailScreen} options={{ headerShown: true, title: 'Chat' }} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
       <Stack.Screen name="VideoCall" component={VideoCallScreen} />
@@ -62,6 +63,7 @@ const RootNavigator = () => {
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Edit Profile' }} />
       <Stack.Screen name="RechargeHub" component={RechargeHubScreen} />
+      <Stack.Screen name="Payment" component={PaymentScreen} />
       <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
       <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
