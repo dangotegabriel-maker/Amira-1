@@ -20,6 +20,7 @@
     "expo": "~51.0.2",
     "expo-av": "~14.0.5",
     "expo-blur": "~13.0.3",
+    "expo-camera": "~15.0.10",
     "expo-haptics": "~13.0.1",
     "expo-image": "~1.13.0",
     "expo-image-picker": "~15.1.0",
@@ -38,6 +39,7 @@
     "react-native-screens": "3.31.1",
     "react-native-svg": "15.2.0",
     "react-native-web": "~0.19.10",
+    "react-native-webview": "^13.16.1",
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {

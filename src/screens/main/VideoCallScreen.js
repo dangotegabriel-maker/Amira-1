@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder, Alert, Modal } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { PhoneOff, Mic, MicOff, Camera, Video, Gift, Coins, X, DollarSign, Heart } from 'lucide-react-native';
+import { PhoneOff, Mic, MicOff, Camera, Video, Gift, Coins, X, DollarSign, Heart, RefreshCw } from 'lucide-react-native';
+import { CameraView } from 'expo-camera';
 import LottieView from 'lottie-react-native';
 import { hapticService } from '../../services/hapticService';
 import { agoraService } from '../../services/agoraService';
@@ -36,6 +37,11 @@ const VideoCallScreen = ({ route, navigation }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pipPos = useRef(new Animated.ValueXY({ x: width - 120, y: 100 })).current;
   const billingTimer = useRef(null);
+
+  const toggleCamera = () => {
+     hapticService.lightImpact();
+     setIsFrontCamera(prev => !prev);
+  };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -202,7 +208,15 @@ const VideoCallScreen = ({ route, navigation }) => {
       </Animated.View>
 
       <Animated.View {...panResponder.panHandlers} style={[styles.pip, { transform: pipPos.getTranslateTransform() }]}>
-         <View style={styles.localPlaceholder}><Camera color="white" size={24} /></View>
+         <View style={styles.localPlaceholder}>
+            <CameraView style={{ flex: 1 }} facing={isFrontCamera ? 'front' : 'back'} />
+            <TouchableOpacity
+               style={styles.flipButton}
+               onPress={toggleCamera}
+            >
+               <RefreshCw color="white" size={20} />
+            </TouchableOpacity>
+         </View>
       </Animated.View>
 
       {showSparkles && (
@@ -215,7 +229,7 @@ const VideoCallScreen = ({ route, navigation }) => {
          <View style={styles.glassBar}>
             <TouchableOpacity style={styles.controlButton} onPress={() => setIsMuted(!isMuted)}>{isMuted ? <MicOff color="white" size={24} /> : <Mic color="white" size={24} />}</TouchableOpacity>
             <TouchableOpacity style={[styles.controlButton, styles.endCall]} onPress={navigateToSummary}><PhoneOff color="white" size={28} /></TouchableOpacity>
-            <TouchableOpacity style={styles.controlButton} onPress={() => setIsFrontCamera(!isFrontCamera)}><Video color="white" size={24} /></TouchableOpacity>
+            <TouchableOpacity style={styles.controlButton} onPress={toggleCamera}><Video color="white" size={24} /></TouchableOpacity>
             <TouchableOpacity style={styles.controlButton} onPress={() => setIsGiftTrayVisible(true)}><Gift color="#FFD700" size={24} /></TouchableOpacity>
          </View>
       </View>
@@ -256,8 +270,16 @@ const styles = StyleSheet.create({
   remotePlaceholder: { flex: 1, backgroundColor: '#1A1A1A', justifyContent: 'center', alignItems: 'center' },
   remoteName: { color: 'white', fontSize: 24, fontWeight: 'bold' },
   remoteStatus: { color: COLORS.primary, fontSize: 16, marginTop: 10 },
-  pip: { position: 'absolute', width: 100, height: 150, borderRadius: 20, backgroundColor: '#333', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', overflow: 'hidden', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
-  localPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  pip: { position: 'absolute', width: 100, height: 150, borderRadius: 20, backgroundColor: '#333', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', overflow: 'hidden', zIndex: 100 },
+  localPlaceholder: { flex: 1 },
+  flipButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 5,
+    borderRadius: 15,
+  },
 
   extendingOverlay: { position: 'absolute', top: '30%', alignItems: 'center' },
   extendingText: { color: 'white', fontWeight: 'bold', marginTop: 15, textShadowColor: 'black', textShadowRadius: 5 },

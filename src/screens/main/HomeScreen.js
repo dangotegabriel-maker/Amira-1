@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4CD964', marginLeft: 5 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 100, paddingHorizontal: 40 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 10 },
-  emptyText: { textAlign: 'center', color: COLORS.textSecondary, fontSize: 16, lineHeight: 22 },
+  emptyText: { textAlign: 'center', color: COLORS.textSecondary, fontSize: 16, lineHeight: 22, marginTop: 20 },
   callButton: {
     position: 'absolute',
     top: 10,
@@ -427,7 +427,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2
   },
-  emptyText: { textAlign: 'center', marginTop: 50, color: COLORS.textSecondary, fontSize: 16 },
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheetContent: { backgroundColor: 'white', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 30, alignItems: 'center' },
   sheetHandle: { width: 40, height: 5, backgroundColor: '#EEE', borderRadius: 3, marginBottom: 20 },
