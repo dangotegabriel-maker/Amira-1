@@ -26,6 +26,7 @@ export const dbService = {
       name: 'John Doe',
       diamonds: 1200,
       isVip: true,
+      country_code: 'GH', // Mocked for Paystack Sprint
       gender: 'male', // or 'female'
       bio: 'Lover of luxury and high-stakes social flexing. 🥂',
       photos: [

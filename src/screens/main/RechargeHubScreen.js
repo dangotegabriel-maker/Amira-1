@@ -82,12 +82,10 @@ const RechargeHubScreen = ({ navigation, route }) => {
       // Mocking a successful init response
       setTimeout(() => {
         setLoading(false);
-        const mockPaystackUrl = `https://checkout.paystack.com/mock-session-${Math.random().toString(36).substr(7)}`;
-
-        navigation.navigate('Payment', {
-          checkoutUrl: mockPaystackUrl,
+        navigation.navigate('PaymentMethod', {
           bundleId: bundle.id,
-          coins: bundle.coins
+          coins: bundle.coins,
+          amount: bundle.price
         });
       }, 1000);
 
