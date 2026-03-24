@@ -17,13 +17,13 @@ const CallSummaryScreen = ({ route, navigation }) => {
     hapticService.lightImpact();
     setIsFollowing(true);
     // Mock follow logic
-    console.log(`Following user: ${targetUserId}`);
+     // console.log(`Following user: ${targetUserId}`);
   };
 
   const handleRating = (r) => {
     hapticService.lightImpact();
     setRating(r);
-    console.log(`Rated user ${targetUserId} with ${r} stars`);
+     // console.log(`Rated user ${targetUserId} with ${r} stars`);
   };
 
   const formatDuration = (s) => {

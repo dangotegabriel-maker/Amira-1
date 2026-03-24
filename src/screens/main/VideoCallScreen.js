@@ -140,7 +140,7 @@ const VideoCallScreen = ({ route, navigation }) => {
         // Signal extension to female
         socketService.signalCallExtension(userId);
 
-        console.log("Minute billed successfully.");
+         // console.log("Minute billed successfully.");
      } catch (e) {
         console.error("Billing failed", e);
      }

@@ -10,11 +10,11 @@ export const firebaseConfig = {
 
 export const authService = {
   loginWithPhone: async (phone) => {
-    console.log("Mock Phone Login:", phone);
+     // console.log("Mock Phone Login:", phone);
     return { success: true };
   },
   verifyOTP: async (code) => {
-    console.log("Mock OTP Verification:", code);
+     // console.log("Mock OTP Verification:", code);
     return { user: { uid: '123', name: 'John' } };
   }
 };
@@ -37,7 +37,7 @@ export const dbService = {
     };
   },
   updateUserProfile: async (uid, data) => {
-    console.log("Mock Updating User Profile:", uid, data);
+     // console.log("Mock Updating User Profile:", uid, data);
     return { success: true };
   }
 };

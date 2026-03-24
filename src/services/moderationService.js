@@ -7,17 +7,17 @@ export const moderationService = {
   reports: [],
 
   blockUser: async (blockerId, blockedId) => {
-    console.log(`Blocking user ${blockedId} for blocker ${blockerId}`);
+     // console.log(`Blocking user ${blockedId} for blocker ${blockerId}`);
     moderationService.blocks.push({ blockerId, blockedId, timestamp: new Date() });
 
     // Logic to instantly invalidate socket connection (simulated)
-    console.log(`Socket connection invalidated for ${blockedId}`);
+     // console.log(`Socket connection invalidated for ${blockedId}`);
 
     return { success: true };
   },
 
   reportUser: async (reporterId, reportedId, reason, lastMessages) => {
-    console.log(`Reporting user ${reportedId} by ${reporterId} for ${reason}`);
+     // console.log(`Reporting user ${reportedId} by ${reporterId} for ${reason}`);
     const reportEntry = {
       reporterId,
       reportedId,
@@ -30,7 +30,7 @@ export const moderationService = {
     // Simulate POST request to admin dashboard
     try {
       // await fetch('https://admin-api.amira.com/v1/reports', { method: 'POST', body: JSON.stringify(reportEntry) });
-      console.log('Report sent to admin dashboard successfully');
+       // console.log('Report sent to admin dashboard successfully');
     } catch (error) {
       console.error('Failed to send report to admin:', error);
     }

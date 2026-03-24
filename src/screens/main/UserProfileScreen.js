@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal, ActivityIndicator, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { Award, ChevronLeft, Gift, ArrowUpCircle, MessageCircle, Phone, Heart, X, Coins, ChevronRight } from 'lucide-react-native';
+import { Award, ChevronLeft, Gift, ArrowUpCircle, MessageCircle, Phone, Heart, X, Coins, ChevronRight, ShieldAlert, UserMinus } from 'lucide-react-native';
 import { ledgerService } from '../../services/ledgerService';
 import { dbService } from '../../services/firebaseService';
 import { socketService } from '../../services/socketService';
@@ -10,6 +10,7 @@ import VIPBadge from '../../components/VIPBadge';
 import GiftingLeaderboard from '../../components/GiftingLeaderboard';
 import GlowAvatar from '../../components/GlowAvatar';
 import { Image } from 'expo-image';
+import ReportUserModal from '../../components/ReportUserModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -46,6 +47,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   const [targetUser, setTargetUser] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [showLowBalance, setShowLowBalance] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -67,6 +69,24 @@ const UserProfileScreen = ({ route, navigation }) => {
 
   const isFemaleProfile = targetUser.gender === 'female';
   const isMaleViewer = currentUser.gender === 'male';
+
+  const handleBlock = () => {
+    Alert.alert(
+      "Block User",
+      `Are you sure you want to block ${targetUser?.name}? They will no longer be able to message or call you.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: () => {
+            hapticService.mediumImpact();
+            navigation.goBack();
+          }
+        }
+      ]
+    );
+  };
 
   const renderHeader = () => (
     <View>
@@ -130,6 +150,17 @@ const UserProfileScreen = ({ route, navigation }) => {
       </View>
 
       <GiftingLeaderboard />
+
+      <View style={styles.safetyActions}>
+         <TouchableOpacity style={styles.safetyBtn} onPress={() => setShowReport(true)}>
+            <ShieldAlert color={COLORS.textSecondary} size={20} />
+            <Text style={styles.safetyBtnText}>Report User</Text>
+         </TouchableOpacity>
+         <TouchableOpacity style={styles.safetyBtn} onPress={handleBlock}>
+            <UserMinus color="#FF3B30" size={20} />
+            <Text style={[styles.safetyBtnText, { color: '#FF3B30' }]}>Block User</Text>
+         </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -146,6 +177,15 @@ const UserProfileScreen = ({ route, navigation }) => {
         onClose={() => setShowLowBalance(false)}
         navigation={navigation}
         required={targetUser?.call_price || 50}
+      />
+
+      <ReportUserModal
+        visible={showReport}
+        onClose={() => setShowReport(false)}
+        userName={targetUser?.name}
+        onReport={() => {
+           Alert.alert("Report Received", "Thank you. Our team will investigate this profile.");
+        }}
       />
     </View>
   );
@@ -168,6 +208,9 @@ const styles = StyleSheet.create({
   photoWrapper: { width: (width - 40) / 3, height: (width - 40) / 3, margin: 5, borderRadius: 10, overflow: 'hidden' },
   photo: { width: '100%', height: '100%' },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 15 },
+  safetyActions: { padding: 20, backgroundColor: 'white', marginTop: 10 },
+  safetyBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  safetyBtnText: { marginLeft: 15, fontSize: 16, fontWeight: '500', color: COLORS.textSecondary },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F8F8' },
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheetContent: { backgroundColor: 'white', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 30, alignItems: 'center' },

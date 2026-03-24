@@ -16,7 +16,7 @@ class SoundService {
         interruptionModeAndroid: 1,
       });
     } catch (e) {
-      console.log('SoundService: Error initializing audio mode', e);
+       // console.log('SoundService: Error initializing audio mode', e);
     }
   }
 
@@ -27,7 +27,7 @@ class SoundService {
         const { sound } = await Audio.Sound.createAsync({ uri: url });
         this.sounds[url] = sound;
       } catch (e) {
-        console.log(`SoundService: Error preloading ${url}`, e);
+         // console.log(`SoundService: Error preloading ${url}`, e);
       }
     }
   }
@@ -37,7 +37,7 @@ class SoundService {
       try {
         await this.sounds[url].replayAsync();
       } catch (e) {
-        console.log(`SoundService: Error replaying ${url}`, e);
+         // console.log(`SoundService: Error replaying ${url}`, e);
         // Fallback: try loading and playing
         const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
         this.sounds[url] = sound;

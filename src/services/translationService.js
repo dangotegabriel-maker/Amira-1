@@ -11,7 +11,7 @@ export const translationService = {
     try {
       const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
-        console.log('Returning cached translation');
+         // console.log('Returning cached translation');
         return cached;
       }
     } catch (e) {
@@ -19,7 +19,7 @@ export const translationService = {
     }
 
     // Mock Translation Logic (Simulating Google Cloud Translation / DeepL)
-    console.log(`Translating "${text}" to ${targetLang}`);
+     // console.log(`Translating "${text}" to ${targetLang}`);
 
     // Simple mock translations for demo
     let translated = `[${targetLang}] ${text}`;
