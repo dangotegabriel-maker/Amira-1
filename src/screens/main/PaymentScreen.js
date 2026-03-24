@@ -6,7 +6,7 @@ import { COLORS } from '../../theme/COLORS';
 import { ChevronLeft } from 'lucide-react-native';
 
 const PaymentScreen = ({ route, navigation }) => {
-  const { checkoutUrl, bundleId, coins } = route.params;
+  const { checkoutUrl, bundleId, coins, channels, currency } = route.params;
   const [loading, setLoading] = useState(true);
 
   const handleNavigationStateChange = (navState) => {

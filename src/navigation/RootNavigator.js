@@ -29,6 +29,7 @@ import WithdrawalScreen from '../screens/main/WithdrawalScreen';
 import CallSummaryScreen from '../screens/main/CallSummaryScreen';
 import HelpSupportScreen from '../screens/main/HelpSupportScreen';
 import PaymentScreen from '../screens/main/PaymentScreen';
+import PaymentMethodScreen from '../screens/main/PaymentMethodScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -63,6 +64,7 @@ const RootNavigator = () => {
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Edit Profile' }} />
       <Stack.Screen name="RechargeHub" component={RechargeHubScreen} />
+      <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />
       <Stack.Screen name="Payment" component={PaymentScreen} />
       <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
       <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />
