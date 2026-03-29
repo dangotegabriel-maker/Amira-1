@@ -4,21 +4,35 @@ import { View, StyleSheet, SafeAreaView, TouchableOpacity, Text, ActivityIndicat
 import { WebView } from 'react-native-webview';
 import { COLORS } from '../../theme/COLORS';
 import { ChevronLeft } from 'lucide-react-native';
+import { paystackService } from '../../services/paystackService';
 
 const PaymentScreen = ({ route, navigation }) => {
   const { checkoutUrl, bundleId, coins, channels, currency } = route.params;
   const [loading, setLoading] = useState(true);
+  const [verifying, setVerifying] = useState(false);
 
-  const handleNavigationStateChange = (navState) => {
+  const handleNavigationStateChange = async (navState) => {
     const { url } = navState;
-    console.log('WebView URL:', url);
+    // console.log('WebView URL:', url);
 
-    // Paystack success redirect usually contains 'callback' or 'success' depending on configuration
-    // For this implementation, we assume the backend handles the actual credit,
-    // and we just detect the completion to close the webview.
     if (url.includes('checkout-success') || url.includes('done') || url.includes('callback')) {
-      // In a real app, you might want to verify the transaction status with your backend here
-      navigation.navigate('RechargeHub', { paymentStatus: 'success', bundleId, coins });
+      // Extract reference from URL (e.g. ?reference=ref_123 or ?trxref=ref_123)
+      const urlParams = new URLSearchParams(url.split('?')[1]);
+      const reference = urlParams.get('reference') || urlParams.get('trxref') || 'simulated_ref';
+
+      setVerifying(true);
+      try {
+        const verification = await paystackService.verifyTransaction(reference);
+        if (verification.status === 'success') {
+          navigation.navigate('RechargeHub', { paymentStatus: 'success', bundleId, coins });
+        } else {
+          navigation.navigate('RechargeHub', { paymentStatus: 'failed' });
+        }
+      } catch (error) {
+        navigation.navigate('RechargeHub', { paymentStatus: 'failed' });
+      } finally {
+        setVerifying(false);
+      }
     } else if (url.includes('cancel') || url.includes('fail')) {
       navigation.navigate('RechargeHub', { paymentStatus: 'failed' });
     }
@@ -48,6 +62,13 @@ const PaymentScreen = ({ route, navigation }) => {
           )}
         />
       </View>
+
+      {verifying && (
+        <View style={styles.verifyingOverlay}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.verifyingText}>Verifying Transaction...</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -75,6 +96,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'white',
+  },
+  verifyingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  verifyingText: {
+    marginTop: 15,
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.primary,
   }
 });
 
