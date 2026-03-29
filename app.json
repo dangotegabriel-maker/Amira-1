@@ -15,12 +15,9 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.amira.social",
+      "package": "com.gabsads.amira",
       "googleServicesFile": "./google-services.json",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      }
+      "buildType": "apk"
     },
     "web": {
       "favicon": "./assets/favicon.png"
