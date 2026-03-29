@@ -31,8 +31,11 @@ const PaymentMethodScreen = ({ route, navigation }) => {
       channels = ['card'];
     }
 
+    // Use dynamic public key from env
+    const publicKey = process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY;
+
     // Mock Paystack Checkout URL generation logic
-    const mockPaystackUrl = `https://checkout.paystack.com/mock-${method}-${currency}-${bundleId}`;
+    const mockPaystackUrl = `https://checkout.paystack.com/mock-${method}-${currency}-${bundleId}?key=${publicKey}`;
 
     navigation.navigate('Payment', {
       checkoutUrl: mockPaystackUrl,
