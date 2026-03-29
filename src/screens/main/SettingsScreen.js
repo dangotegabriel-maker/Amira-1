@@ -4,6 +4,7 @@ import { COLORS } from '../../theme/COLORS';
 import { ChevronRight, LogOut, Trash2, Shield, User, Globe } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { socketService } from '../../services/socketService';
+import { authService } from '../../services/firebaseService';
 
 const SettingsScreen = ({ navigation }) => {
   const handleLogout = async () => {
@@ -12,6 +13,7 @@ const SettingsScreen = ({ navigation }) => {
       {
         text: "Logout",
         onPress: async () => {
+          await authService.signOut();
           socketService.disconnect();
           navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
         }

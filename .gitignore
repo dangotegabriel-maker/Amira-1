@@ -10,3 +10,4 @@ yarn-error.*
 .env.test.local
 .env.production.local
 web-build/
+.env

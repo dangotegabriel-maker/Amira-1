@@ -16,6 +16,10 @@ export const authService = {
   verifyOTP: async (code) => {
      // console.log("Mock OTP Verification:", code);
     return { user: { uid: '123', name: 'John' } };
+  },
+  signOut: async () => {
+     // console.log("Mock Logout");
+    return { success: true };
   }
 };
 
