@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions } fr
 import { COLORS } from '../../theme/COLORS';
 import { ChevronLeft, Smartphone, CreditCard, ChevronRight } from 'lucide-react-native';
 import { useUser } from '../../context/UserContext';
+import { convertUSDToGHS } from '../../utils/currencyConverter';
 
 const { width } = Dimensions.get('window');
 
@@ -34,16 +35,30 @@ const PaymentMethodScreen = ({ route, navigation }) => {
     // Use dynamic public key from env
     const publicKey = process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY;
 
+    // Extract numeric amount from string (e.g., "$0.99" -> 0.99)
+    const usdPrice = parseFloat(amount.replace('$', '')) || 0;
+    const finalAmount = currency === 'GHS' ? convertUSDToGHS(usdPrice) : Math.round(usdPrice * 100);
+
     // Mock Paystack Checkout URL generation logic
-    const mockPaystackUrl = `https://checkout.paystack.com/mock-${method}-${currency}-${bundleId}?key=${publicKey}`;
+    const mockPaystackUrl = `https://checkout.paystack.com/mock-${method}-${currency}-${bundleId}?key=${publicKey}&amount=${finalAmount}`;
 
     navigation.navigate('Payment', {
       checkoutUrl: mockPaystackUrl,
       bundleId,
       coins,
       channels,
-      currency
+      currency,
+      finalAmount
     });
+  };
+
+  const getSubTitle = () => {
+     if (currency === 'GHS') {
+        const usdPrice = parseFloat(amount.replace('$', '')) || 0;
+        const ghsValue = (usdPrice * 16.0).toFixed(2);
+        return `Pay ${amount} (~GH₵${ghsValue}) for ${coins} coins`;
+     }
+     return `Pay ${amount} in ${currency} for ${coins} coins`;
   };
 
   return (
@@ -58,7 +73,7 @@ const PaymentMethodScreen = ({ route, navigation }) => {
 
       <View style={styles.content}>
         <Text style={styles.title}>Choose how to pay</Text>
-        <Text style={styles.subtitle}>Pay {amount} in {currency} for {coins} coins</Text>
+        <Text style={styles.subtitle}>{getSubTitle()}</Text>
 
         <TouchableOpacity
           style={styles.methodCard}
