@@ -44,5 +44,23 @@ export const dbService = {
   updateUserProfile: async (uid, data) => {
      // console.log("Mock Updating User Profile:", uid, data);
     return { success: true };
+  },
+  createUserProfile: async (uid, data = {}) => {
+    // console.log("Firestore: Creating user document in 'users' collection:", uid);
+
+    // Test Build Bypass: Initial Balance set to 500,000 coins
+    const initialBalance = 500000;
+
+    const newUser = {
+      uid,
+      coin_balance: initialBalance,
+      diamonds: 0,
+      is_verified: false,
+      created_at: new Date(),
+      ...data
+    };
+
+    // In a real app, this would be: await setDoc(doc(db, "users", uid), newUser);
+    return { success: true, user: newUser };
   }
 };
