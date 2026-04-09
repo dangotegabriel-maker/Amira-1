@@ -1,9 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
+import { authService, dbService } from '../../services/firebaseService';
 
 const OTPScreen = ({ navigation }) => {
   const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleVerify = async () => {
+    setLoading(true);
+    try {
+      const { user } = await authService.verifyOTP(code);
+      if (user) {
+        // Auto-Create User Document with testing bypass (500,000 coins)
+        await dbService.createUserProfile(user.uid, { name: user.name || 'New User' });
+        navigation.navigate('NameSetup');
+      }
+    } catch (error) {
+      Alert.alert("Verification Failed", "Please check your code and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -25,11 +43,15 @@ const OTPScreen = ({ navigation }) => {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.button, code.length < 6 && styles.buttonDisabled]}
-        onPress={() => navigation.navigate('NameSetup')}
-        disabled={code.length < 6}
+        style={[styles.button, (code.length < 6 || loading) && styles.buttonDisabled]}
+        onPress={handleVerify}
+        disabled={code.length < 6 || loading}
       >
-        <Text style={styles.buttonText}>Verify</Text>
+        {loading ? (
+          <ActivityIndicator color={COLORS.white} />
+        ) : (
+          <Text style={styles.buttonText}>Verify</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
