@@ -2,8 +2,9 @@ import React from 'react';
 import { WebView } from 'react-native-webview';
 
 const PaystackWebView = ({ source, onNavigationStateChange, onLoadStart, onLoadEnd, startInLoadingState, renderLoading, email }) => {
-  // In a real implementation, we could inject the email into the Paystack flow here if needed,
-  // or just pass it through to the WebView.
+  // Pass the email prop to the WebView if needed, e.g. for analytics or direct injection
+  // console.log('Initializing Paystack for:', email);
+
   return (
     <WebView
       source={source}
