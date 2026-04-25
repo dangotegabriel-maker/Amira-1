@@ -10,7 +10,8 @@ const { width } = Dimensions.get('window');
 
 const PaymentMethodScreen = ({ route, navigation }) => {
   const { bundleId, coins, amount } = route.params;
-  const { user } = useUser();
+  const userContext = useUser();
+  const user = userContext?.user;
 
   const getCurrency = (countryCode) => {
     switch (countryCode) {
