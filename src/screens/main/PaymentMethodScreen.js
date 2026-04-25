@@ -40,7 +40,7 @@ const PaymentMethodScreen = ({ route, navigation }) => {
     const finalAmount = currency === 'GHS' ? convertUSDToGHS(usdPrice) : Math.round(usdPrice * 100);
 
     // Mock Paystack Checkout URL generation logic
-    const mockPaystackUrl = `https://checkout.paystack.com/mock-${method}-${currency}-${bundleId}?key=${publicKey}&amount=${finalAmount}`;
+    const mockPaystackUrl = `https://checkout.paystack.com/mock-${method}-${currency}-${bundleId}?key=${publicKey}&amount=${finalAmount}&email=${encodeURIComponent(user?.email || '')}`;
 
     navigation.navigate('Payment', {
       checkoutUrl: mockPaystackUrl,
@@ -48,7 +48,8 @@ const PaymentMethodScreen = ({ route, navigation }) => {
       coins,
       channels,
       currency,
-      finalAmount
+      finalAmount,
+      email: user?.email
     });
   };
 

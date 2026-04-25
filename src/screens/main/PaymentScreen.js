@@ -1,13 +1,13 @@
 // src/screens/main/PaymentScreen.js
 import React, { useState } from 'react';
 import { View, StyleSheet, SafeAreaView, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { COLORS } from '../../theme/COLORS';
 import { ChevronLeft } from 'lucide-react-native';
 import { paystackService } from '../../services/paystackService';
+import PaystackWebView from '../../components/PaystackWebView';
 
 const PaymentScreen = ({ route, navigation }) => {
-  const { checkoutUrl, bundleId, coins, channels, currency } = route.params;
+  const { checkoutUrl, bundleId, coins, channels, currency, email } = route.params;
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
 
@@ -49,7 +49,7 @@ const PaymentScreen = ({ route, navigation }) => {
       </View>
 
       <View style={styles.webviewContainer}>
-        <WebView
+        <PaystackWebView
           source={{ uri: checkoutUrl }}
           onNavigationStateChange={handleNavigationStateChange}
           onLoadStart={() => setLoading(true)}
@@ -60,6 +60,7 @@ const PaymentScreen = ({ route, navigation }) => {
               <ActivityIndicator size="large" color={COLORS.primary} />
             </View>
           )}
+          email={email}
         />
       </View>
 
