@@ -2,7 +2,9 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Image } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import auth from '@react-native-firebase/auth';
 import { useUser } from '../../context/UserContext';
+import { dbService } from '../../services/firebaseService';
 
 const WelcomeScreen = ({ navigation }) => {
   const { setUser } = useUser();
@@ -19,35 +21,49 @@ const WelcomeScreen = ({ navigation }) => {
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
 
-      // In version 13+, userInfo structure changed to { data: { user: { ... } } }
-      const user = userInfo.data ? userInfo.data.user : userInfo.user;
+      const idToken = userInfo.data ? userInfo.data.idToken : userInfo.idToken;
+      if (!idToken) throw new Error("Google Sign-In failed: No ID Token found.");
 
-      // Store user info in context
-      if (user) {
-        setUser({
-          uid: user.id,
-          email: user.email,
-          name: user.name,
-          photo: user.photo,
-          // Add default fields for a new user if needed, or fetch from DB
-          country_code: 'GH', // Default for now as per previous mock
-          gender: null, // Force setup flow
-        });
+      // Authenticate with Firebase
+      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+      const userCredential = await auth().signInWithCredential(googleCredential);
+      const firebaseUser = userCredential.user;
 
-        // Navigate to gender setup if it's a new login/profile needs info
-        navigation.navigate('GenderSetup');
+      if (firebaseUser) {
+        // Check if user already exists in Firestore
+        const profile = await dbService.getUserProfile(firebaseUser.uid);
+
+        const userData = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName,
+          photo: firebaseUser.photoURL,
+        };
+
+        if (profile) {
+          setUser({ ...userData, ...profile });
+          navigation.navigate('MainTabs');
+        } else {
+          // New user creation
+          await dbService.createUserProfile(firebaseUser.uid, {
+            email: firebaseUser.email,
+            name: firebaseUser.displayName,
+            photo: firebaseUser.photoURL,
+            country_code: 'GH',
+            gender: null,
+          });
+          setUser({ ...userData, country_code: 'GH', gender: null });
+          navigation.navigate('GenderSetup');
+        }
       }
     } catch (error) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        // user cancelled the login flow
+        // user cancelled
       } else if (error.code === statusCodes.IN_PROGRESS) {
-        // operation (e.g. sign in) is in progress already
         Alert.alert("Sign In In Progress", "A sign in operation is already in progress.");
       } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        // play services not available or outdated
         Alert.alert("Play Services Error", "Google Play Services are not available or outdated.");
       } else {
-        // some other error happened
         Alert.alert("Login Failed", error.message || "An unexpected error occurred during Google Sign-In.");
       }
     }
@@ -89,55 +105,15 @@ const WelcomeScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    padding: 20,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 10,
-  },
-  description: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  footer: {
-    marginBottom: 40,
-  },
-  button: {
-    backgroundColor: COLORS.primary,
-    padding: 16,
-    borderRadius: 30,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  buttonText: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  secondaryButton: {
-    padding: 16,
-    borderRadius: 30,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-  },
-  secondaryButtonText: {
-    color: COLORS.primary,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  container: { flex: 1, backgroundColor: COLORS.background, padding: 20 },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 32, fontWeight: 'bold', color: COLORS.primary, marginBottom: 10 },
+  description: { fontSize: 16, color: COLORS.textSecondary, textAlign: 'center', paddingHorizontal: 20 },
+  footer: { marginBottom: 40 },
+  button: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 30, alignItems: 'center', marginBottom: 12 },
+  buttonText: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
+  secondaryButton: { padding: 16, borderRadius: 30, alignItems: 'center', borderWidth: 1, borderColor: COLORS.primary },
+  secondaryButtonText: { color: COLORS.primary, fontSize: 18, fontWeight: 'bold' },
 });
 
 export default WelcomeScreen;

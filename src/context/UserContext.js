@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { dbService } from '../services/firebaseService';
+import auth from '@react-native-firebase/auth';
 
 const UserContext = createContext();
 
@@ -8,29 +9,49 @@ export const UserProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadUser();
+    // Listen for auth state changes
+    const unsubscribe = auth().onAuthStateChanged(async (authUser) => {
+      if (authUser) {
+        try {
+          const profile = await dbService.getUserProfile(authUser.uid);
+          if (profile) {
+            setUser({
+              uid: authUser.uid,
+              email: authUser.email,
+              name: authUser.displayName || profile.name,
+              photo: authUser.photoURL || profile.photos?.[0],
+              ...profile
+            });
+          } else {
+            // Document might not exist yet during onboarding
+            setUser({
+              uid: authUser.uid,
+              email: authUser.email,
+              name: authUser.displayName,
+              photo: authUser.photoURL,
+            });
+          }
+        } catch (error) {
+          console.error("User Hydration Error:", error);
+        }
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return unsubscribe;
   }, []);
 
-  const loadUser = async () => {
-    try {
-      // Mock user for sprint demo/pivot
-      // setUser({
-      //   id: 'u1',
-      //   name: 'John Doe',
-      //   gender: 'male',
-      //   is_verified: true
-      // });
-      const profile = await dbService.getUserProfile('current_user_id');
-      setUser(profile);
-    } catch (error) {
-      console.error("Failed to load user profile:", error);
-    } finally {
-      setLoading(false);
+  const refreshUser = async () => {
+    if (user?.uid) {
+      const profile = await dbService.getUserProfile(user.uid);
+      if (profile) setUser(prev => ({ ...prev, ...profile }));
     }
   };
 
   return (
-    <UserContext.Provider value={{ user, setUser, loading, isMale: user?.gender === 'male', refreshUser: loadUser }}>
+    <UserContext.Provider value={{ user, setUser, loading, isMale: user?.gender === 'male', refreshUser }}>
       {children}
     </UserContext.Provider>
   );

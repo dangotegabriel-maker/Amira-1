@@ -1,3 +1,6 @@
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+
 // Firebase initialization and service methods
 export const firebaseConfig = {
   apiKey: "AIzaSyB_Mock_Key_For_Production",
@@ -10,57 +13,85 @@ export const firebaseConfig = {
 
 export const authService = {
   loginWithPhone: async (phone) => {
-     // console.log("Mock Phone Login:", phone);
-    return { success: true };
+    try {
+      const confirmation = await auth().signInWithPhoneNumber(phone);
+      return { success: true, confirmation };
+    } catch (error) {
+      console.error("Firebase Phone Login Error:", error);
+      throw error;
+    }
   },
-  verifyOTP: async (code) => {
-     // console.log("Mock OTP Verification:", code);
-    return { user: { uid: '123', name: 'John' } };
+  verifyOTP: async (confirmation, code) => {
+    try {
+      const result = await confirmation.confirm(code);
+      return { success: true, user: result.user };
+    } catch (error) {
+      console.error("Firebase OTP Verification Error:", error);
+      throw error;
+    }
+  },
+  updateProfile: async (data) => {
+    try {
+      const user = auth().currentUser;
+      if (user) {
+        await user.updateProfile(data);
+        return { success: true };
+      }
+      throw new Error("No authenticated user found.");
+    } catch (error) {
+      console.error("Firebase Update Profile Error:", error);
+      throw error;
+    }
   },
   signOut: async () => {
-     // console.log("Mock Logout");
-    return { success: true };
+    try {
+      await auth().signOut();
+      return { success: true };
+    } catch (error) {
+      console.error("Firebase Sign Out Error:", error);
+      throw error;
+    }
   }
 };
 
 export const dbService = {
   getUserProfile: async (uid) => {
-    return {
-      uid,
-      name: 'John Doe',
-      diamonds: 1200,
-      isVip: true,
-      country_code: 'GH', // Mocked for Paystack Sprint
-      gender: 'male', // or 'female'
-      bio: 'Lover of luxury and high-stakes social flexing. 🥂',
-      photos: [
-        'https://via.placeholder.com/300x400?text=Photo+1',
-        'https://via.placeholder.com/300x400?text=Photo+2',
-        'https://via.placeholder.com/300x400?text=Photo+3',
-        'https://via.placeholder.com/300x400?text=Photo+4',
-      ]
-    };
+    try {
+      const doc = await firestore().collection('users').doc(uid).get();
+      if (doc.exists) {
+        return { uid, ...doc.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error("Firestore Get User Profile Error:", error);
+      throw error;
+    }
   },
   updateUserProfile: async (uid, data) => {
-     // console.log("Mock Updating User Profile:", uid, data);
-    return { success: true };
+    try {
+      await firestore().collection('users').doc(uid).update(data);
+      return { success: true };
+    } catch (error) {
+      console.error("Firestore Update User Profile Error:", error);
+      throw error;
+    }
   },
   createUserProfile: async (uid, data = {}) => {
-    // console.log("Firestore: Creating user document in 'users' collection:", uid);
-
-    // Test Build Bypass: Initial Balance set to 500,000 coins
-    const initialBalance = 500000;
-
-    const newUser = {
-      uid,
-      coin_balance: initialBalance,
-      diamonds: 0,
-      is_verified: false,
-      created_at: new Date(),
-      ...data
-    };
-
-    // In a real app, this would be: await setDoc(doc(db, "users", uid), newUser);
-    return { success: true, user: newUser };
+    try {
+      const initialBalance = 0; // Production default
+      const newUser = {
+        uid,
+        coin_balance: initialBalance,
+        diamonds: 0,
+        is_verified: false,
+        created_at: firestore.FieldValue.serverTimestamp(),
+        ...data
+      };
+      await firestore().collection('users').doc(uid).set(newUser);
+      return { success: true, user: newUser };
+    } catch (error) {
+      console.error("Firestore Create User Profile Error:", error);
+      throw error;
+    }
   }
 };

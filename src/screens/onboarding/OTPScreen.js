@@ -3,21 +3,27 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
 import { COLORS } from '../../theme/COLORS';
 import { authService, dbService } from '../../services/firebaseService';
 
-const OTPScreen = ({ navigation }) => {
+const OTPScreen = ({ route, navigation }) => {
+  const { confirmation } = route.params;
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleVerify = async () => {
     setLoading(true);
     try {
-      const { user } = await authService.verifyOTP(code);
+      const { user } = await authService.verifyOTP(confirmation, code);
       if (user) {
-        // Auto-Create User Document with testing bypass (500,000 coins)
-        await dbService.createUserProfile(user.uid, { name: user.name || 'New User' });
-        navigation.navigate('NameSetup');
+        // Check if user document already exists
+        const profile = await dbService.getUserProfile(user.uid);
+        if (profile) {
+           navigation.navigate('MainTabs');
+        } else {
+           await dbService.createUserProfile(user.uid, { phone: user.phoneNumber });
+           navigation.navigate('NameSetup');
+        }
       }
     } catch (error) {
-      Alert.alert("Verification Failed", "Please check your code and try again.");
+      Alert.alert("Verification Failed", error.message || "Please check your code and try again.");
     } finally {
       setLoading(false);
     }
