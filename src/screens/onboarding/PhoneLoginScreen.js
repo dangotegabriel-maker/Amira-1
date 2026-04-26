@@ -1,18 +1,28 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import CountryPicker from 'react-native-country-picker-modal';
+import { authService } from '../../services/firebaseService';
 
 const PhoneLoginScreen = ({ navigation }) => {
-  const [countryCode, setCountryCode] = useState('US');
-  const [callingCode, setCallingCode] = useState('1');
   const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleContinue = () => {
-    if (phone.length > 5) {
-      navigation.navigate('OTP', { phone: `+${callingCode}${phone}` });
-    } else {
+  const handleContinue = async () => {
+    if (phone.length < 10) {
       Alert.alert("Invalid Phone", "Please enter a valid phone number.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await authService.loginWithPhone(phone);
+      if (response.success) {
+        navigation.navigate('OTP', { confirmation: response.confirmation });
+      }
+    } catch (error) {
+      Alert.alert("Login Error", error.message || "Failed to send verification code.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -22,20 +32,9 @@ const PhoneLoginScreen = ({ navigation }) => {
       <Text style={styles.subtitle}>We'll send a code to verify your account</Text>
 
       <View style={styles.inputRow}>
-        <CountryPicker
-          countryCode={countryCode}
-          withFilter
-          withFlag
-          withCallingCode
-          onSelect={(country) => {
-            setCountryCode(country.cca2);
-            setCallingCode(country.callingCode[0]);
-          }}
-        />
-        <Text style={styles.callingCode}>+{callingCode}</Text>
         <TextInput
           style={styles.input}
-          placeholder="Phone Number"
+          placeholder="+1 234 567 8900"
           keyboardType="phone-pad"
           value={phone}
           onChangeText={setPhone}
@@ -44,11 +43,11 @@ const PhoneLoginScreen = ({ navigation }) => {
       </View>
 
       <TouchableOpacity
-        style={[styles.button, phone.length < 6 && styles.buttonDisabled]}
+        style={[styles.button, (phone.length < 10 || loading) && styles.buttonDisabled]}
         onPress={handleContinue}
-        disabled={phone.length < 6}
+        disabled={phone.length < 10 || loading}
       >
-        <Text style={styles.buttonText}>Continue</Text>
+        {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Continue</Text>}
       </TouchableOpacity>
     </View>
   );
@@ -58,8 +57,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background, padding: 20, paddingTop: 100 },
   title: { fontSize: 32, fontWeight: 'bold', marginBottom: 10 },
   subtitle: { fontSize: 16, color: COLORS.textSecondary, marginBottom: 40 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 10 },
-  callingCode: { fontSize: 18, marginHorizontal: 10, fontWeight: '500' },
+  inputRow: { borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 10 },
   input: { flex: 1, fontSize: 18 },
   button: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 30, alignItems: 'center', marginTop: 40 },
   buttonDisabled: { backgroundColor: COLORS.border },

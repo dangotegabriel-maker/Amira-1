@@ -3,12 +3,12 @@ import { WebView } from 'react-native-webview';
 
 const PaystackWebView = ({ source, onNavigationStateChange, onLoadStart, onLoadEnd, startInLoadingState, renderLoading, email }) => {
   // Use the email prop to customize the WebView experience or for logging
-  // In a real Paystack integration, this might be used to pre-fill user details
-  // via injected JavaScript or by appending it to the URL if not already done.
+  // Safe string injection for email
+  const safeEmail = (email || '').replace(/"/g, '\\"');
 
   const injectedJavaScript = `
-    window.paystackUserEmail = "${email || ''}";
-    true; // note: this is required, or you'll sometimes get silent failures
+    window.paystackUserEmail = "${safeEmail}";
+    true;
   `;
 
   return (
