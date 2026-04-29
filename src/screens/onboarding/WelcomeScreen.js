@@ -2,13 +2,11 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Image } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import auth from '@react-native-firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithCredential } from '@react-native-firebase/auth';
 import { useUser } from '../../context/UserContext';
 import { dbService } from '../../services/firebaseService';
 
 const WelcomeScreen = ({ navigation }) => {
-  const { setUser } = useUser();
-
   useEffect(() => {
     GoogleSignin.configure({
       webClientId: '528428934640-taoiu31lp997g77vf4m7tded8kphfeio.apps.googleusercontent.com',
@@ -24,36 +22,30 @@ const WelcomeScreen = ({ navigation }) => {
       const idToken = userInfo.data ? userInfo.data.idToken : userInfo.idToken;
       if (!idToken) throw new Error("Google Sign-In failed: No ID Token found.");
 
-      // Authenticate with Firebase
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-      const userCredential = await auth().signInWithCredential(googleCredential);
+      // Authenticate with Firebase using Modular SDK
+      const auth = getAuth();
+      const googleCredential = GoogleAuthProvider.credential(idToken);
+      const userCredential = await signInWithCredential(auth, googleCredential);
       const firebaseUser = userCredential.user;
 
       if (firebaseUser) {
         // Check if user already exists in Firestore
         const profile = await dbService.getUserProfile(firebaseUser.uid);
 
-        const userData = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          name: firebaseUser.displayName,
-          photo: firebaseUser.photoURL,
-        };
-
-        if (profile) {
-          setUser({ ...userData, ...profile });
+        if (profile && profile.name && profile.gender) {
           navigation.navigate('MainTabs');
         } else {
-          // New user creation
-          await dbService.createUserProfile(firebaseUser.uid, {
-            email: firebaseUser.email,
-            name: firebaseUser.displayName,
-            photo: firebaseUser.photoURL,
-            country_code: 'GH',
-            gender: null,
-          });
-          setUser({ ...userData, country_code: 'GH', gender: null });
-          navigation.navigate('GenderSetup');
+          // New user creation or incomplete profile
+          if (!profile) {
+            await dbService.createUserProfile(firebaseUser.uid, {
+              email: firebaseUser.email,
+              name: firebaseUser.displayName,
+              photo: firebaseUser.photoURL,
+              country_code: 'GH',
+              gender: null,
+            });
+          }
+          navigation.navigate('NameSetup');
         }
       }
     } catch (error) {

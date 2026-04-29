@@ -1,5 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useUser } from '../context/UserContext';
 
 // Onboarding Screens
 import SplashScreen from '../screens/onboarding/SplashScreen';
@@ -34,6 +35,13 @@ import PaymentMethodScreen from '../screens/main/PaymentMethodScreen';
 const Stack = createNativeStackNavigator();
 
 const RootNavigator = () => {
+  const { user, loading } = useUser();
+
+  if (loading) return null;
+
+  // Determine if profile setup is complete
+  const isProfileComplete = user && user.name && user.gender;
+
   return (
     <Stack.Navigator
       screenOptions={{
@@ -42,35 +50,43 @@ const RootNavigator = () => {
         gestureEnabled: true,
       }}
     >
-      {/* Main App */}
-      <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-      {/* Onboarding Stack */}
-      <Stack.Screen name="Splash" component={SplashScreen} />
-      <Stack.Screen name="Welcome" component={WelcomeScreen} />
-      <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
-      <Stack.Screen name="OTP" component={OTPScreen} />
-      <Stack.Screen name="NameSetup" component={NameSetupScreen} />
-      <Stack.Screen name="BirthdaySetup" component={BirthdaySetupScreen} />
-      <Stack.Screen name="GenderSetup" component={GenderSetupScreen} />
-      <Stack.Screen name="PhotoUpload" component={PhotoUploadScreen} />
-      <Stack.Screen name="Interests" component={InterestsScreen} />
-      <Stack.Screen name="LocationPermission" component={LocationPermissionScreen} />
-
-      <Stack.Screen name="ChatDetail" component={ChatDetailScreen} options={{ headerShown: true, title: 'Chat' }} />
-      <Stack.Screen name="UserProfile" component={UserProfileScreen} />
-      <Stack.Screen name="VideoCall" component={VideoCallScreen} />
-      <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: true, title: 'Wallet' }} />
-      <Stack.Screen name="VIPStore" component={VIPStoreScreen} options={{ headerShown: true, title: 'VIP Store' }} />
-      <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} />
-      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Edit Profile' }} />
-      <Stack.Screen name="RechargeHub" component={RechargeHubScreen} />
-      <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />
-      <Stack.Screen name="Payment" component={PaymentScreen} />
-      <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
-      <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
-      <Stack.Screen name="CallSummary" component={CallSummaryScreen} />
-      <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ headerShown: true, title: 'Help & Support' }} />
+      {!user || !isProfileComplete ? (
+        <>
+          {!user ? (
+            <>
+              <Stack.Screen name="Splash" component={SplashScreen} />
+              <Stack.Screen name="Welcome" component={WelcomeScreen} />
+              <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
+              <Stack.Screen name="OTP" component={OTPScreen} />
+            </>
+          ) : null}
+          <Stack.Screen name="NameSetup" component={NameSetupScreen} />
+          <Stack.Screen name="BirthdaySetup" component={BirthdaySetupScreen} />
+          <Stack.Screen name="GenderSetup" component={GenderSetupScreen} />
+          <Stack.Screen name="PhotoUpload" component={PhotoUploadScreen} />
+          <Stack.Screen name="Interests" component={InterestsScreen} />
+          <Stack.Screen name="LocationPermission" component={LocationPermissionScreen} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+          <Stack.Screen name="ChatDetail" component={ChatDetailScreen} options={{ headerShown: true, title: 'Chat' }} />
+          <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+          <Stack.Screen name="VideoCall" component={VideoCallScreen} />
+          <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: true, title: 'Wallet' }} />
+          <Stack.Screen name="VIPStore" component={VIPStoreScreen} options={{ headerShown: true, title: 'VIP Store' }} />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} />
+          <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Edit Profile' }} />
+          <Stack.Screen name="RechargeHub" component={RechargeHubScreen} />
+          <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />
+          <Stack.Screen name="Payment" component={PaymentScreen} />
+          <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
+          <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
+          <Stack.Screen name="CallSummary" component={CallSummaryScreen} />
+          <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ headerShown: true, title: 'Help & Support' }} />
+        </>
+      )}
     </Stack.Navigator>
   );
 };

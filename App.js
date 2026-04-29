@@ -7,14 +7,22 @@ import { GiftingProvider } from './src/context/GiftingContext';
 import { UserProvider } from './src/context/UserContext';
 import FreeNowBanner from './src/components/FreeNowBanner';
 
+const AppContent = () => {
+  return (
+    <>
+      <RootNavigator />
+      <FreeNowBanner />
+      <StatusBar style="auto" />
+    </>
+  );
+};
+
 export default function App() {
   return (
     <UserProvider>
       <GiftingProvider>
         <NavigationContainer>
-          <RootNavigator />
-        <FreeNowBanner />
-        <StatusBar style="auto" />
+           <AppContent />
         </NavigationContainer>
       </GiftingProvider>
     </UserProvider>
