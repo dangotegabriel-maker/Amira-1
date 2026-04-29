@@ -1,20 +1,10 @@
-import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
-
-// Firebase initialization and service methods
-export const firebaseConfig = {
-  apiKey: "AIzaSyB_Mock_Key_For_Production",
-  authDomain: "amira-social.firebaseapp.com",
-  projectId: "amira-social",
-  storageBucket: "amira-social.appspot.com",
-  messagingSenderId: "777888999000",
-  appId: "1:777888999000:android:abc123xyz"
-};
+import { getAuth, signInWithPhoneNumber, updateProfile, signOut } from '@react-native-firebase/auth';
+import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, serverTimestamp } from '@react-native-firebase/firestore';
 
 export const authService = {
   loginWithPhone: async (phone) => {
     try {
-      const confirmation = await auth().signInWithPhoneNumber(phone);
+      const confirmation = await signInWithPhoneNumber(getAuth(), phone);
       return { success: true, confirmation };
     } catch (error) {
       console.error("Firebase Phone Login Error:", error);
@@ -32,9 +22,9 @@ export const authService = {
   },
   updateProfile: async (data) => {
     try {
-      const user = auth().currentUser;
+      const user = getAuth().currentUser;
       if (user) {
-        await user.updateProfile(data);
+        await updateProfile(user, data);
         return { success: true };
       }
       throw new Error("No authenticated user found.");
@@ -45,7 +35,7 @@ export const authService = {
   },
   signOut: async () => {
     try {
-      await auth().signOut();
+      await signOut(getAuth());
       return { success: true };
     } catch (error) {
       console.error("Firebase Sign Out Error:", error);
@@ -57,9 +47,10 @@ export const authService = {
 export const dbService = {
   getUserProfile: async (uid) => {
     try {
-      const doc = await firestore().collection('users').doc(uid).get();
-      if (doc.exists) {
-        return { uid, ...doc.data() };
+      const userRef = doc(getFirestore(), 'users', uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        return { uid, ...userSnap.data() };
       }
       return null;
     } catch (error) {
@@ -69,7 +60,8 @@ export const dbService = {
   },
   updateUserProfile: async (uid, data) => {
     try {
-      await firestore().collection('users').doc(uid).update(data);
+      const userRef = doc(getFirestore(), 'users', uid);
+      await updateDoc(userRef, data);
       return { success: true };
     } catch (error) {
       console.error("Firestore Update User Profile Error:", error);
@@ -78,16 +70,17 @@ export const dbService = {
   },
   createUserProfile: async (uid, data = {}) => {
     try {
-      const initialBalance = 0; // Production default
+      const initialBalance = 0;
       const newUser = {
         uid,
         coin_balance: initialBalance,
         diamonds: 0,
         is_verified: false,
-        created_at: firestore.FieldValue.serverTimestamp(),
+        created_at: serverTimestamp(),
         ...data
       };
-      await firestore().collection('users').doc(uid).set(newUser);
+      const userRef = doc(getFirestore(), 'users', uid);
+      await setDoc(userRef, newUser);
       return { success: true, user: newUser };
     } catch (error) {
       console.error("Firestore Create User Profile Error:", error);
