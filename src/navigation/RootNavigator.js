@@ -39,8 +39,8 @@ const RootNavigator = () => {
 
   if (loading) return null;
 
-  // Determine if profile setup is complete
-  const isProfileComplete = user && user.name && user.gender;
+  // The Navigation Gatekeeper (The Smart Skip)
+  const isProfileComplete = user && user.isProfileComplete === true;
 
   return (
     <Stack.Navigator
@@ -60,9 +60,12 @@ const RootNavigator = () => {
               <Stack.Screen name="OTP" component={OTPScreen} />
             </>
           ) : null}
-          <Stack.Screen name="NameSetup" component={NameSetupScreen} />
-          <Stack.Screen name="BirthdaySetup" component={BirthdaySetupScreen} />
-          <Stack.Screen name="GenderSetup" component={GenderSetupScreen} />
+
+          {/* Missing Detail Routing */}
+          {user && !user.name && <Stack.Screen name="NameSetup" component={NameSetupScreen} />}
+          {user && !user.age && <Stack.Screen name="BirthdaySetup" component={BirthdaySetupScreen} />}
+          {user && !user.gender && <Stack.Screen name="GenderSetup" component={GenderSetupScreen} />}
+
           <Stack.Screen name="PhotoUpload" component={PhotoUploadScreen} />
           <Stack.Screen name="Interests" component={InterestsScreen} />
           <Stack.Screen name="LocationPermission" component={LocationPermissionScreen} />

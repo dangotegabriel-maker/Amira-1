@@ -1,22 +1,43 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { dbService } from '../../services/firebaseService';
 import { useUser } from '../../context/UserContext';
 
 const GenderSetupScreen = ({ navigation }) => {
   const [gender, setGender] = useState(null);
-  const { refreshUser } = useUser();
+  const [loading, setLoading] = useState(false);
+  const { user, refreshUser } = useUser();
 
   const handleContinue = async () => {
-    if (!gender) return;
+    // Safety check: Valid selection must exist
+    if (!gender) {
+      Alert.alert("Selection Required", "Please select your gender to continue.");
+      return;
+    }
+
+    if (!user?.uid) {
+      Alert.alert("Session Error", "User session not found. Please log in again.");
+      return;
+    }
+
+    setLoading(true);
     try {
       const g = gender === 'Woman' ? 'female' : 'male';
-      await dbService.updateUserProfile('current_user_id', { gender: g });
+
+      // Final update call: Set isProfileComplete to true
+      await dbService.updateUserProfile(user.uid, {
+        gender: g,
+        isProfileComplete: true
+      });
+
       await refreshUser();
-      navigation.navigate('PhotoUpload');
+
+      // Close the loop: RootNavigator will now grant access to Home
     } catch (e) {
-      Alert.alert("Error", "Failed to save gender preference.");
+      Alert.alert("Update Failed", "Failed to save gender preference. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -29,17 +50,18 @@ const GenderSetupScreen = ({ navigation }) => {
             key={g}
             style={[styles.option, gender === g && styles.optionSelected]}
             onPress={() => setGender(g)}
+            disabled={loading}
           >
             <Text style={[styles.optionText, gender === g && styles.optionTextSelected]}>{g}</Text>
           </TouchableOpacity>
         ))}
       </View>
       <TouchableOpacity
-        style={[styles.button, !gender && styles.buttonDisabled]}
+        style={[styles.button, (!gender || loading) && styles.buttonDisabled]}
         onPress={handleContinue}
-        disabled={!gender}
+        disabled={!gender || loading}
       >
-        <Text style={styles.buttonText}>Continue</Text>
+        {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Finish</Text>}
       </TouchableOpacity>
     </View>
   );

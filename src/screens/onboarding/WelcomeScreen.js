@@ -22,35 +22,30 @@ const WelcomeScreen = ({ navigation }) => {
       const idToken = userInfo.data ? userInfo.data.idToken : userInfo.idToken;
       if (!idToken) throw new Error("Google Sign-In failed: No ID Token found.");
 
-      // Authenticate with Firebase using Modular SDK
       const auth = getAuth();
       const googleCredential = GoogleAuthProvider.credential(idToken);
       const userCredential = await signInWithCredential(auth, googleCredential);
       const firebaseUser = userCredential.user;
 
       if (firebaseUser) {
-        // Check if user already exists in Firestore
+        // "Silent Upsert" (Update or Insert)
         const profile = await dbService.getUserProfile(firebaseUser.uid);
 
-        if (profile && profile.name && profile.gender) {
-          navigation.navigate('MainTabs');
-        } else {
-          // New user creation or incomplete profile
-          if (!profile) {
-            await dbService.createUserProfile(firebaseUser.uid, {
-              email: firebaseUser.email,
-              name: firebaseUser.displayName,
-              photo: firebaseUser.photoURL,
-              country_code: 'GH',
-              gender: null,
-            });
-          }
-          navigation.navigate('NameSetup');
+        if (!profile) {
+          // Silent background ingest of Google data
+          await dbService.createUserProfile(firebaseUser.uid, {
+            email: firebaseUser.email,
+            name: firebaseUser.displayName,
+            photo: firebaseUser.photoURL,
+            country_code: 'GH',
+            isProfileComplete: false,
+          });
         }
+
+        // Navigation is now handled by the RootNavigator listener (Smart Skip)
       }
     } catch (error) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        // user cancelled
       } else if (error.code === statusCodes.IN_PROGRESS) {
         Alert.alert("Sign In In Progress", "A sign in operation is already in progress.");
       } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
