@@ -1,5 +1,5 @@
 import { getAuth, signInWithPhoneNumber, updateProfile, signOut } from '@react-native-firebase/auth';
-import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, serverTimestamp } from '@react-native-firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp } from '@react-native-firebase/firestore';
 
 export const authService = {
   loginWithPhone: async (phone) => {
@@ -20,7 +20,7 @@ export const authService = {
       throw error;
     }
   },
-  updateProfile: async (data) => {
+  updateUserProfile: async (data) => {
     try {
       const user = getAuth().currentUser;
       if (user) {
@@ -76,6 +76,7 @@ export const dbService = {
         coin_balance: initialBalance,
         diamonds: 0,
         is_verified: false,
+        isProfileComplete: false, // Core pillar for navigation logic
         created_at: serverTimestamp(),
         ...data
       };
