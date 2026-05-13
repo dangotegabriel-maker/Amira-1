@@ -1,106 +1,88 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Image } from "react-native";
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { Camera } from 'lucide-react-native';
+import { ChevronLeft, Camera, Check } from 'lucide-react-native';
+import { useUser } from '../../context/UserContext';
+import { dbService, authService } from '../../services/firebaseService';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 
 const EditProfileScreen = ({ navigation }) => {
-  const [name, setName] = useState('John Doe');
-  const [bio, setBio] = useState('Enjoying life and looking for connections.');
-  const [location, setLocation] = useState('Lagos, Nigeria');
+  const { user, refreshUser } = useUser();
+  const [name, setName] = useState(user?.name || '');
+  const [bio, setBio] = useState(user?.bio || '');
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      Alert.alert("Error", "Name cannot be empty.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (user?.uid) {
+        await authService.updateProfile({ displayName: name });
+        await dbService.updateUserProfile(user.uid, { name, bio });
+        await refreshUser();
+        Alert.alert("Success", "Profile updated successfully!");
+        navigation.goBack();
+      }
+    } catch (e) {
+      Alert.alert("Error", "Failed to update profile.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.avatarContainer}>
-          <View style={styles.avatarPlaceholder} />
-          <View style={styles.cameraIcon}>
-            <Camera color={COLORS.white} size={20} />
-          </View>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <ChevronLeft color={COLORS.text} size={28} />
         </TouchableOpacity>
-        <Text style={styles.changePhotoText}>Change Profile Photo</Text>
+        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <TouchableOpacity onPress={handleSave} disabled={loading}>
+          {loading ? <ActivityIndicator size="small" color={COLORS.primary} /> : <Check color={COLORS.primary} size={28} />}
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Full Name</Text>
+      <ScrollView style={styles.content}>
+        <View style={styles.section}>
+          <Text style={styles.label}>Display Name</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="Name"
+            placeholder="Your name"
           />
         </View>
 
-        <View style={styles.inputGroup}>
+        <View style={styles.section}>
           <Text style={styles.label}>Bio</Text>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[styles.input, styles.bioInput]}
             value={bio}
             onChangeText={setBio}
-            placeholder="Bio"
+            placeholder="Tell us about yourself"
             multiline
             numberOfLines={4}
           />
         </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Location</Text>
-          <TextInput
-            style={styles.input}
-            value={location}
-            onChangeText={setLocation}
-            placeholder="Location"
-          />
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={styles.saveButton}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.saveButtonText}>Save Changes</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.white },
-  header: { alignItems: 'center', paddingVertical: 30 },
-  avatarContainer: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#EEE', position: 'relative' },
-  avatarPlaceholder: { width: '100%', height: '100%', borderRadius: 60 },
-  cameraIcon: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: COLORS.primary,
-    padding: 8,
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: COLORS.white
-  },
-  changePhotoText: { marginTop: 15, color: COLORS.primary, fontWeight: '600' },
-  form: { padding: 20 },
-  inputGroup: { marginBottom: 20 },
+  header: { height: 100, paddingTop: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold' },
+  content: { padding: 20 },
+  section: { marginBottom: 25 },
   label: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 8, fontWeight: '600' },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 16,
-    color: COLORS.text
-  },
-  textArea: { height: 100, textAlignVertical: 'top' },
-  saveButton: {
-    margin: 20,
-    backgroundColor: COLORS.primary,
-    padding: 16,
-    borderRadius: 30,
-    alignItems: 'center',
-    marginBottom: 40
-  },
-  saveButtonText: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
+  input: { fontSize: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingVertical: 10, color: COLORS.text },
+  bioInput: { height: 100, textAlignVertical: 'top' },
 });
 
 export default EditProfileScreen;
