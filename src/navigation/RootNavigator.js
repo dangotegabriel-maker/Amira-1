@@ -5,14 +5,12 @@ import { useUser } from '../context/UserContext';
 // Onboarding Screens
 import SplashScreen from '../screens/onboarding/SplashScreen';
 import WelcomeScreen from '../screens/onboarding/WelcomeScreen';
+import LoginScreen from '../screens/onboarding/LoginScreen';
 import PhoneLoginScreen from '../screens/onboarding/PhoneLoginScreen';
 import OTPScreen from '../screens/onboarding/OTPScreen';
 import NameSetupScreen from '../screens/onboarding/NameSetupScreen';
 import BirthdaySetupScreen from '../screens/onboarding/BirthdaySetupScreen';
 import GenderSetupScreen from '../screens/onboarding/GenderSetupScreen';
-import PhotoUploadScreen from '../screens/onboarding/PhotoUploadScreen';
-import InterestsScreen from '../screens/onboarding/InterestsScreen';
-import LocationPermissionScreen from '../screens/onboarding/LocationPermissionScreen';
 
 // Main App Screens
 import MainTabNavigator from './MainTabNavigator';
@@ -31,6 +29,9 @@ import CallSummaryScreen from '../screens/main/CallSummaryScreen';
 import HelpSupportScreen from '../screens/main/HelpSupportScreen';
 import PaymentScreen from '../screens/main/PaymentScreen';
 import PaymentMethodScreen from '../screens/main/PaymentMethodScreen';
+import StoryViewerScreen from '../screens/main/StoryViewerScreen';
+import MomentsScreen from '../screens/main/MomentsScreen';
+import RoleSelectionScreen from '../screens/onboarding/RoleSelectionScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -39,8 +40,17 @@ const RootNavigator = () => {
 
   if (loading) return null;
 
-  // The Navigation Gatekeeper (The Smart Skip)
-  const isProfileComplete = user && user.isProfileComplete === true;
+  const hasName = Boolean(user?.username || user?.name);
+  const nextProfileScreen = !hasName
+    ? 'NameSetup'
+    : !user?.dob
+      ? 'BirthdaySetup'
+      : !user?.gender
+        ? 'GenderSetup'
+        : !user?.role
+          ? 'RoleSelection'
+          : null;
+  const isProfileComplete = Boolean(user && !nextProfileScreen && user.isProfileComplete);
 
   return (
     <Stack.Navigator
@@ -50,26 +60,22 @@ const RootNavigator = () => {
         gestureEnabled: true,
       }}
     >
-      {!user || !isProfileComplete ? (
+      {!user ? (
         <>
-          {!user ? (
-            <>
-              <Stack.Screen name="Splash" component={SplashScreen} />
-              <Stack.Screen name="Welcome" component={WelcomeScreen} />
-              <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
-              <Stack.Screen name="OTP" component={OTPScreen} />
-            </>
-          ) : null}
-
-          {/* Missing Detail Routing */}
-          {user && !user.name && <Stack.Screen name="NameSetup" component={NameSetupScreen} />}
-          {user && !user.age && <Stack.Screen name="BirthdaySetup" component={BirthdaySetupScreen} />}
-          {user && !user.gender && <Stack.Screen name="GenderSetup" component={GenderSetupScreen} />}
-
-          <Stack.Screen name="PhotoUpload" component={PhotoUploadScreen} />
-          <Stack.Screen name="Interests" component={InterestsScreen} />
-          <Stack.Screen name="LocationPermission" component={LocationPermissionScreen} />
+          <Stack.Screen name="Splash" component={SplashScreen} />
+          <Stack.Screen name="Welcome" component={LoginScreen} />
+          <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
+          <Stack.Screen name="OTP" component={OTPScreen} />
         </>
+      ) : !isProfileComplete ? (
+        <Stack.Group key={nextProfileScreen || 'profile-completion'}>
+          <Stack.Screen name={nextProfileScreen || 'RoleSelection'} component={
+            nextProfileScreen === 'NameSetup' ? NameSetupScreen
+              : nextProfileScreen === 'BirthdaySetup' ? BirthdaySetupScreen
+                : nextProfileScreen === 'GenderSetup' ? GenderSetupScreen
+                  : RoleSelectionScreen
+          } />
+        </Stack.Group>
       ) : (
         <>
           <Stack.Screen name="MainTabs" component={MainTabNavigator} />
@@ -83,6 +89,8 @@ const RootNavigator = () => {
           <Stack.Screen name="RechargeHub" component={RechargeHubScreen} />
           <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />
           <Stack.Screen name="Payment" component={PaymentScreen} />
+          <Stack.Screen name="StoryViewer" component={StoryViewerScreen} />
+          <Stack.Screen name="Moments" component={MomentsScreen} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
           <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />

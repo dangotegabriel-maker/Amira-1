@@ -16,7 +16,7 @@ const { width, height } = Dimensions.get('window');
 
 const MyProfileScreen = ({ navigation }) => {
   const isFocused = useIsFocused();
-  const { user, loading, isMale } = useUser();
+  const { user, loading, isMale, coins, fetchUserCoins } = useUser();
 
   const [balance, setBalance] = useState(0);
   const [diamondBalance, setDiamondBalance] = useState(0);
@@ -38,23 +38,28 @@ const MyProfileScreen = ({ navigation }) => {
   }, [isFocused, user]);
 
   const loadData = async () => {
-    const b = await ledgerService.getBalance();
-    const s = await ledgerService.getTotalSpent();
-    const u = await ledgerService.getUpvotes();
-    const trc = await ledgerService.getTotalGiftsReceived();
-    const r = await ledgerService.getReceivedGifts();
-    const db = await ledgerService.getDiamondBalance();
-    const td = await ledgerService.getTodayDiamonds();
-    const xp = await ledgerService.getWealthXP();
+    try {
+      const latestCoins = await fetchUserCoins();
+      const b = await ledgerService.getBalance();
+      const s = await ledgerService.getTotalSpent();
+      const u = await ledgerService.getUpvotes();
+      const trc = await ledgerService.getTotalGiftsReceived();
+      const r = await ledgerService.getReceivedGifts();
+      const db = await ledgerService.getDiamondBalance();
+      const td = await ledgerService.getTodayDiamonds();
+      const xp = await ledgerService.getWealthXP();
 
-    setBalance(b);
-    setTotalSpent(s);
-    setUpvotes(u);
-    setTotalReceivedCount(trc);
-    setReceivedGifts(r);
-    setDiamondBalance(db);
-    setTodayDiamonds(td);
-    setWealthXP(xp);
+      setBalance(latestCoins ?? b);
+      setTotalSpent(s);
+      setUpvotes(u);
+      setTotalReceivedCount(trc);
+      setReceivedGifts(r);
+      setDiamondBalance(db);
+      setTodayDiamonds(td);
+      setWealthXP(xp);
+    } catch (error) {
+      console.log("PROFILE LOAD ERROR:", error?.code, error?.message);
+    }
   };
 
   if (loading) return (
@@ -90,7 +95,7 @@ const MyProfileScreen = ({ navigation }) => {
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
           <GlowAvatar size={100} isOnline={true} xp={isMale ? wealthXP : 0}>
-             <Image source={user.photos?.[0]} style={styles.profileImg} />
+             <Image source={user.photos?.[0] ? { uri: user.photos[0] } : null} style={styles.profileImg} />
           </GlowAvatar>
         </View>
         <View style={styles.nameContainer}>
@@ -98,6 +103,16 @@ const MyProfileScreen = ({ navigation }) => {
           <VIPBadge totalSpent={totalSpent} />
         </View>
         {isMale && <Text style={styles.tierName}>{tier.name} Rank</Text>}
+        <View style={styles.profileStatsRow}>
+          <View style={styles.profileStatPill}>
+            <Coins color="#FFD700" size={16} />
+            <Text style={styles.profileStatText}>{user.wallet?.currency || 'GHS'} {(user.wallet?.balance ?? coins ?? balance).toLocaleString()}</Text>
+          </View>
+          <View style={styles.profileStatPill}>
+            <Award color={COLORS.primary} size={16} />
+            <Text style={styles.profileStatText}>VIP 1</Text>
+          </View>
+        </View>
         <Text style={styles.bio}>{user.bio || 'No bio yet'}</Text>
         <TouchableOpacity
           style={styles.editButton}
@@ -199,13 +214,16 @@ const MyProfileScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F8F8' },
-  header: { alignItems: 'center', paddingVertical: 30, backgroundColor: COLORS.white },
+  header: { alignItems: 'center', paddingVertical: 30, paddingHorizontal: 20, backgroundColor: COLORS.white },
   avatarContainer: { marginBottom: 15 },
   profileImg: { width: 100, height: 100, borderRadius: 50 },
   nameContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
   name: { fontSize: 24, fontWeight: 'bold', marginRight: 5 },
   tierName: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary, marginBottom: 5 },
-  bio: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 15, paddingHorizontal: 40, textAlign: 'center' },
+  profileStatsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 12 },
+  profileStatPill: { minHeight: 34, paddingHorizontal: 12, borderRadius: 17, backgroundColor: '#F8F8F8', flexDirection: 'row', alignItems: 'center', marginHorizontal: 5, borderWidth: 1, borderColor: '#EEE' },
+  profileStatText: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginLeft: 6 },
+  bio: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 15, paddingHorizontal: 20, textAlign: 'center' },
   editButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
   editButtonText: { color: COLORS.textSecondary },
   dashboard: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingVertical: 20, marginTop: 10 },

@@ -4,10 +4,20 @@ dist/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+
+# Environment files
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
 web-build/
-.env
+
+/android
+# Local logs
+expo-start.log
+expo-start.err.log
+
+# Firebase local configuration
+google-services.json

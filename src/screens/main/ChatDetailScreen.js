@@ -10,6 +10,7 @@ import { soundService } from '../../services/soundService';
 import { hapticService } from '../../services/hapticService';
 import { getGiftAsset } from '../../services/giftingService';
 import { ledgerService } from '../../services/ledgerService';
+import { dbService } from '../../services/firebaseService';
 import { useGifting } from '../../context/GiftingContext';
 import ReportUserModal from '../../components/ReportUserModal';
 import GiftTray from '../../components/GiftTray';
@@ -56,12 +57,16 @@ const ChatDetailScreen = ({ route, navigation }) => {
   useEffect(() => {
     checkAutoTranslate();
 
-    soundService.init();
-    soundService.preload([
-      'https://www.soundjay.com/nature/wind-chime-1.mp3',
-      'https://www.soundjay.com/magic/magic-chime-01.mp3',
-      'https://www.soundjay.com/magic/magic-chime-03.mp3'
-    ]);
+    if (soundService?.init) {
+      soundService.init();
+    }
+    if (soundService?.preload) {
+      soundService.preload([
+        'https://www.soundjay.com/nature/wind-chime-1.mp3',
+        'https://www.soundjay.com/magic/magic-chime-01.mp3',
+        'https://www.soundjay.com/magic/magic-chime-03.mp3'
+      ]);
+    }
 
     socketService.connect('current_user_id');
 

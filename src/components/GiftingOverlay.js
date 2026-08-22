@@ -14,7 +14,11 @@ const GiftingOverlay = ({ giftId, senderName, combo = 1, onComplete }) => {
     const asset = getGiftAsset(giftId);
     if (asset && asset.sfxUrl) {
       // Trigger sound simultaneously with the animation start
-      soundService.play(asset.sfxUrl);
+      if (typeof soundService?.play === 'function') {
+        soundService.play(asset.sfxUrl).catch?.((error) => {
+          console.log('SOUND PLAY ERROR:', error);
+        });
+      }
 
       // Trigger long vibration for premium feel
       hapticService.longVibration();

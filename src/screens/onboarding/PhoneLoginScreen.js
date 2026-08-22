@@ -1,30 +1,41 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { authService } from '../../services/firebaseService';
-import CountryPicker from 'react-native-country-picker-modal';
+import { COUNTRIES, DEFAULT_COUNTRY } from '../../data/countries';
+
+const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
 const PhoneLoginScreen = ({ navigation }) => {
-  const [countryCode, setCountryCode] = useState('GH');
-  const [callingCode, setCallingCode] = useState('233');
   const [phone, setPhone] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState(DEFAULT_COUNTRY);
+  const [showPicker, setShowPicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const getNationalNumber = () => {
+    return phone.trim().replace(/\D/g, '').replace(/^0/, '');
+  };
+
   const handleContinue = async () => {
-    const fullPhone = `+${callingCode}${phone}`;
-    if (phone.length < 7) {
-      Alert.alert("Invalid Phone", "Please enter a valid phone number.");
+    const localNumber = getNationalNumber();
+
+    if (localNumber.length < 7) {
+      Alert.alert('Try again', GENERIC_ERROR_MESSAGE);
       return;
     }
 
     setLoading(true);
     try {
-      const response = await authService.loginWithPhone(fullPhone);
-      if (response.success) {
-        navigation.navigate('OTP', { confirmation: response.confirmation });
-      }
+      const fullPhoneNumber = `+${selectedCountry.callingCode}${localNumber}`;
+      const { phone: formattedPhone } = await authService.loginWithPhone(fullPhoneNumber);
+      navigation.navigate('OTP', {
+        phone: formattedPhone,
+        countryCode: selectedCountry.cca2,
+        currency: selectedCountry.currency,
+      });
     } catch (error) {
-      Alert.alert("Login Error", error.message || "Failed to send verification code.");
+      console.error('Phone login screen error:', error);
+      alert(`${error.code} - ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -32,36 +43,60 @@ const PhoneLoginScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>What's your number?</Text>
-      <Text style={styles.subtitle}>We'll send a code to verify your account</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Enter your phone number</Text>
+        <Text style={styles.subtitle}>We'll send you a verification code</Text>
+      </View>
 
       <View style={styles.inputRow}>
-        <CountryPicker
-          countryCode={countryCode}
-          withFilter
-          withFlag
-          withCallingCode
-          onSelect={(country) => {
-            setCountryCode(country.cca2);
-            setCallingCode(country.callingCode[0]);
-          }}
-        />
-        <Text style={styles.callingCode}>+{callingCode}</Text>
+        <TouchableOpacity
+          style={styles.callingCodeButton}
+          onPress={() => setShowPicker(true)}
+          disabled={loading}
+        >
+          <Text style={styles.countryCode}>{selectedCountry.flag} {selectedCountry.cca2}</Text>
+          <Text style={styles.callingCode}>+{selectedCountry.callingCode}</Text>
+        </TouchableOpacity>
+
         <TextInput
           style={styles.input}
-          placeholder="Phone Number"
-          placeholderTextColor="#999"
+          placeholder="Phone number"
+          placeholderTextColor="#B8B8BD"
           keyboardType="phone-pad"
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(value) => setPhone(value.replace(/[^\d+\s()-]/g, ''))}
           autoFocus
         />
       </View>
 
+      <Modal visible={showPicker} transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
+        <TouchableOpacity style={styles.countryOverlay} activeOpacity={1} onPress={() => setShowPicker(false)}>
+          <View style={styles.countryModal}>
+            <Text style={styles.countryTitle}>Select country</Text>
+            <FlatList
+              data={COUNTRIES}
+              keyExtractor={(item) => item.cca2}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.countryOption}
+                  onPress={() => {
+                    setSelectedCountry(item);
+                    setShowPicker(false);
+                  }}
+                >
+                  <Text style={styles.countryName}>{item.flag} {item.name}</Text>
+                  <Text style={styles.countryDial}>{item.cca2} +{item.callingCode}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       <TouchableOpacity
-        style={[styles.button, (phone.length < 7 || loading) && styles.buttonDisabled]}
+        style={[styles.button, (getNationalNumber().length < 7 || loading) && styles.buttonDisabled]}
         onPress={handleContinue}
-        disabled={phone.length < 7 || loading}
+        disabled={getNationalNumber().length < 7 || loading}
       >
         {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Continue</Text>}
       </TouchableOpacity>
@@ -70,15 +105,57 @@ const PhoneLoginScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background, padding: 20, paddingTop: 100 },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 10, color: COLORS.text },
-  subtitle: { fontSize: 16, color: COLORS.textSecondary, marginBottom: 40 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 10 },
-  callingCode: { fontSize: 18, marginHorizontal: 10, fontWeight: '500', color: COLORS.text },
-  input: { flex: 1, fontSize: 18, color: '#000' }, // Enforce black text color
-  button: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 30, alignItems: 'center', marginTop: 40 },
-  buttonDisabled: { backgroundColor: COLORS.border },
-  buttonText: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 24,
+    paddingTop: 96,
+  },
+  header: {
+    marginBottom: 44,
+  },
+  title: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: 0,
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 17,
+    color: COLORS.textSecondary,
+    lineHeight: 24,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 58,
+    borderWidth: 1,
+    borderColor: '#ECECF0',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    backgroundColor: '#FAFAFB',
+  },
+  callingCodeButton: { marginRight: 12, minHeight: 56, justifyContent: 'center', alignItems: 'center', minWidth: 68 },
+  countryCode: { fontSize: 12, fontWeight: '800', color: COLORS.textSecondary },
+  callingCode: { fontSize: 18, fontWeight: '700', color: COLORS.text },
+  input: { flex: 1, fontSize: 18, color: COLORS.text, minHeight: 56 },
+  countryOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 24 },
+  countryModal: { backgroundColor: COLORS.white, borderRadius: 18, paddingVertical: 12, maxHeight: 420 },
+  countryTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, paddingHorizontal: 18, paddingVertical: 12 },
+  countryOption: { paddingHorizontal: 18, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  countryName: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  countryDial: { fontSize: 13, color: COLORS.textSecondary, marginTop: 3 },
+  button: {
+    backgroundColor: COLORS.primary,
+    minHeight: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 32,
+  },
+  buttonDisabled: { backgroundColor: '#F0A3B2' },
+  buttonText: { color: COLORS.white, fontSize: 17, fontWeight: '800' },
 });
 
 export default PhoneLoginScreen;

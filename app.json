@@ -12,15 +12,34 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Amira uses your camera for video calls and profile photos.",
+        "NSMicrophoneUsageDescription": "Amira uses your microphone for video calls and voice messages."
+      }
     },
     "android": {
       "package": "com.gabsads.amira",
       "googleServicesFile": "./google-services.json",
-      "buildType": "apk"
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-camera",
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4e81406d-5b97-4396-b96d-f326bbc3ed8b"
+      }
+    },
+    "owner": "gabsads"
   }
 }

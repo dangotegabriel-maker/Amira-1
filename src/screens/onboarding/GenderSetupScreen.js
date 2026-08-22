@@ -4,7 +4,7 @@ import { COLORS } from '../../theme/COLORS';
 import { dbService } from '../../services/firebaseService';
 import { useUser } from '../../context/UserContext';
 
-const GenderSetupScreen = ({ navigation }) => {
+const GenderSetupScreen = () => {
   const [gender, setGender] = useState(null);
   const [loading, setLoading] = useState(false);
   const { user, refreshUser } = useUser();
@@ -25,10 +25,8 @@ const GenderSetupScreen = ({ navigation }) => {
     try {
       const g = gender === 'Woman' ? 'female' : 'male';
 
-      // Final update call: Set isProfileComplete to true
       await dbService.updateUserProfile(user.uid, {
         gender: g,
-        isProfileComplete: true
       });
 
       await refreshUser();

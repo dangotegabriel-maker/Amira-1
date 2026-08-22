@@ -3,13 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, Anima
 import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import { Phone, Coins, ChevronRight } from 'lucide-react-native';
+import { Phone, Coins, ChevronRight, PlayCircle } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { hapticService } from '../../services/hapticService';
 import { socketService } from '../../services/socketService';
-import { ledgerService } from '../../services/ledgerService';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 30) / 2;
@@ -83,11 +82,13 @@ const LowBalanceSheet = ({ visible, onClose, navigation, required }) => (
 
 const HomeScreen = () => {
   const navigation = useNavigation();
-  const { user, loading, isMale } = useUser();
+  const { user, loading, isMale, fetchUserCoins } = useUser();
+  const isConsumer = user?.role ? user.role === 'consumer' : isMale;
   const [activeTab, setActiveTab] = useState('online'); // 'online' or 'live'
   const [selectedContinent, setSelectedContinent] = useState('All');
   const [allUsers, setAllUsers] = useState([]);
   const [isFetching, setIsFetching] = useState(false);
+  const [callingUserId, setCallingUserId] = useState(null);
   const [showLowBalance, setShowLowBalance] = useState(false);
   const [requiredCoins, setRequiredCoins] = useState(50);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -179,20 +180,38 @@ const HomeScreen = () => {
       <TouchableOpacity
         style={styles.callButton}
         onPress={async () => {
-          hapticService.mediumImpact();
-          if (isMale) {
-            const currentCoins = await ledgerService.getBalance();
-            const price = item.call_price || 50;
-            if (currentCoins < price) {
-              setRequiredCoins(price);
-              setShowLowBalance(true);
-              return;
+          if (callingUserId) return;
+          setCallingUserId(item.id);
+          try {
+            hapticService.mediumImpact();
+            if (isConsumer) {
+              const currentCoins = await fetchUserCoins();
+              const price = item.call_price || 50;
+              console.log("USER COINS:", currentCoins);
+              if (currentCoins < price) {
+                setRequiredCoins(price);
+                setShowLowBalance(true);
+                return;
+              }
             }
+            navigation.navigate('VideoCall', {
+              name: item.name,
+              userId: item.id,
+              callRate: item.call_price || 50,
+            });
+          } catch (error) {
+            console.log("CALL BUTTON ERROR:", error?.code, error?.message);
+          } finally {
+            setCallingUserId(null);
           }
-          navigation.navigate('VideoCall', { name: item.name, userId: item.id });
         }}
+        disabled={Boolean(callingUserId)}
       >
-        <Phone color="white" size={20} fill="white" />
+        {callingUserId === item.id ? (
+          <Text style={styles.callLoadingText}>...</Text>
+        ) : (
+          <Phone color="white" size={20} fill="white" />
+        )}
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -258,6 +277,9 @@ const HomeScreen = () => {
             ]}>
               Live Streams
             </Animated.Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.storiesButton} onPress={() => navigation.navigate('Moments')}>
+            <PlayCircle color={COLORS.primary} size={19} />
           </TouchableOpacity>
         </View>
       </View>
@@ -345,6 +367,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFF' },
   header: { paddingTop: 60, paddingBottom: 10, paddingHorizontal: 20 },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
+  storiesButton: { marginLeft: 'auto', alignItems: 'center', padding: 9, borderRadius: 18, backgroundColor: '#FFF1F4' },
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: COLORS.text },
   categoryBarContainer: { borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   categoryBar: { paddingHorizontal: 15, paddingVertical: 10 },
@@ -427,6 +450,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2
   },
+  callLoadingText: { color: 'white', fontSize: 14, fontWeight: '900' },
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheetContent: { backgroundColor: 'white', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 30, alignItems: 'center' },
   sheetHandle: { width: 40, height: 5, backgroundColor: '#EEE', borderRadius: 3, marginBottom: 20 },

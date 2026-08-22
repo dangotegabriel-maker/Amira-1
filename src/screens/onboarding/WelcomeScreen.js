@@ -1,67 +1,14 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Image } from "react-native";
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { getAuth, GoogleAuthProvider, signInWithCredential } from '@react-native-firebase/auth';
-import { useUser } from '../../context/UserContext';
-import { dbService } from '../../services/firebaseService';
 
 const WelcomeScreen = ({ navigation }) => {
-  useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: '528428934640-taoiu31lp997g77vf4m7tded8kphfeio.apps.googleusercontent.com',
-      offlineAccess: true,
-    });
-  }, []);
-
-  const handleGoogleLogin = async () => {
-    try {
-      await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
-
-      const idToken = userInfo.data ? userInfo.data.idToken : userInfo.idToken;
-      if (!idToken) throw new Error("Google Sign-In failed: No ID Token found.");
-
-      const auth = getAuth();
-      const googleCredential = GoogleAuthProvider.credential(idToken);
-      const userCredential = await signInWithCredential(auth, googleCredential);
-      const firebaseUser = userCredential.user;
-
-      if (firebaseUser) {
-        // "Silent Upsert" (Update or Insert)
-        const profile = await dbService.getUserProfile(firebaseUser.uid);
-
-        if (!profile) {
-          // Silent background ingest of Google data
-          await dbService.createUserProfile(firebaseUser.uid, {
-            email: firebaseUser.email,
-            name: firebaseUser.displayName,
-            photo: firebaseUser.photoURL,
-            country_code: 'GH',
-            isProfileComplete: false,
-          });
-        }
-
-        // Navigation is now handled by the RootNavigator listener (Smart Skip)
-      }
-    } catch (error) {
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-      } else if (error.code === statusCodes.IN_PROGRESS) {
-        Alert.alert("Sign In In Progress", "A sign in operation is already in progress.");
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        Alert.alert("Play Services Error", "Google Play Services are not available or outdated.");
-      } else {
-        Alert.alert("Login Failed", error.message || "An unexpected error occurred during Google Sign-In.");
-      }
-    }
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Welcome to Amira</Text>
         <Text style={styles.description}>
-          Find your perfect match and start chatting today.
+          Meet new people, match with confidence, and start real conversations.
         </Text>
       </View>
 
@@ -70,21 +17,22 @@ const WelcomeScreen = ({ navigation }) => {
           style={styles.button}
           onPress={() => navigation.navigate('PhoneLogin')}
         >
-          <Text style={styles.buttonText}>Get Started</Text>
+          <Text style={styles.buttonText}>Continue with phone</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.secondaryButton}
           onPress={() => navigation.navigate('PhoneLogin')}
         >
-          <Text style={styles.secondaryButtonText}>Login with Phone</Text>
+          <Text style={styles.secondaryButtonText}>Log in</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.secondaryButton, { marginTop: 12, borderColor: '#DDD' }]}
-          onPress={handleGoogleLogin}
+          style={[styles.secondaryButton, styles.disabledButton]}
+          disabled
+          activeOpacity={1}
         >
-          <Text style={[styles.secondaryButtonText, { color: '#444' }]}>Continue with Google</Text>
+          <Text style={styles.disabledButtonText}>Google Sign-In · Coming soon</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -92,15 +40,40 @@ const WelcomeScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background, padding: 20 },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 32, fontWeight: 'bold', color: COLORS.primary, marginBottom: 10 },
-  description: { fontSize: 16, color: COLORS.textSecondary, textAlign: 'center', paddingHorizontal: 20 },
-  footer: { marginBottom: 40 },
-  button: { backgroundColor: COLORS.primary, padding: 16, borderRadius: 30, alignItems: 'center', marginBottom: 12 },
-  buttonText: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
-  secondaryButton: { padding: 16, borderRadius: 30, alignItems: 'center', borderWidth: 1, borderColor: COLORS.primary },
-  secondaryButtonText: { color: COLORS.primary, fontSize: 18, fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: COLORS.background, paddingHorizontal: 24, paddingVertical: 36 },
+  content: { flex: 1, justifyContent: 'center' },
+  title: { fontSize: 42, fontWeight: '900', color: COLORS.text, marginBottom: 12, letterSpacing: 0 },
+  description: { fontSize: 18, color: COLORS.textSecondary, lineHeight: 26 },
+  footer: { paddingBottom: 12 },
+  button: {
+    backgroundColor: COLORS.primary,
+    minHeight: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  buttonText: { color: COLORS.white, fontSize: 17, fontWeight: '800' },
+  secondaryButton: {
+    minHeight: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ECECF0',
+    backgroundColor: COLORS.white,
+  },
+  secondaryButtonText: { color: COLORS.text, fontSize: 17, fontWeight: '800' },
+  disabledButton: {
+    marginTop: 12,
+    borderColor: '#ECECF0',
+    backgroundColor: '#F7F7F8',
+  },
+  disabledButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: 17,
+    fontWeight: '800',
+  },
 });
 
 export default WelcomeScreen;

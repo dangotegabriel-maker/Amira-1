@@ -4,25 +4,31 @@ export const paystackConfig = {
 };
 
 export const paystackService = {
-  initializeTransaction: async (email, amount, currency = 'GHS', channels = ['card']) => {
-    // console.log("Initializing Paystack transaction via Backend Simulation:", { email, amount, currency });
+  initializeTransaction: async (user, amount) => {
+    const PAYSTACK_PUBLIC_KEY = process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY;
+    if (!PAYSTACK_PUBLIC_KEY || !PAYSTACK_PUBLIC_KEY.startsWith('pk_test_')) {
+      throw new Error('Paystack public test key is missing or invalid.');
+    }
 
-    // BACKEND-SIDE MOCK using sk_test_...
-    const secretKey = process.env.EXPO_PUBLIC_PAYSTACK_SECRET_KEY;
-    if (!secretKey) throw new Error("Paystack Secret Key is missing from environment.");
+    const reference = "ref_" + Date.now();
+    const amountInKobo = amount * 100;
 
-    // Simulate Paystack API Response for /transaction/initialize
-    const reference = `amira_ref_${Date.now()}_${Math.random().toString(36).substr(7)}`;
-    const authorization_url = `https://checkout.paystack.com/checkout-${reference}`;
-
-    return {
-      success: true,
-      data: {
-        authorization_url,
-        access_code: `CODE_${Math.random().toString(36).substr(7).toUpperCase()}`,
-        reference
-      }
+    const paystackConfig = {
+      email: user.email || "test@email.com",
+      amount: amountInKobo,
+      reference: reference,
+      publicKey: PAYSTACK_PUBLIC_KEY,
+      onSuccess(response) {
+        console.log("SUCCESS:", response);
+      },
+      onCancel() {
+        console.log("CANCELLED");
+      },
     };
+
+    console.log("PAYSTACK CONFIG:", paystackConfig);
+
+    return paystackConfig;
   },
 
   verifyTransaction: async (reference) => {

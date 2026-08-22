@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal, ActivityIndicator, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { Award, ChevronLeft, Gift, ArrowUpCircle, MessageCircle, Phone, Heart, X, Coins, ChevronRight, ShieldAlert, UserMinus } from 'lucide-react-native';
-import { ledgerService } from '../../services/ledgerService';
 import { dbService } from '../../services/firebaseService';
 import { socketService } from '../../services/socketService';
 import { hapticService } from '../../services/hapticService';
+import { useUser } from '../../context/UserContext';
 import VIPBadge from '../../components/VIPBadge';
 import GiftingLeaderboard from '../../components/GiftingLeaderboard';
 import GlowAvatar from '../../components/GlowAvatar';
@@ -43,11 +43,13 @@ const LowBalanceSheet = ({ visible, onClose, navigation, required }) => (
 
 const UserProfileScreen = ({ route, navigation }) => {
   const { userId, name } = route.params;
+  const { user, fetchUserCoins } = useUser();
   const [currentUser, setCurrentUser] = useState(null);
   const [targetUser, setTargetUser] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [showLowBalance, setShowLowBalance] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [isStartingCall, setIsStartingCall] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -55,10 +57,30 @@ const UserProfileScreen = ({ route, navigation }) => {
   }, [userId]);
 
   const loadData = async () => {
-    const p = await dbService.getUserProfile('current_user_id');
-    const t = await dbService.getUserProfile(userId);
-    setCurrentUser(p);
-    setTargetUser(t);
+    try {
+      const p = user?.uid ? await dbService.getUserProfile(user.uid) : null;
+      const t = await dbService.getUserProfile(userId);
+      setCurrentUser(p || user);
+      setTargetUser(t || {
+        uid: userId,
+        name,
+        gender: 'female',
+        call_price: 50,
+        bio: '',
+        photos: [],
+      });
+    } catch (error) {
+      console.log("PROFILE LOAD ERROR:", error?.code, error?.message);
+      setCurrentUser(user);
+      setTargetUser({
+        uid: userId,
+        name,
+        gender: 'female',
+        call_price: 50,
+        bio: '',
+        photos: [],
+      });
+    }
   };
 
   if (!targetUser || !currentUser) return (
@@ -106,17 +128,26 @@ const UserProfileScreen = ({ route, navigation }) => {
         <View style={styles.actionRow}>
            {isMaleViewer && isFemaleProfile ? (
              <>
-               <TouchableOpacity style={styles.primaryAction} onPress={async () => {
-                 const currentCoins = await ledgerService.getBalance();
-                 const price = targetUser.call_price || 50;
-                 if (currentCoins < price) {
-                   setShowLowBalance(true);
-                   return;
+               <TouchableOpacity style={styles.primaryAction} disabled={isStartingCall} onPress={async () => {
+                 if (isStartingCall) return;
+                 setIsStartingCall(true);
+                 try {
+                   const currentCoins = await fetchUserCoins();
+                   const price = targetUser.call_price || 50;
+                   console.log("USER COINS:", currentCoins);
+                   if (currentCoins < price) {
+                     setShowLowBalance(true);
+                     return;
+                   }
+                   navigation.navigate('VideoCall', { name: targetUser.name, userId: targetUser.uid });
+                 } catch (error) {
+                   console.log("CALL START ERROR:", error?.code, error?.message);
+                 } finally {
+                   setIsStartingCall(false);
                  }
-                 navigation.navigate('VideoCall', { name: targetUser.name, userId: targetUser.uid });
                }}>
                   <Phone color="white" size={20} />
-                  <Text style={styles.primaryActionText}>Call Now</Text>
+                  <Text style={styles.primaryActionText}>{isStartingCall ? 'Starting...' : 'Call Now'}</Text>
                </TouchableOpacity>
                <TouchableOpacity style={styles.secondaryAction}>
                   <Gift color={COLORS.primary} size={20} />

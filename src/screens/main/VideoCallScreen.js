@@ -1,29 +1,35 @@
 // src/screens/main/VideoCallScreen.js
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder, Alert, Modal } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Animated, PanResponder, Alert, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { PhoneOff, Mic, MicOff, Camera, Video, Gift, Coins, X, DollarSign, Heart, RefreshCw } from 'lucide-react-native';
-import { CameraView } from 'expo-camera';
+import { PhoneOff, Mic, MicOff, Video, Gift, Coins, Heart, RefreshCw } from 'lucide-react-native';
+import { Camera, CameraView } from 'expo-camera';
 import LottieView from 'lottie-react-native';
 import { hapticService } from '../../services/hapticService';
 import { agoraService } from '../../services/agoraService';
 import { ledgerService } from '../../services/ledgerService';
-import { dbService } from '../../services/firebaseService';
+import { auth, dbService, getWalletBalance } from '../../services/firebaseService';
 import { socketService } from '../../services/socketService';
 import { soundService } from '../../services/soundService';
 import GiftTray from '../../components/GiftTray';
 import GiftingOverlay from '../../components/GiftingOverlay';
 import * as ScreenCapture from 'expo-screen-capture';
 import { BlurView } from 'expo-blur';
+import { useUser } from '../../context/UserContext';
 
 const { width, height } = Dimensions.get('window');
 const CALL_RATE = 50;
 
 const VideoCallScreen = ({ route, navigation }) => {
-  const { name, userId } = route.params;
+  const { name, userId, callRate = CALL_RATE } = route.params || {};
+  const { fetchUserCoins } = useUser();
   const [currentUser, setCurrentUser] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [hasCameraPermission, setHasCameraPermission] = useState(false);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(true);
   const [showSparkles, setShowSparkles] = useState(true);
   const [isGiftTrayVisible, setIsGiftTrayVisible] = useState(false);
   const [activeGift, setActiveGift] = useState(null);
@@ -89,59 +95,145 @@ const VideoCallScreen = ({ route, navigation }) => {
    const navigateToSummary = () => {
       navigation.navigate('CallSummary', {
          duration,
-         coinsSpent: currentUser?.gender === 'male' ? (Math.ceil(duration / 60) * CALL_RATE) : 0,
-         diamondsEarned: currentUser?.gender === 'female' ? diamondsEarned : 0,
+         coinsSpent: currentUser?.role === 'consumer' || (!currentUser?.role && currentUser?.gender === 'male')
+           ? (Math.ceil(duration / 60) * callRate)
+           : 0,
+         diamondsEarned: currentUser?.role === 'host' || (!currentUser?.role && currentUser?.gender === 'female') ? diamondsEarned : 0,
          targetUserId: userId,
          targetUserName: name,
          targetUserPhoto: `https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200`, // In real app, pass actual photo
-         isMale: currentUser?.gender === 'male'
+         isMale: currentUser?.role ? currentUser.role === 'consumer' : currentUser?.gender === 'male'
       });
    };
 
   const loadUserAndStartCall = async () => {
-     const profile = await dbService.getUserProfile('current_user_id');
-     if (profile.is_verified === false && profile.defaultAvatar === true) {
-        Alert.alert("Verification Required", "Please upload a profile photo to initiate or receive calls.");
-        navigation.goBack();
-        return;
-     }
-     setCurrentUser(profile);
+     try {
+        const permissionsGranted = await requestMediaPermissions();
+        if (!permissionsGranted) return;
 
-     const currentBalance = await ledgerService.getBalance();
-     setBalance(currentBalance);
-
-     if (profile.gender === 'male') {
-        if (currentBalance < CALL_RATE) {
-           Alert.alert("Low Balance", "You need at least 50 coins to start a call.");
+        const user = auth.currentUser;
+        if (!user) {
+           Alert.alert("Error", "User not authenticated.");
            navigation.goBack();
            return;
         }
-        await billMinute();
-     }
 
-     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-     hapticService.success();
-     const sparkleTimer = setTimeout(() => setShowSparkles(false), 3000);
-     agoraService.joinChannel(`call_${userId}`);
+        const profile = await dbService.getUserProfile(user.uid);
+        if (!profile) {
+           Alert.alert("Error", "Could not load your profile.");
+           navigation.goBack();
+           return;
+        }
 
-     if (profile.gender === 'male') {
-        billingTimer.current = setInterval(async () => {
-           const latestBalance = await ledgerService.getBalance();
-           if (latestBalance < CALL_RATE) {
-              hapticService.error();
-              socketService.emitEndCall(userId, 'low_balance');
-           } else {
-              await billMinute();
+        if (profile.is_verified === false && profile.defaultAvatar === true) {
+           Alert.alert("Verification Required", "Please upload a profile photo to initiate or receive calls.");
+           navigation.goBack();
+           return;
+        }
+        setCurrentUser(profile);
+
+        const currentBalance = await fetchLatestCoins();
+        console.log("USER COINS:", currentBalance);
+        setBalance(currentBalance);
+
+        const isConsumer = profile.role ? profile.role === 'consumer' : profile.gender === 'male';
+        if (isConsumer) {
+           if (currentBalance < callRate) {
+              Alert.alert("Low Balance", `You need at least ${callRate} to start a call.`);
+              navigation.goBack();
+              return;
            }
-        }, 60000);
+           await billMinute();
+        }
+
+        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+        hapticService.success();
+        setTimeout(() => setShowSparkles(false), 3000);
+        await agoraService.joinChannel(`call_${userId}`);
+        setCameraActive(true);
+        setIsConnecting(false);
+
+        if (isConsumer) {
+           billingTimer.current = setInterval(async () => {
+              const latestBalance = await fetchLatestCoins();
+              console.log("USER COINS:", latestBalance);
+              if (latestBalance < callRate) {
+                 hapticService.error();
+                 socketService.emitEndCall(userId, 'low_balance');
+              } else {
+                 await billMinute();
+              }
+           }, 60000);
+        }
+     } catch (error) {
+        console.log("CALL START ERROR:", error?.code, error?.message);
+        Alert.alert("Call Error", "Could not start the call.");
+        navigation.goBack();
+     }
+  };
+
+  const requestMediaPermissions = async () => {
+     try {
+        const cameraPermission = await Camera.requestCameraPermissionsAsync();
+        const microphonePermission = await Camera.requestMicrophonePermissionsAsync();
+        const granted = cameraPermission?.granted && microphonePermission?.granted;
+
+        console.log("Camera permission:", cameraPermission?.status);
+        console.log("Microphone permission:", microphonePermission?.status);
+        setHasCameraPermission(Boolean(granted));
+
+        if (!granted) {
+           Alert.alert("Permissions Required", "Camera and microphone access are required for video calls.");
+           navigation.goBack();
+        }
+
+        return Boolean(granted);
+     } catch (error) {
+        console.log("MEDIA PERMISSION ERROR:", error?.code, error?.message);
+        Alert.alert("Camera Error", "Could not start camera permissions.");
+        navigation.goBack();
+        return false;
+     }
+  };
+
+  const fetchLatestCoins = async () => {
+     try {
+        const user = auth.currentUser;
+        if (!user?.uid) {
+           console.log("COIN FETCH ERROR:", "User not authenticated");
+           return 0;
+        }
+
+        const profile = await dbService.getUserProfile(user.uid);
+        const walletBalance = getWalletBalance(profile);
+        setBalance(walletBalance);
+        console.log('WALLET BALANCE:', walletBalance);
+        return walletBalance;
+     } catch (error) {
+        console.log("COIN FETCH ERROR:", error?.code, error?.message);
+        return 0;
      }
   };
 
   const billMinute = async () => {
      try {
-        await ledgerService.billCallMinute(CALL_RATE, userId, name);
-        const newBalance = await ledgerService.getBalance();
+        const user = auth.currentUser;
+        if (!user) {
+           throw new Error("User not authenticated");
+        }
+
+        const latestCoins = await fetchLatestCoins();
+        if (latestCoins < callRate) {
+           Alert.alert("Low Balance", `You need at least ${callRate} to continue this call.`);
+           socketService.emitEndCall(userId, 'low_balance');
+           return;
+        }
+
+        await dbService.updateWalletBalance(-callRate);
+
+        const newBalance = latestCoins - callRate;
         setBalance(newBalance);
+        await fetchUserCoins();
 
         // Signal extension to female
         socketService.signalCallExtension(userId);
@@ -153,29 +245,49 @@ const VideoCallScreen = ({ route, navigation }) => {
   };
 
   const handleQuickBuy = async (amount) => {
-     hapticService.mediumImpact();
-     await ledgerService.buyCoins(amount, 'quick_buy');
-     const newBalance = await ledgerService.getBalance();
-     setBalance(newBalance);
-     setShowQuickRecharge(false);
-     hapticService.success();
+     try {
+        hapticService.mediumImpact();
+        const user = auth.currentUser;
+        if (!user) {
+           Alert.alert("Error", "User not authenticated.");
+           return;
+        }
+
+        await dbService.topUpWallet(amount);
+        await ledgerService.buyCoins(amount, 'quick_buy');
+        const newBalance = await fetchLatestCoins();
+        setBalance(newBalance);
+        setShowQuickRecharge(false);
+        hapticService.success();
+     } catch (error) {
+        console.log("QUICK BUY ERROR:", error?.code, error?.message);
+        Alert.alert("Error", "Failed to add coins.");
+     }
   };
 
   useEffect(() => {
-     if (currentUser?.gender === 'female' && duration > 0 && duration % 60 === 0) {
+     const isHost = currentUser?.role ? currentUser.role === 'host' : currentUser?.gender === 'female';
+     if (isHost && duration > 0 && duration % 60 === 0) {
         creditMinute();
      }
   }, [duration]);
 
   const creditMinute = async () => {
-     const earned = await ledgerService.creditDiamonds(CALL_RATE);
-     setDiamondsEarned(prev => prev + earned);
-     soundService.play('https://www.soundjay.com/misc/coin-drop-1.mp3');
-     hapticService.lightImpact();
+     try {
+        const earned = await ledgerService.creditDiamonds(callRate);
+        setDiamondsEarned(prev => prev + earned);
+        if (soundService?.play) {
+          soundService.play('https://www.soundjay.com/misc/coin-drop-1.mp3');
+        }
+        hapticService.lightImpact();
+     } catch (error) {
+        console.log("DIAMOND CREDIT ERROR:", error?.code, error?.message);
+     }
   };
 
-  const isLowForNext = balance < CALL_RATE;
-  const showWarning = secondsInMinute >= 50 && currentUser?.gender === 'male' && isLowForNext;
+  const isLowForNext = balance < callRate;
+  const isConsumer = currentUser?.role ? currentUser.role === 'consumer' : currentUser?.gender === 'male';
+  const showWarning = secondsInMinute >= 50 && isConsumer && isLowForNext;
 
   useEffect(() => {
      if (showWarning) setShowQuickRecharge(true);
@@ -199,7 +311,7 @@ const VideoCallScreen = ({ route, navigation }) => {
                   <Text style={styles.extendingText}>User is extending the call...</Text>
                </View>
             )}
-            {currentUser?.gender === 'female' && diamondsEarned > 0 && (
+            {(currentUser?.role === 'host' || (!currentUser?.role && currentUser?.gender === 'female')) && diamondsEarned > 0 && (
                <View style={styles.diamondFloat}>
                   <Text style={styles.diamondText}>+💎 {diamondsEarned}</Text>
                </View>
@@ -207,9 +319,37 @@ const VideoCallScreen = ({ route, navigation }) => {
          </View>
       </Animated.View>
 
+      {isConnecting && (
+        <View style={styles.connectingOverlay}>
+          <ActivityIndicator color={COLORS.primary} size="large" />
+          <Text style={styles.connectingText}>Connecting video...</Text>
+        </View>
+      )}
+
       <Animated.View {...panResponder.panHandlers} style={[styles.pip, { transform: pipPos.getTranslateTransform() }]}>
          <View style={styles.localPlaceholder}>
-            <CameraView style={{ flex: 1 }} facing={isFrontCamera ? 'front' : 'back'} />
+            {hasCameraPermission ? (
+              <CameraView
+                style={{ flex: 1 }}
+                facing={isFrontCamera ? 'front' : 'back'}
+                active={cameraActive}
+                onCameraReady={() => {
+                  console.log('Camera stream active:', true);
+                  setIsCameraReady(true);
+                }}
+                onMountError={(event) => console.log("CAMERA MOUNT ERROR:", event?.nativeEvent?.message)}
+              />
+            ) : (
+              <View style={styles.cameraFallback}>
+                <Text style={styles.cameraFallbackText}>Starting camera...</Text>
+              </View>
+            )}
+            {hasCameraPermission && !isCameraReady && (
+              <View style={styles.cameraLoading}>
+                <ActivityIndicator color="white" />
+                <Text style={styles.cameraFallbackText}>Starting camera...</Text>
+              </View>
+            )}
             <TouchableOpacity
                style={styles.flipButton}
                onPress={toggleCamera}
@@ -272,6 +412,11 @@ const styles = StyleSheet.create({
   remoteStatus: { color: COLORS.primary, fontSize: 16, marginTop: 10 },
   pip: { position: 'absolute', width: 100, height: 150, borderRadius: 20, backgroundColor: '#333', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', overflow: 'hidden', zIndex: 100 },
   localPlaceholder: { flex: 1 },
+  cameraFallback: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
+  cameraFallbackText: { color: 'white', fontSize: 12 },
+  cameraLoading: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
+  connectingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 90, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' },
+  connectingText: { color: 'white', marginTop: 12, fontSize: 16, fontWeight: '700' },
   flipButton: {
     position: 'absolute',
     top: 10,

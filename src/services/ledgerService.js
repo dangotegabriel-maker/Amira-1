@@ -85,6 +85,26 @@ export const ledgerService = {
     return ledgerService.wealthXP;
   },
 
+  getTotalSpent: async () => {
+    await ledgerService.init();
+    return ledgerService.totalSpent;
+  },
+
+  getUpvotes: async () => {
+    await ledgerService.init();
+    return ledgerService.upvotes;
+  },
+
+  getTotalGiftsReceived: async () => {
+    await ledgerService.init();
+    return Object.values(ledgerService.receivedGifts).reduce((total, count) => total + Number(count || 0), 0);
+  },
+
+  getReceivedGifts: async () => {
+    await ledgerService.init();
+    return ledgerService.receivedGifts;
+  },
+
   getWithdrawalHistory: async () => {
     await ledgerService.init();
     return ledgerService.withdrawalHistory;

@@ -11,7 +11,7 @@ import { socketService } from '../../services/socketService';
 const { width, height } = Dimensions.get('window');
 const POST_IMAGE_HEIGHT = height * 0.5;
 
-const MomentsScreen = () => {
+const MomentsScreen = ({ navigation }) => {
   const { triggerGiftOverlay } = useGifting();
   const [activeMoments, setActiveMoments] = useState([]);
   const [statusUsers, setStatusUsers] = useState([]);
@@ -30,7 +30,12 @@ const MomentsScreen = () => {
         timestamp: now - (2 * 60 * 60 * 1000), // 2 hours ago
         isOnline: true,
         hasStory: true,
-        userId: 'f1'
+        userId: 'f1',
+        storyThumbnail: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=300',
+        stories: [
+          { id: 's1', type: 'image', uri: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=900' },
+          { id: 's2', type: 'image', uri: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900' },
+        ],
       },
       {
         id: '2',
@@ -40,7 +45,11 @@ const MomentsScreen = () => {
         timestamp: now - (25 * 60 * 60 * 1000), // 25 hours ago (expired)
         isOnline: true,
         hasStory: true,
-        userId: 'f2'
+        userId: 'f2',
+        storyThumbnail: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300',
+        stories: [
+          { id: 's3', type: 'image', uri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=900' },
+        ],
       },
       {
         id: '3',
@@ -50,7 +59,11 @@ const MomentsScreen = () => {
         timestamp: now - (10 * 60 * 60 * 1000), // 10 hours ago
         isOnline: false,
         hasStory: true,
-        userId: 'f3'
+        userId: 'f3',
+        storyThumbnail: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300',
+        stories: [
+          { id: 's4', type: 'image', uri: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=900' },
+        ],
       },
       {
         id: '4',
@@ -60,7 +73,11 @@ const MomentsScreen = () => {
         timestamp: now - (23 * 60 * 60 * 1000), // 23 hours ago
         isOnline: true,
         hasStory: true,
-        userId: 'f4'
+        userId: 'f4',
+        storyThumbnail: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300',
+        stories: [
+          { id: 's5', type: 'image', uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=900' },
+        ],
       },
     ];
 
@@ -75,12 +92,28 @@ const MomentsScreen = () => {
         id: p.userId,
         user: p.user,
         avatar: p.avatar,
+        storyThumbnail: p.storyThumbnail || p.avatar,
+        stories: p.stories || [],
         isOnline: p.isOnline,
         hasStory: p.hasStory
       }))
     ];
     setStatusUsers(users);
   }, []);
+
+  const openStory = (user) => {
+    try {
+      hapticService.lightImpact();
+      if (!user?.stories?.length) return;
+
+      navigation.navigate("StoryViewer", {
+        stories: user.stories,
+        userName: user.user,
+      });
+    } catch (error) {
+      console.log("OPEN STORY ERROR:", error?.code, error?.message);
+    }
+  };
 
   const onDoubleTap = (userId) => (event) => {
     if (event.nativeEvent.state === State.ACTIVE) {
@@ -99,7 +132,7 @@ const MomentsScreen = () => {
       contentContainerStyle={styles.statusContent}
     >
       {statusUsers.map((item) => (
-        <TouchableOpacity key={item.id} style={styles.statusItem} onPress={() => hapticService.lightImpact()}>
+        <TouchableOpacity key={item.id} style={styles.statusItem} onPress={() => openStory(item)}>
           <View style={[
             styles.avatarContainer,
             item.hasStory && !item.isMe && styles.storyRing,
@@ -110,7 +143,7 @@ const MomentsScreen = () => {
                 <Plus size={20} color="white" />
               </View>
             ) : (
-              <Image source={{ uri: item.avatar }} style={styles.statusAvatar} />
+              <Image source={{ uri: item.storyThumbnail || item.avatar }} style={styles.statusAvatar} />
             )}
             {item.isOnline && <View style={styles.statusOnlineDot} />}
           </View>
