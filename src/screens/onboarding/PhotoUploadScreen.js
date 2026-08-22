@@ -91,7 +91,7 @@ const PhotoUploadScreen = ({ navigation }) => {
       </View>
       <TouchableOpacity
         style={[styles.button, photoCount < 2 && styles.buttonDisabled]}
-        onPress={() => navigation.navigate('Interests')}
+        onPress={() => Alert.alert('Deferred', 'Photo onboarding will return with the V2 media pipeline.')}
         disabled={photoCount < 2}
       >
         <Text style={styles.buttonText}>Continue</Text>

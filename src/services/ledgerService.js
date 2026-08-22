@@ -105,6 +105,11 @@ export const ledgerService = {
     return ledgerService.receivedGifts;
   },
 
+  getDetailedGifts: async () => {
+    await ledgerService.init();
+    return Array.isArray(ledgerService.detailedGifts) ? ledgerService.detailedGifts : [];
+  },
+
   getWithdrawalHistory: async () => {
     await ledgerService.init();
     return ledgerService.withdrawalHistory;

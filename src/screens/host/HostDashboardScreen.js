@@ -4,6 +4,7 @@ import { Clock, Coins, Wallet } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
 import { auth, dbService } from '../../services/firebaseService';
 import { useUser } from '../../context/UserContext';
+import { isApprovedHost } from '../../models/userModel';
 
 const HostDashboardScreen = () => {
   const { user } = useUser();
@@ -14,7 +15,7 @@ const HostDashboardScreen = () => {
     if (!currentUser?.uid || updating) return;
     setUpdating(true);
     try {
-      await dbService.updateUserProfile(currentUser.uid, { isOnline });
+      await dbService.updateHostAvailability(isOnline ? 'online' : 'offline');
     } catch (error) {
       console.log('FIRESTORE ERROR:', error);
       Alert.alert('Update Failed', 'Could not change your online status.');
@@ -25,20 +26,22 @@ const HostDashboardScreen = () => {
 
   const metrics = [
     { label: 'Call time', value: user?.callTimeMinutes || 0, suffix: ' min', icon: Clock },
-    { label: 'Earnings', value: user?.earnings || 0, suffix: '', icon: Coins },
-    { label: 'Balance', value: user?.wallet?.balance || 0, suffix: ` ${user?.wallet?.currency || 'GHS'}`, icon: Wallet },
+    { label: 'Earnings', value: user?.earnings?.available || 0, suffix: ` ${user?.earnings?.currency || 'GHS'}`, icon: Coins },
+    { label: 'Balance', value: user?.wallet?.creditBalance || 0, suffix: ` ${user?.wallet?.currency || 'GHS'}`, icon: Wallet },
   ];
+
+  if (!isApprovedHost(user)) return null;
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Dashboard</Text>
       <View style={styles.statusCard}>
         <View>
-          <Text style={styles.statusTitle}>{user?.isOnline ? 'You are online' : 'You are offline'}</Text>
+          <Text style={styles.statusTitle}>{user?.hostStatus?.availability === 'online' ? 'You are online' : 'You are offline'}</Text>
           <Text style={styles.statusText}>Online creators can receive connection requests.</Text>
         </View>
         <Switch
-          value={Boolean(user?.isOnline)}
+          value={user?.hostStatus?.availability === 'online'}
           onValueChange={updateOnlineStatus}
           disabled={updating}
           trackColor={{ true: COLORS.primary }}

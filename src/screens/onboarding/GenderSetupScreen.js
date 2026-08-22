@@ -23,7 +23,8 @@ const GenderSetupScreen = () => {
 
     setLoading(true);
     try {
-      const g = gender === 'Woman' ? 'female' : 'male';
+      const genderValues = { Woman: 'female', Man: 'male', Other: 'other' };
+      const g = genderValues[gender];
 
       await dbService.updateUserProfile(user.uid, {
         gender: g,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, Animated, Easing, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView, Animated, Easing, Modal, Alert } from 'react-native';
 import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from '@react-navigation/native';
 import { Image } from 'expo-image';
@@ -9,6 +9,8 @@ import { useUser } from '../../context/UserContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { hapticService } from '../../services/hapticService';
 import { socketService } from '../../services/socketService';
+import { dbService } from '../../services/firebaseService';
+import { isApprovedHost } from '../../models/userModel';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 30) / 2;
@@ -82,8 +84,8 @@ const LowBalanceSheet = ({ visible, onClose, navigation, required }) => (
 
 const HomeScreen = () => {
   const navigation = useNavigation();
-  const { user, loading, isMale, fetchUserCoins } = useUser();
-  const isConsumer = user?.role ? user.role === 'consumer' : isMale;
+  const { user, loading, fetchUserCoins } = useUser();
+  const isConsumer = user?.role === 'consumer';
   const [activeTab, setActiveTab] = useState('online'); // 'online' or 'live'
   const [selectedContinent, setSelectedContinent] = useState('All');
   const [allUsers, setAllUsers] = useState([]);
@@ -191,6 +193,11 @@ const HomeScreen = () => {
               if (currentCoins < price) {
                 setRequiredCoins(price);
                 setShowLowBalance(true);
+                return;
+              }
+              const targetProfile = await dbService.getUserProfile(item.id);
+              if (!isApprovedHost(targetProfile)) {
+                Alert.alert('Host unavailable', 'Only approved hosts can receive paid calls.');
                 return;
               }
             }

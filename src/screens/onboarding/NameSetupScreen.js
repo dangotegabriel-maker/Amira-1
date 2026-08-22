@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
-import { doc, setDoc } from 'firebase/firestore';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
-import { auth, db } from '../../services/firebaseService';
+import { auth, dbService } from '../../services/firebaseService';
+import { validateUsername } from '../../utils/usernameValidation';
 
 const NameSetupScreen = ({ navigation }) => {
   const [name, setName] = useState('');
@@ -12,7 +12,12 @@ const NameSetupScreen = ({ navigation }) => {
 
   const saveName = async () => {
     setLoading(true);
-    const enteredName = name.trim();
+    const validation = validateUsername(name);
+    if (!validation.isValid) {
+      Alert.alert('Check your name', validation.error);
+      return;
+    }
+    const enteredName = validation.value;
 
     try {
       const user = auth.currentUser;
@@ -26,12 +31,11 @@ const NameSetupScreen = ({ navigation }) => {
         return;
       }
 
-      await setDoc(doc(db, "users", user.uid), {
+      await dbService.updateUserProfile(user.uid, {
         username: enteredName,
-        name: enteredName,
         phone: user.phoneNumber,
         updatedAt: new Date()
-      }, { merge: true });
+      });
 
       setUser((currentUser) => ({ ...currentUser, username: enteredName, name: enteredName }));
     } catch (error) {
@@ -53,9 +57,9 @@ const NameSetupScreen = ({ navigation }) => {
         autoFocus
       />
       <TouchableOpacity
-        style={[styles.button, (!name || loading) && styles.buttonDisabled]}
+        style={[styles.button, (!name.trim() || loading) && styles.buttonDisabled]}
         onPress={saveName}
-        disabled={!name || loading}
+        disabled={!name.trim() || loading}
       >
         {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Continue</Text>}
       </TouchableOpacity>

@@ -70,7 +70,7 @@ const GiftTray = ({ visible, onClose, onGiftSent }) => {
   }, [visible]);
 
   const loadBalance = async () => {
-    setBalance(user?.wallet?.balance || 0);
+    setBalance(user?.wallet?.creditBalance || 0);
   };
 
   const handleGiftTap = async (gift) => {

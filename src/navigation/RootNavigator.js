@@ -4,7 +4,6 @@ import { useUser } from '../context/UserContext';
 
 // Onboarding Screens
 import SplashScreen from '../screens/onboarding/SplashScreen';
-import WelcomeScreen from '../screens/onboarding/WelcomeScreen';
 import LoginScreen from '../screens/onboarding/LoginScreen';
 import PhoneLoginScreen from '../screens/onboarding/PhoneLoginScreen';
 import OTPScreen from '../screens/onboarding/OTPScreen';
@@ -32,6 +31,8 @@ import PaymentMethodScreen from '../screens/main/PaymentMethodScreen';
 import StoryViewerScreen from '../screens/main/StoryViewerScreen';
 import MomentsScreen from '../screens/main/MomentsScreen';
 import RoleSelectionScreen from '../screens/onboarding/RoleSelectionScreen';
+import CountrySetupScreen from '../screens/onboarding/CountrySetupScreen';
+import { getRequiredProfileStep, isProfileActuallyComplete } from '../models/userModel';
 
 const Stack = createNativeStackNavigator();
 
@@ -40,17 +41,8 @@ const RootNavigator = () => {
 
   if (loading) return null;
 
-  const hasName = Boolean(user?.username || user?.name);
-  const nextProfileScreen = !hasName
-    ? 'NameSetup'
-    : !user?.dob
-      ? 'BirthdaySetup'
-      : !user?.gender
-        ? 'GenderSetup'
-        : !user?.role
-          ? 'RoleSelection'
-          : null;
-  const isProfileComplete = Boolean(user && !nextProfileScreen && user.isProfileComplete);
+  const nextProfileScreen = getRequiredProfileStep(user);
+  const isProfileComplete = isProfileActuallyComplete(user);
 
   return (
     <Stack.Navigator
@@ -63,7 +55,7 @@ const RootNavigator = () => {
       {!user ? (
         <>
           <Stack.Screen name="Splash" component={SplashScreen} />
-          <Stack.Screen name="Welcome" component={LoginScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
           <Stack.Screen name="OTP" component={OTPScreen} />
         </>
@@ -73,6 +65,7 @@ const RootNavigator = () => {
             nextProfileScreen === 'NameSetup' ? NameSetupScreen
               : nextProfileScreen === 'BirthdaySetup' ? BirthdaySetupScreen
                 : nextProfileScreen === 'GenderSetup' ? GenderSetupScreen
+                  : nextProfileScreen === 'CountrySetup' ? CountrySetupScreen
                   : RoleSelectionScreen
           } />
         </Stack.Group>

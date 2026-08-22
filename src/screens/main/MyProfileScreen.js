@@ -16,7 +16,7 @@ const { width, height } = Dimensions.get('window');
 
 const MyProfileScreen = ({ navigation }) => {
   const isFocused = useIsFocused();
-  const { user, loading, isMale, coins, fetchUserCoins } = useUser();
+  const { user, loading, isConsumer, coins, fetchUserCoins } = useUser();
 
   const [balance, setBalance] = useState(0);
   const [diamondBalance, setDiamondBalance] = useState(0);
@@ -31,9 +31,6 @@ const MyProfileScreen = ({ navigation }) => {
   useEffect(() => {
     if (isFocused && user) {
       loadData();
-      if (!user.gender) {
-        navigation.navigate('GenderSetup');
-      }
     }
   }, [isFocused, user]);
 
@@ -83,8 +80,8 @@ const MyProfileScreen = ({ navigation }) => {
 
   const menuItems = [
     { icon: <Award size={20} color="#FFD700" />, label: 'Global Leaderboard', screen: 'Leaderboard' },
-    { icon: <Gift size={20} color={COLORS.primary} />, label: isMale ? 'Gifts Sent' : 'My Gift Cabinet', screen: 'GiftLedger', params: { type: isMale ? 'sent' : 'received' } },
-    ...(isMale ? [{ icon: <Coins size={20} color="#FFD700" />, label: 'Recharge Hub', screen: 'RechargeHub' }] : []),
+    { icon: <Gift size={20} color={COLORS.primary} />, label: isConsumer ? 'Gifts Sent' : 'My Gift Cabinet', screen: 'GiftLedger', params: { type: isConsumer ? 'sent' : 'received' } },
+    ...(isConsumer ? [{ icon: <Coins size={20} color="#FFD700" />, label: 'Recharge Hub', screen: 'RechargeHub' }] : []),
     { icon: <Award size={20} color={COLORS.primary} />, label: 'VIP Store', screen: 'VIPStore' },
     { icon: <Settings size={20} color="#666" />, label: 'Settings', screen: 'Settings' },
     { icon: <Award size={20} color={COLORS.secondary} />, label: 'Help & Support', screen: 'HelpSupport' },
@@ -94,19 +91,19 @@ const MyProfileScreen = ({ navigation }) => {
     <View>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          <GlowAvatar size={100} isOnline={true} xp={isMale ? wealthXP : 0}>
-             <Image source={user.photos?.[0] ? { uri: user.photos[0] } : null} style={styles.profileImg} />
+          <GlowAvatar size={100} isOnline={true} xp={isConsumer ? wealthXP : 0}>
+             <Image source={user.profilePic || user.photos?.[0] ? { uri: user.profilePic || user.photos[0] } : null} style={styles.profileImg} />
           </GlowAvatar>
         </View>
         <View style={styles.nameContainer}>
-          <Text style={styles.name}>{user.name || 'Amira User'}</Text>
+          <Text style={styles.name}>{user.username || 'Amira User'}</Text>
           <VIPBadge totalSpent={totalSpent} />
         </View>
-        {isMale && <Text style={styles.tierName}>{tier.name} Rank</Text>}
+        {isConsumer && <Text style={styles.tierName}>{tier.name} Rank</Text>}
         <View style={styles.profileStatsRow}>
           <View style={styles.profileStatPill}>
             <Coins color="#FFD700" size={16} />
-            <Text style={styles.profileStatText}>{user.wallet?.currency || 'GHS'} {(user.wallet?.balance ?? coins ?? balance).toLocaleString()}</Text>
+            <Text style={styles.profileStatText}>{user.wallet?.currency || 'GHS'} {(user.wallet?.creditBalance ?? coins ?? balance).toLocaleString()}</Text>
           </View>
           <View style={styles.profileStatPill}>
             <Award color={COLORS.primary} size={16} />
@@ -125,8 +122,8 @@ const MyProfileScreen = ({ navigation }) => {
       <View style={styles.dashboard}>
         <TouchableOpacity style={styles.dashItem} onPress={() => navigation.navigate('GiftLedger', { type: 'received' })}>
           <Gift color={COLORS.primary} size={24} />
-          <Text style={styles.dashValue}>{isMale ? totalReceivedCount : diamondBalance}</Text>
-          <Text style={styles.dashLabel}>{isMale ? 'Gifts Received' : 'Diamond Balance'}</Text>
+          <Text style={styles.dashValue}>{isConsumer ? totalReceivedCount : diamondBalance}</Text>
+          <Text style={styles.dashLabel}>{isConsumer ? 'Gifts Received' : 'Diamond Balance'}</Text>
         </TouchableOpacity>
         <View style={styles.dashItem}>
           <ArrowUpCircle color="#4CD964" size={24} />
@@ -135,12 +132,12 @@ const MyProfileScreen = ({ navigation }) => {
         </View>
         <TouchableOpacity style={styles.dashItem} onPress={() => navigation.navigate('GiftLedger', { type: 'sent' })}>
           <ArrowUpCircle color="#007AFF" size={24} style={{ transform: [{ rotate: '180deg' }] }} />
-          <Text style={styles.dashValue}>{isMale ? wealthXP : totalSpent}</Text>
-          <Text style={styles.dashLabel}>{isMale ? 'Total Contributed' : 'Gifts Sent'}</Text>
+          <Text style={styles.dashValue}>{isConsumer ? wealthXP : totalSpent}</Text>
+          <Text style={styles.dashLabel}>{isConsumer ? 'Total Contributed' : 'Gifts Sent'}</Text>
         </TouchableOpacity>
       </View>
 
-      {!isMale && (
+      {!isConsumer && (
         <View style={styles.portfolioContainer}>
            <Text style={styles.sectionTitle}>Earnings Portfolio</Text>
            <View style={styles.portfolioCard}>

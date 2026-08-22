@@ -10,13 +10,17 @@ import MyProfileScreen from '../screens/main/MyProfileScreen';
 import WalletScreen from '../screens/main/WalletScreen';
 import HostDashboardScreen from '../screens/host/HostDashboardScreen';
 import HostEarningsScreen from '../screens/host/HostEarningsScreen';
+import HostPendingScreen from '../screens/host/HostPendingScreen';
 import { useUser } from '../context/UserContext';
+import { isApprovedHost } from '../models/userModel';
 
 const Tab = createBottomTabNavigator();
 
 const MainTabNavigator = () => {
   const navigation = useNavigation();
   const { user } = useUser();
+  const approvedHost = isApprovedHost(user);
+  const pendingHost = user?.role === 'host' && !approvedHost;
 
   useEffect(() => {
     const handleIncomingCall = (data) => {
@@ -51,11 +55,17 @@ const MainTabNavigator = () => {
         headerShown: false,
       })}
     >
-      {user?.role === 'host' ? (
+      {approvedHost ? (
         <>
           <Tab.Screen name="Dashboard" component={HostDashboardScreen} />
           <Tab.Screen name="Messages" component={MessageHomeScreen} />
           <Tab.Screen name="Earnings" component={HostEarningsScreen} />
+          <Tab.Screen name="Profile" component={MyProfileScreen} />
+        </>
+      ) : pendingHost ? (
+        <>
+          <Tab.Screen name="Dashboard" component={HostPendingScreen} />
+          <Tab.Screen name="Messages" component={MessageHomeScreen} />
           <Tab.Screen name="Profile" component={MyProfileScreen} />
         </>
       ) : (

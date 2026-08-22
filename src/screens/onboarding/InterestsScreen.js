@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 
 const InterestsScreen = ({ navigation }) => {
@@ -28,7 +28,7 @@ const InterestsScreen = ({ navigation }) => {
       </View>
       <TouchableOpacity
         style={styles.button}
-        onPress={() => navigation.navigate('LocationPermission')}
+        onPress={() => Alert.alert('Deferred', 'Interest matching is not part of the V2 foundation batch.')}
       >
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>

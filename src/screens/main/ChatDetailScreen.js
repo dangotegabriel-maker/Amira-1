@@ -11,6 +11,7 @@ import { hapticService } from '../../services/hapticService';
 import { getGiftAsset } from '../../services/giftingService';
 import { ledgerService } from '../../services/ledgerService';
 import { dbService } from '../../services/firebaseService';
+import { isApprovedHost } from '../../models/userModel';
 import { useGifting } from '../../context/GiftingContext';
 import ReportUserModal from '../../components/ReportUserModal';
 import GiftTray from '../../components/GiftTray';
@@ -148,12 +149,21 @@ const ChatDetailScreen = ({ route, navigation }) => {
     });
   }, [navigation, name, totalSpent]);
 
-  const handleCallPress = () => {
+  const handleCallPress = async () => {
     hapticService.lightImpact();
     if (isBusy) {
       setIsWaitingRoomVisible(true);
     } else {
-      navigation.navigate('VideoCall', { name, userId });
+      try {
+        const target = await dbService.getUserProfile(userId);
+        if (!isApprovedHost(target)) {
+          Alert.alert('Host unavailable', 'Only approved hosts can receive paid calls.');
+          return;
+        }
+        navigation.navigate('VideoCall', { name, userId });
+      } catch (error) {
+        Alert.alert('Call unavailable', 'Could not verify this host profile.');
+      }
     }
   };
 
@@ -188,6 +198,10 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const handleGiftSent = async (gift, combo) => {
     // Check if target user is verified (mocked)
     const target = await dbService.getUserProfile(userId);
+    if (!target) {
+       Alert.alert('Gift unavailable', 'This recipient profile is not available.');
+       return;
+    }
     if (target.is_verified === false && target.defaultAvatar === true) {
        Alert.alert("Recipient Restricted", "This user must verify their profile before they can receive gifts.");
        return;

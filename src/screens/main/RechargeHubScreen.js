@@ -6,6 +6,7 @@ import { Coins, ChevronLeft } from 'lucide-react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { dbService } from '../../services/firebaseService';
 import { useUser } from '../../context/UserContext';
+import { DEV_FEATURES } from '../../config/devFeatures';
 
 const RechargeHubScreen = ({ navigation }) => {
   const [userCoins, setUserCoins] = useState(0);
@@ -74,13 +75,13 @@ const RechargeHubScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <View style={styles.testButtonContainer}>
+      {DEV_FEATURES.enableTestTopUps && <View style={styles.testButtonContainer}>
         {isAddingCoins ? (
           <ActivityIndicator color={COLORS.primary} />
         ) : (
           <Button title="Add 100 Coins (Test)" onPress={addTestCoins} />
         )}
-      </View>
+      </View>}
     </SafeAreaView>
   );
 };

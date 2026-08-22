@@ -16,6 +16,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { LogIn, Sparkles } from 'lucide-react-native';
 import { authService } from '../../services/firebaseService';
 import { COLORS } from '../../theme/COLORS';
+import { DEV_FEATURES } from '../../config/devFeatures';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -54,7 +55,11 @@ const LoginScreen = () => {
   const quickLogin = async () => {
     setLoading('quick');
     try {
-      await authService.createQuickAccount();
+      const account = await authService.createQuickAccount();
+      Alert.alert(
+        'Development account created',
+        `Save these credentials now. They are not stored in your profile.\n\nAccount ID: ${account.accountId}\nPassword: ${account.password}`,
+      );
     } catch (error) {
       Alert.alert('Quick login failed', error.message || 'Please try again.');
     } finally {
@@ -102,17 +107,17 @@ const LoginScreen = () => {
         <Text style={styles.title}>Welcome to Amira</Text>
         <Text style={styles.subtitle}>Connect, chat, and enjoy every moment.</Text>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={quickLogin} disabled={busy}>
+        {DEV_FEATURES.enableQuickLogin && <TouchableOpacity style={styles.primaryButton} onPress={quickLogin} disabled={busy}>
           {loading === 'quick' ? (
             <ActivityIndicator color={COLORS.white} />
           ) : (
             <Text style={styles.primaryText}>QUICK LOGIN</Text>
           )}
-        </TouchableOpacity>
-        <Text style={styles.helper}>Start instantly. We will generate account recovery details.</Text>
+        </TouchableOpacity>}
+        {DEV_FEATURES.enableQuickLogin && <Text style={styles.helper}>Development only. Save the generated credentials when shown.</Text>}
 
         <View style={styles.accountCard}>
-          <Text style={styles.cardTitle}>ACCOUNT LOGIN</Text>
+          <Text style={styles.cardTitle}>EXISTING ACCOUNT LOGIN</Text>
           <TextInput
             style={styles.input}
             value={accountId}

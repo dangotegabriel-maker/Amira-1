@@ -15,7 +15,7 @@ const SettingsScreen = ({ navigation }) => {
         onPress: async () => {
           await authService.signOut();
           socketService.disconnect();
-          navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
         }
       }
     ]);

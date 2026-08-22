@@ -4,11 +4,12 @@ import { Plus, Wallet } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
 import { dbService } from '../../services/firebaseService';
 import { useUser } from '../../context/UserContext';
+import { DEV_FEATURES } from '../../config/devFeatures';
 
 const WalletScreen = () => {
   const { user } = useUser();
   const [adding, setAdding] = useState(false);
-  const balance = user?.wallet?.balance || 0;
+  const balance = user?.wallet?.creditBalance || 0;
   const currency = user?.wallet?.currency || 'GHS';
 
   const addTestBalance = async () => {
@@ -34,11 +35,11 @@ const WalletScreen = () => {
         <Text style={styles.balanceValue}>{currency} {balance.toLocaleString()}</Text>
       </View>
 
-      <TouchableOpacity style={styles.topUpButton} onPress={addTestBalance} disabled={adding}>
+      {DEV_FEATURES.enableTestTopUps && <TouchableOpacity style={styles.topUpButton} onPress={addTestBalance} disabled={adding}>
         {adding ? <ActivityIndicator color={COLORS.white} /> : <Plus color={COLORS.white} size={20} />}
         <Text style={styles.topUpText}>{adding ? 'Adding...' : 'Add 100 (Test Mode)'}</Text>
-      </TouchableOpacity>
-      <Text style={styles.note}>Manual top-up is enabled for testing. Payment integration is intentionally disabled.</Text>
+      </TouchableOpacity>}
+      <Text style={styles.note}>{DEV_FEATURES.enableTestTopUps ? 'Development test top-ups are enabled by environment flag.' : 'Payment integration is intentionally deferred.'}</Text>
     </View>
   );
 };

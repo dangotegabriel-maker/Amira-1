@@ -32,31 +32,11 @@ export const paystackService = {
   },
 
   verifyTransaction: async (reference) => {
-    // console.log("Verifying Paystack transaction via Backend Simulation:", reference);
-
-    // BACKEND-SIDE CALL: https://api.paystack.co/transaction/verify/:reference
-    const secretKey = process.env.EXPO_PUBLIC_PAYSTACK_SECRET_KEY;
-    if (!secretKey) throw new Error("Paystack Secret Key is missing from environment.");
-
-    // Simulate the verification response from Paystack Backend API
-    return new Promise((resolve) => {
-       setTimeout(() => {
-          resolve({
-             success: true,
-             status: 'success', // or 'failed' / 'pending'
-             message: 'Verification successful',
-             data: {
-                id: 12345,
-                domain: 'test',
-                status: 'success',
-                reference: reference,
-                amount: 1000,
-                gateway_response: 'Successful',
-                channel: 'card',
-                currency: 'GHS'
-             }
-          });
-       }, 1500);
-    });
+    // Batch 1 intentionally has no client-side verification. A future trusted
+    // server must verify the reference with Paystack and credit the wallet idempotently.
+    const error = new Error('Payment verification is unavailable until the server integration is implemented.');
+    error.code = 'payments/server-verification-required';
+    error.reference = reference;
+    throw error;
   }
 };

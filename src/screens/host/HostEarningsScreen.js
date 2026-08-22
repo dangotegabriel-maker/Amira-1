@@ -5,14 +5,14 @@ import { useUser } from '../../context/UserContext';
 
 const HostEarningsScreen = () => {
   const { user } = useUser();
-  const currency = user?.wallet?.currency || 'GHS';
+  const currency = user?.earnings?.currency || 'GHS';
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Earnings</Text>
       <View style={styles.card}>
         <Text style={styles.label}>Available balance</Text>
-        <Text style={styles.value}>{currency} {(user?.wallet?.balance || 0).toLocaleString()}</Text>
+        <Text style={styles.value}>{currency} {(user?.earnings?.available || 0).toLocaleString()}</Text>
         <Text style={styles.note}>Payout processing will be added in a future release.</Text>
       </View>
     </View>

@@ -8,6 +8,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { COUNTRIES } from '../../data/countries';
+import { validateUsername } from '../../utils/usernameValidation';
 
 const EditProfileScreen = ({ navigation }) => {
   const { user, refreshUser } = useUser();
@@ -20,8 +21,9 @@ const EditProfileScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
-    if (!name.trim()) {
-      Alert.alert("Error", "Name cannot be empty.");
+    const validation = validateUsername(name);
+    if (!validation.isValid) {
+      Alert.alert('Check your name', validation.error);
       return;
     }
 
@@ -35,17 +37,14 @@ const EditProfileScreen = ({ navigation }) => {
       }
 
       console.log('UID:', currentAuthUser.uid);
-      await authService.updateUserProfile({ displayName: name.trim() });
+      await authService.updateUserProfile({ displayName: validation.value });
       await setDoc(doc(db, "users", currentAuthUser.uid), {
-        username: name.trim(),
-        name: name.trim(),
+        username: validation.value,
         bio,
         countryCode: country.cca2,
+        countryName: country.name,
         phoneCode: `+${country.callingCode}`,
-        wallet: {
-          balance: user?.wallet?.balance || 0,
-          currency: country.currency,
-        },
+        updatedAt: new Date(),
       }, { merge: true });
       await refreshUser();
       Alert.alert("Success", "Profile updated successfully!");

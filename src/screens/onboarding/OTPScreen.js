@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { authService, dbService } from '../../services/firebaseService';
+import { COUNTRIES } from '../../data/countries';
 
 const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
 const OTPScreen = ({ route, navigation }) => {
   const { phone, countryCode = 'GH', currency = 'GHS' } = route.params;
+  const countryName = COUNTRIES.find((country) => country.cca2 === countryCode)?.name || '';
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -26,6 +28,7 @@ const OTPScreen = ({ route, navigation }) => {
            await dbService.updateUserProfile(user.uid, {
              phone: user.phoneNumber || phone,
              countryCode,
+             countryName,
              wallet: {
                ...profile.wallet,
                currency,
@@ -37,8 +40,9 @@ const OTPScreen = ({ route, navigation }) => {
            await dbService.createUserProfile(user.uid, {
              phone: user.phoneNumber || phone,
              countryCode,
+             countryName,
              wallet: {
-               balance: 0,
+               creditBalance: 0,
                currency,
              },
              phoneVerified: true,

@@ -16,6 +16,8 @@ import GiftingOverlay from '../../components/GiftingOverlay';
 import * as ScreenCapture from 'expo-screen-capture';
 import { BlurView } from 'expo-blur';
 import { useUser } from '../../context/UserContext';
+import { DEV_FEATURES } from '../../config/devFeatures';
+import { isApprovedHost } from '../../models/userModel';
 
 const { width, height } = Dimensions.get('window');
 const CALL_RATE = 50;
@@ -95,14 +97,14 @@ const VideoCallScreen = ({ route, navigation }) => {
    const navigateToSummary = () => {
       navigation.navigate('CallSummary', {
          duration,
-         coinsSpent: currentUser?.role === 'consumer' || (!currentUser?.role && currentUser?.gender === 'male')
+         coinsSpent: currentUser?.role === 'consumer'
            ? (Math.ceil(duration / 60) * callRate)
            : 0,
-         diamondsEarned: currentUser?.role === 'host' || (!currentUser?.role && currentUser?.gender === 'female') ? diamondsEarned : 0,
+         diamondsEarned: isApprovedHost(currentUser) ? diamondsEarned : 0,
          targetUserId: userId,
          targetUserName: name,
          targetUserPhoto: `https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200`, // In real app, pass actual photo
-         isMale: currentUser?.role ? currentUser.role === 'consumer' : currentUser?.gender === 'male'
+         isMale: currentUser?.role === 'consumer'
       });
    };
 
@@ -132,11 +134,17 @@ const VideoCallScreen = ({ route, navigation }) => {
         }
         setCurrentUser(profile);
 
+        if (profile.role === 'host' && !isApprovedHost(profile)) {
+           Alert.alert('Host Approval Required', 'Paid host calls are unavailable until your host application is approved.');
+           navigation.goBack();
+           return;
+        }
+
         const currentBalance = await fetchLatestCoins();
         console.log("USER COINS:", currentBalance);
         setBalance(currentBalance);
 
-        const isConsumer = profile.role ? profile.role === 'consumer' : profile.gender === 'male';
+        const isConsumer = profile.role === 'consumer';
         if (isConsumer) {
            if (currentBalance < callRate) {
               Alert.alert("Low Balance", `You need at least ${callRate} to start a call.`);
@@ -245,6 +253,10 @@ const VideoCallScreen = ({ route, navigation }) => {
   };
 
   const handleQuickBuy = async (amount) => {
+     if (!DEV_FEATURES.enableTestTopUps) {
+        Alert.alert('Unavailable', 'Test top-ups are disabled in this build.');
+        return;
+     }
      try {
         hapticService.mediumImpact();
         const user = auth.currentUser;
@@ -266,7 +278,7 @@ const VideoCallScreen = ({ route, navigation }) => {
   };
 
   useEffect(() => {
-     const isHost = currentUser?.role ? currentUser.role === 'host' : currentUser?.gender === 'female';
+     const isHost = isApprovedHost(currentUser);
      if (isHost && duration > 0 && duration % 60 === 0) {
         creditMinute();
      }
@@ -286,7 +298,7 @@ const VideoCallScreen = ({ route, navigation }) => {
   };
 
   const isLowForNext = balance < callRate;
-  const isConsumer = currentUser?.role ? currentUser.role === 'consumer' : currentUser?.gender === 'male';
+  const isConsumer = currentUser?.role === 'consumer';
   const showWarning = secondsInMinute >= 50 && isConsumer && isLowForNext;
 
   useEffect(() => {
@@ -311,7 +323,7 @@ const VideoCallScreen = ({ route, navigation }) => {
                   <Text style={styles.extendingText}>User is extending the call...</Text>
                </View>
             )}
-            {(currentUser?.role === 'host' || (!currentUser?.role && currentUser?.gender === 'female')) && diamondsEarned > 0 && (
+            {isApprovedHost(currentUser) && diamondsEarned > 0 && (
                <View style={styles.diamondFloat}>
                   <Text style={styles.diamondText}>+💎 {diamondsEarned}</Text>
                </View>
@@ -377,7 +389,7 @@ const VideoCallScreen = ({ route, navigation }) => {
       <GiftTray visible={isGiftTrayVisible} onClose={() => setIsGiftTrayVisible(false)} onGiftSent={(g, c) => setActiveGift({ id: g.id, combo: c })} />
 
       {/* Quick Recharge Overlay */}
-      {showQuickRecharge && (
+      {showQuickRecharge && DEV_FEATURES.enableTestTopUps && (
          <View style={styles.quickBuyContainer}>
             <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
             <View style={styles.quickBuyContent}>

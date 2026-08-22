@@ -89,13 +89,14 @@ const UserProfileScreen = ({ route, navigation }) => {
     </View>
   );
 
-  const isFemaleProfile = targetUser.gender === 'female';
-  const isMaleViewer = currentUser.gender === 'male';
+  const canInitiatePaidHostCall = currentUser.role === 'consumer' &&
+    targetUser.role === 'host' && targetUser.hostStatus?.isApproved === true;
+  const targetDisplayName = targetUser.username || targetUser.name || name || 'Amira User';
 
   const handleBlock = () => {
     Alert.alert(
       "Block User",
-      `Are you sure you want to block ${targetUser?.name}? They will no longer be able to message or call you.`,
+      `Are you sure you want to block ${targetDisplayName}? They will no longer be able to message or call you.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -120,13 +121,13 @@ const UserProfileScreen = ({ route, navigation }) => {
         <GlowAvatar size={100} isOnline={true} />
 
         <View style={styles.nameContainer}>
-          <Text style={styles.name}>{targetUser.name}</Text>
+          <Text style={styles.name}>{targetDisplayName}</Text>
           <VIPBadge totalSpent={6000} />
         </View>
         <Text style={styles.bio}>{targetUser.bio}</Text>
 
         <View style={styles.actionRow}>
-           {isMaleViewer && isFemaleProfile ? (
+           {canInitiatePaidHostCall ? (
              <>
                <TouchableOpacity style={styles.primaryAction} disabled={isStartingCall} onPress={async () => {
                  if (isStartingCall) return;
@@ -139,7 +140,7 @@ const UserProfileScreen = ({ route, navigation }) => {
                      setShowLowBalance(true);
                      return;
                    }
-                   navigation.navigate('VideoCall', { name: targetUser.name, userId: targetUser.uid });
+                   navigation.navigate('VideoCall', { name: targetDisplayName, userId: targetUser.uid });
                  } catch (error) {
                    console.log("CALL START ERROR:", error?.code, error?.message);
                  } finally {
@@ -156,7 +157,7 @@ const UserProfileScreen = ({ route, navigation }) => {
              </>
            ) : (
              <>
-               <TouchableOpacity style={styles.primaryAction} onPress={() => navigation.navigate('ChatDetail', { name: targetUser.name, userId: targetUser.uid })}>
+               <TouchableOpacity style={styles.primaryAction} onPress={() => navigation.navigate('ChatDetail', { name: targetDisplayName, userId: targetUser.uid })}>
                   <MessageCircle color="white" size={20} />
                   <Text style={styles.primaryActionText}>Message</Text>
                </TouchableOpacity>
@@ -213,7 +214,7 @@ const UserProfileScreen = ({ route, navigation }) => {
       <ReportUserModal
         visible={showReport}
         onClose={() => setShowReport(false)}
-        userName={targetUser?.name}
+        userName={targetDisplayName}
         onReport={() => {
            Alert.alert("Report Received", "Thank you. Our team will investigate this profile.");
         }}

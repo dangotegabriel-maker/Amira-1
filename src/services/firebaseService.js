@@ -3,13 +3,12 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   getAuth,
-  inMemoryPersistence,
+  getReactNativePersistence,
   initializeAuth,
   linkWithCredential,
   onAuthStateChanged,
   signInWithCredential,
   signInWithEmailAndPassword,
-  signInWithPhoneNumber,
   updateProfile,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
@@ -21,9 +20,20 @@ import {
   onSnapshot,
   runTransaction,
   setDoc,
+  updateDoc,
+  deleteField,
   serverTimestamp,
 } from 'firebase/firestore';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  DEFAULT_EARNINGS,
+  DEFAULT_HOST_STATUS,
+  DEFAULT_WALLET,
+  getLegacyCreditBalance,
+  getLegacyMigrationPatch,
+  normalizeUser,
+} from '../models/userModel';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyAVS5T2i7jW2cW8xX3xFE8Hgutb5V7Wj08',
@@ -42,7 +52,9 @@ const getFirebaseAuth = () => {
       return getAuth(app);
     }
 
-    return initializeAuth(app, { persistence: inMemoryPersistence });
+    return initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
   } catch (error) {
     if (error?.code === 'auth/already-initialized') {
       return getAuth(app);
@@ -60,90 +72,29 @@ export const DEFAULT_USER_PROFILE = {
   username: '',
   email: '',
   phone: '',
-  photoURL: '',
+  profilePic: '',
   gender: '',
   dob: '',
   age: 0,
   role: '',
   isProfileComplete: false,
-  isApproved: false,
-  agencyId: 'DIRECT',
-  wallet: {
-    balance: 0,
-    currency: 'GHS',
-  },
-  vip: {
-    isActive: false,
-    level: 0,
-  },
-  rewards: {
-    dailyClaimedAt: null,
-    googleLinked: false,
-  },
+  countryCode: '',
+  countryName: '',
+  hostStatus: { ...DEFAULT_HOST_STATUS },
+  wallet: { ...DEFAULT_WALLET },
+  earnings: { ...DEFAULT_EARNINGS },
   settings: {
     doNotDisturb: false,
   },
-  notifications: {
-    unreadMessages: 0,
-    likesCount: 0,
-  },
-  isOnline: false,
+  createdAt: null,
+  updatedAt: null,
 };
 
 export const getWalletBalance = (profile = {}) => {
-  const value = profile?.wallet?.balance ?? profile?.coins ?? profile?.coin_balance ?? 0;
-  const balance = Number(value);
-  return Number.isFinite(balance) ? balance : 0;
+  return getLegacyCreditBalance(profile);
 };
 
-export const normalizeUserProfile = (uid, data = {}, authUser = null) => {
-  const username =
-    data.username ||
-    data.name ||
-    authUser?.displayName ||
-    '';
-  const photoURL =
-    data.photoURL ||
-    data.photo ||
-    data.photos?.[0] ||
-    authUser?.photoURL ||
-    '';
-  const role = data.role === 'host' || data.role === 'consumer' ? data.role : '';
-
-  return {
-    ...DEFAULT_USER_PROFILE,
-    ...data,
-    uid,
-    username,
-    name: username,
-    email: data.email || authUser?.email || '',
-    phone: data.phone || authUser?.phoneNumber || '',
-    photoURL,
-    photo: photoURL,
-    role,
-    agencyId: data.agencyId || 'DIRECT',
-    wallet: {
-      balance: getWalletBalance(data),
-      currency: data?.wallet?.currency || data.currency || 'GHS',
-    },
-    vip: {
-      ...DEFAULT_USER_PROFILE.vip,
-      ...data.vip,
-    },
-    rewards: {
-      ...DEFAULT_USER_PROFILE.rewards,
-      ...data.rewards,
-    },
-    settings: {
-      ...DEFAULT_USER_PROFILE.settings,
-      ...data.settings,
-    },
-    notifications: {
-      ...DEFAULT_USER_PROFILE.notifications,
-      ...data.notifications,
-    },
-  };
-};
+export const normalizeUserProfile = normalizeUser;
 
 const requireAuthenticatedUser = (expectedUid) => {
   const user = auth.currentUser;
@@ -157,18 +108,9 @@ const requireAuthenticatedUser = (expectedUid) => {
   return user;
 };
 
-let lastConfirmationResult = null;
-
 const GENERIC_AUTH_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
 const getAuthErrorMessage = () => GENERIC_AUTH_ERROR_MESSAGE;
-
-const throwFriendlyAuthError = (error, context) => {
-  console.error(context, error);
-  console.log("ERROR CODE:", error?.code);
-  console.log("ERROR MESSAGE:", error?.message);
-  throw error;
-};
 
 export const formatPhoneToE164 = (phone) => {
   const rawPhone = String(phone || '').trim();
@@ -189,46 +131,20 @@ export const formatPhoneToE164 = (phone) => {
   return `+233${digits}`;
 };
 
-const testPhoneAuthVerifier = {
-  type: 'recaptcha',
-  verify: async () => 'test',
-  _reset: () => {},
-};
-
 export const authService = {
   getErrorMessage: getAuthErrorMessage,
   formatPhoneToE164,
   loginWithPhone: async (phone) => {
     const formattedPhone = formatPhoneToE164(phone);
-    console.log("PHONE:", formattedPhone);
-
-    try {
-      lastConfirmationResult = await signInWithPhoneNumber(auth, formattedPhone, testPhoneAuthVerifier);
-
-      return {
-        success: true,
-        phone: formattedPhone,
-        requiresOTP: true,
-      };
-    } catch (error) {
-      throwFriendlyAuthError(error, 'Firebase Phone Login Error:');
-    }
+    const error = new Error('Phone sign-in is temporarily unavailable while native app verification is configured.');
+    error.code = 'auth/phone-auth-unavailable';
+    error.phone = formattedPhone;
+    throw error;
   },
-  verifyOTP: async (code) => {
-    try {
-      if (!lastConfirmationResult) {
-        const error = new Error('Missing phone confirmation result.');
-        error.code = 'auth/missing-confirmation-result';
-        throw error;
-      }
-
-      const userCredential = await lastConfirmationResult.confirm(code);
-      lastConfirmationResult = null;
-
-      return { success: true, user: userCredential.user };
-    } catch (error) {
-      throwFriendlyAuthError(error, 'Firebase OTP Verification Error:');
-    }
+  verifyOTP: async () => {
+    const error = new Error('Phone sign-in is temporarily unavailable.');
+    error.code = 'auth/phone-auth-unavailable';
+    throw error;
   },
   resendOTP: async (phone) => authService.loginWithPhone(phone),
   createQuickAccount: async () => {
@@ -245,19 +161,12 @@ export const authService = {
     await dbService.createUserProfile(credential.user.uid, {
       accountId,
       username,
-      password,
       loginEmail,
       isGuest: true,
-      role: 'consumer',
-      gender: 'male',
-      isProfileComplete: true,
+      isProfileComplete: false,
       authProvider: 'quick',
       accountDetailsAcknowledged: false,
-      wallet: { balance: 0, currency: 'COINS' },
-      vip: { isActive: false, level: 0 },
-      rewards: { dailyClaimedAt: null, googleLinked: false },
-      settings: { doNotDisturb: false },
-      notifications: { unreadMessages: 0, likesCount: 0 },
+      wallet: { creditBalance: 0, currency: 'COINS' },
     });
 
     return { success: true, user: credential.user, accountId, username, password };
@@ -282,22 +191,26 @@ export const authService = {
     if (!idToken) throw new Error('Google did not return an identity token.');
     const credential = GoogleAuthProvider.credential(idToken);
     const result = await signInWithCredential(auth, credential);
-    const googleProfile = {
-      username: result.user.displayName || result.user.email?.split('@')[0] || 'Amira User',
-      email: result.user.email || '',
-      photoURL: result.user.photoURL || '',
-      profilePic: result.user.photoURL || '',
-      isGuest: false,
-      role: 'consumer',
-      gender: 'male',
-      isProfileComplete: true,
-      authProvider: 'google',
-    };
     const existing = await dbService.getUserProfile(result.user.uid);
     if (existing) {
+      const googleProfile = {
+        isGuest: false,
+        authProvider: 'google',
+        updatedAt: serverTimestamp(),
+      };
+      if (!existing.username && result.user.displayName) googleProfile.username = result.user.displayName;
+      if (result.user.email) googleProfile.email = result.user.email;
+      if (!existing.profilePic && result.user.photoURL) googleProfile.profilePic = result.user.photoURL;
       await dbService.updateUserProfile(result.user.uid, googleProfile);
     } else {
-      await dbService.createUserProfile(result.user.uid, googleProfile);
+      await dbService.createUserProfile(result.user.uid, {
+        username: result.user.displayName || result.user.email?.split('@')[0] || '',
+        email: result.user.email || '',
+        profilePic: result.user.photoURL || '',
+        isGuest: false,
+        authProvider: 'google',
+        isProfileComplete: false,
+      });
     }
     return { success: true, user: result.user };
   },
@@ -357,29 +270,61 @@ export const dbService = {
       throw error;
     }
   },
+  updateHostAvailability: async (availability) => {
+    const user = requireAuthenticatedUser();
+    const userRef = doc(db, 'users', user.uid);
+    const snapshot = await getDoc(userRef);
+    if (!snapshot.exists()) throw new Error('Profile not found.');
+    const profile = normalizeUserProfile(user.uid, snapshot.data(), user);
+    if (profile.role !== 'host' || profile.hostStatus?.isApproved !== true) {
+      throw new Error('Only approved hosts can change availability.');
+    }
+    if (!['online', 'offline', 'busy'].includes(availability)) {
+      throw new Error('Invalid host availability.');
+    }
+    await updateDoc(userRef, {
+      'hostStatus.availability': availability,
+      updatedAt: serverTimestamp(),
+    });
+    return { success: true };
+  },
   createUserProfile: async (uid, data = {}) => {
     try {
       const user = requireAuthenticatedUser(uid);
       const suppliedBalance = getWalletBalance(data);
-      const newUser = {
-        ...DEFAULT_USER_PROFILE,
+      const canonicalInput = normalizeUserProfile(uid, {
+        ...data,
         uid: user.uid,
         username: data.username || data.name || user.displayName || '',
         email: data.email || user.email || '',
         phone: data.phone || user.phoneNumber || '',
-        photoURL: data.photoURL || user.photoURL || '',
+        profilePic: data.profilePic || data.photoURL || user.photoURL || '',
         wallet: {
-          balance: suppliedBalance,
+          creditBalance: suppliedBalance,
           currency: data?.wallet?.currency || data.currency || 'GHS',
         },
-        // Keep legacy fields synchronized while old screens are phased out.
-        coins: suppliedBalance,
-        coin_balance: suppliedBalance,
-        diamonds: data.diamonds || 0,
-        is_verified: data.is_verified || false,
-        createdAt: serverTimestamp(),
-        created_at: serverTimestamp(),
+      }, user);
+      const newUser = {
+        ...DEFAULT_USER_PROFILE,
         ...data,
+        uid: canonicalInput.uid,
+        username: canonicalInput.username,
+        email: canonicalInput.email,
+        phone: canonicalInput.phone,
+        profilePic: canonicalInput.profilePic,
+        gender: canonicalInput.gender,
+        dob: canonicalInput.dob,
+        age: canonicalInput.age,
+        countryCode: canonicalInput.countryCode,
+        countryName: canonicalInput.countryName,
+        role: canonicalInput.role,
+        isProfileComplete: canonicalInput.isProfileComplete,
+        hostStatus: canonicalInput.hostStatus,
+        wallet: canonicalInput.wallet,
+        earnings: canonicalInput.earnings,
+        settings: canonicalInput.settings,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
       const userRef = doc(db, 'users', uid);
       await setDoc(userRef, newUser, { merge: true });
@@ -391,22 +336,33 @@ export const dbService = {
   },
   ensureUserProfile: async (authUser) => {
     if (!authUser?.uid) throw new Error('No authenticated user found.');
-    const existing = await dbService.getUserProfile(authUser.uid);
-    const providerData = {
-      username: existing?.username || authUser.displayName || '',
-      email: existing?.email || authUser.email || '',
-      phone: existing?.phone || authUser.phoneNumber || '',
-      photoURL: existing?.photoURL || authUser.photoURL || '',
-    };
-
-    if (!existing) {
-      await dbService.createUserProfile(authUser.uid, providerData);
-    } else {
-      await dbService.updateUserProfile(authUser.uid, {
-        ...providerData,
-        wallet: existing.wallet,
-        agencyId: existing.agencyId || 'DIRECT',
+    const userRef = doc(db, 'users', authUser.uid);
+    const snapshot = await getDoc(userRef);
+    if (!snapshot.exists()) {
+      await dbService.createUserProfile(authUser.uid, {
+        username: authUser.displayName || '',
+        email: authUser.email || '',
+        phone: authUser.phoneNumber || '',
+        profilePic: authUser.photoURL || '',
       });
+    } else {
+      const rawData = snapshot.data();
+      const normalized = normalizeUserProfile(authUser.uid, rawData, authUser);
+      const migrationPatch = getLegacyMigrationPatch(rawData, normalized);
+      // Firebase Auth remains the authority for generated-account passwords.
+      if (Object.prototype.hasOwnProperty.call(rawData, 'password')) {
+        migrationPatch.password = deleteField();
+      }
+      if (Object.keys(migrationPatch).length > 0) {
+        migrationPatch.updatedAt = serverTimestamp();
+        try {
+          await updateDoc(userRef, migrationPatch);
+        } catch (migrationError) {
+          // A legacy ruleset may not yet allow every canonical field. Do not
+          // prevent sign-in; surface the normalized profile and retry later.
+          console.log('PROFILE MIGRATION ERROR:', migrationError);
+        }
+      }
     }
 
     return dbService.getUserProfile(authUser.uid);
@@ -442,10 +398,8 @@ export const dbService = {
     try {
       await setDoc(userRef, {
         wallet: {
-          balance: increment(numericAmount),
+          creditBalance: increment(numericAmount),
         },
-        coins: increment(numericAmount),
-        coin_balance: increment(numericAmount),
         updatedAt: serverTimestamp(),
       }, { merge: true });
       return { success: true };
@@ -462,10 +416,8 @@ export const dbService = {
     try {
       await setDoc(doc(db, 'users', user.uid), {
         wallet: {
-          balance: increment(numericDelta),
+          creditBalance: increment(numericDelta),
         },
-        coins: increment(numericDelta),
-        coin_balance: increment(numericDelta),
         updatedAt: serverTimestamp(),
       }, { merge: true });
       return { success: true };
@@ -495,9 +447,7 @@ export const dbService = {
       }
       const balance = getWalletBalance(data) + 10;
       transaction.set(userRef, {
-        wallet: { balance, currency: data?.wallet?.currency || 'COINS' },
-        coins: balance,
-        coin_balance: balance,
+        wallet: { creditBalance: balance, currency: data?.wallet?.currency || 'COINS' },
         rewards: {
           ...(data.rewards || {}),
           dailyClaimedAt: today,
@@ -520,12 +470,9 @@ export const dbService = {
       transaction.set(userRef, {
         username: googleUser?.displayName || data.username || '',
         email: googleUser?.email || data.email || '',
-        photoURL: googleUser?.photoURL || data.photoURL || '',
         profilePic: googleUser?.photoURL || data.profilePic || '',
         isGuest: false,
-        wallet: { balance, currency: data?.wallet?.currency || 'COINS' },
-        coins: balance,
-        coin_balance: balance,
+        wallet: { creditBalance: balance, currency: data?.wallet?.currency || 'COINS' },
         rewards: {
           ...(data.rewards || {}),
           googleLinked: true,

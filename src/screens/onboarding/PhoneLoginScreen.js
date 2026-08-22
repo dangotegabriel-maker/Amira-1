@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { authService } from '../../services/firebaseService';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../../data/countries';
 
 const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
@@ -24,28 +23,17 @@ const PhoneLoginScreen = ({ navigation }) => {
       return;
     }
 
-    setLoading(true);
-    try {
-      const fullPhoneNumber = `+${selectedCountry.callingCode}${localNumber}`;
-      const { phone: formattedPhone } = await authService.loginWithPhone(fullPhoneNumber);
-      navigation.navigate('OTP', {
-        phone: formattedPhone,
-        countryCode: selectedCountry.cca2,
-        currency: selectedCountry.currency,
-      });
-    } catch (error) {
-      console.error('Phone login screen error:', error);
-      alert(`${error.code} - ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
+    Alert.alert(
+      'Phone sign-in unavailable',
+      'Phone sign-in is disabled until native Firebase App Verification is configured. Please use another sign-in method.',
+    );
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Enter your phone number</Text>
-        <Text style={styles.subtitle}>We'll send you a verification code</Text>
+        <Text style={styles.subtitle}>Phone sign-in is temporarily unavailable while secure app verification is configured.</Text>
       </View>
 
       <View style={styles.inputRow}>
