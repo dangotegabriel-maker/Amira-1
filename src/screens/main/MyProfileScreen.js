@@ -1,256 +1,62 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal, ActivityIndicator } from "react-native";
+import React from 'react';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ChevronRight, Coins, Headphones, LogOut, Settings, UserCheck, UserPlus, Users } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Settings, Award, ChevronRight, Coins, Gift, ArrowUpCircle, User as UserIcon, X, DollarSign, Wallet } from 'lucide-react-native';
-import { ledgerService } from '../../services/ledgerService';
-import { dbService } from '../../services/firebaseService';
-import { getGiftAsset } from '../../services/giftingService';
-import { hapticService } from '../../services/hapticService';
-import { useIsFocused } from '@react-navigation/native';
 import { useUser } from '../../context/UserContext';
-import VIPBadge from '../../components/VIPBadge';
-import GlowAvatar from '../../components/GlowAvatar';
-import { Image } from 'expo-image';
+import { authService } from '../../services/firebaseService';
+import { socketService } from '../../services/socketService';
+import { getCountryByCode } from '../../data/countries';
+import { isApprovedHost } from '../../models/userModel';
 
-const { width, height } = Dimensions.get('window');
+const Row = ({ icon: Icon, label, detail, onPress, destructive = false }) => (
+  <TouchableOpacity style={styles.row} onPress={onPress}>
+    <View style={styles.rowIcon}><Icon color={destructive ? '#DC2626' : COLORS.primary} size={21} /></View>
+    <View style={styles.rowText}><Text style={[styles.rowLabel, destructive && { color: '#DC2626' }]}>{label}</Text>{detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}</View>
+    <ChevronRight color="#B5B5BC" size={20} />
+  </TouchableOpacity>
+);
 
 const MyProfileScreen = ({ navigation }) => {
-  const isFocused = useIsFocused();
-  const { user, loading, isConsumer, coins, fetchUserCoins } = useUser();
+  const { user } = useUser();
+  const country = getCountryByCode(user?.countryCode);
+  const approvedHost = isApprovedHost(user);
+  const pendingHost = user?.role === 'host' && !approvedHost;
 
-  const [balance, setBalance] = useState(0);
-  const [diamondBalance, setDiamondBalance] = useState(0);
-  const [todayDiamonds, setTodayDiamonds] = useState(0);
-  const [wealthXP, setWealthXP] = useState(0);
-  const [totalSpent, setTotalSpent] = useState(0);
-  const [upvotes, setUpvotes] = useState(0);
-  const [totalReceivedCount, setTotalReceivedCount] = useState(0);
-  const [receivedGifts, setReceivedGifts] = useState({});
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const logout = () => Alert.alert('Log out', 'Are you sure you want to log out?', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Log out', style: 'destructive', onPress: async () => { socketService.disconnect(); await authService.signOut(); } },
+  ]);
 
-  useEffect(() => {
-    if (isFocused && user) {
-      loadData();
-    }
-  }, [isFocused, user]);
-
-  const loadData = async () => {
-    try {
-      const latestCoins = await fetchUserCoins();
-      const b = await ledgerService.getBalance();
-      const s = await ledgerService.getTotalSpent();
-      const u = await ledgerService.getUpvotes();
-      const trc = await ledgerService.getTotalGiftsReceived();
-      const r = await ledgerService.getReceivedGifts();
-      const db = await ledgerService.getDiamondBalance();
-      const td = await ledgerService.getTodayDiamonds();
-      const xp = await ledgerService.getWealthXP();
-
-      setBalance(latestCoins ?? b);
-      setTotalSpent(s);
-      setUpvotes(u);
-      setTotalReceivedCount(trc);
-      setReceivedGifts(r);
-      setDiamondBalance(db);
-      setTodayDiamonds(td);
-      setWealthXP(xp);
-    } catch (error) {
-      console.log("PROFILE LOAD ERROR:", error?.code, error?.message);
-    }
-  };
-
-  if (loading) return (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#FFD700" />
+  return <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.profileCard}>
+      {user?.profilePic ? <Image source={{ uri: user.profilePic }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarPlaceholder]}><Text style={styles.avatarLetter}>{user?.username?.slice(0, 1)?.toUpperCase() || 'A'}</Text></View>}
+      <Text style={styles.name}>{user?.username || 'Amira User'}</Text>
+      <Text style={styles.country}>{country?.flag || ''} {user?.countryName || country?.name || 'Country not set'}</Text>
+      <TouchableOpacity style={styles.edit} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.editText}>Edit Profile</Text></TouchableOpacity>
     </View>
-  );
 
-  if (!user) return (
-    <View style={styles.errorContainer}>
-      <Text style={styles.errorText}>Error: Profile not found. Please re-login.</Text>
-    </View>
-  );
+    {user?.role === 'consumer' && <View style={styles.creditsCard}><Text style={styles.creditsLabel}>AMIRA CREDITS</Text><View style={styles.balanceRow}><Coins color="#FACC15" size={30} /><Text style={styles.balance}>{(user?.wallet?.creditBalance || 0).toLocaleString()}</Text></View><TouchableOpacity style={styles.recharge} onPress={() => navigation.navigate('RechargeHub')}><Text style={styles.rechargeText}>Recharge</Text></TouchableOpacity></View>}
 
-  const trophyData = Object.entries(receivedGifts).map(([id, count]) => {
-    const asset = getGiftAsset(id);
-    return { id, count, name: asset?.name || 'Gift' };
-  });
+    {user?.role === 'consumer' && <Section title="SOCIAL"><Row icon={Users} label="Following" detail="Approved hosts you follow" onPress={() => navigation.navigate('Home', { initialTab: 'Following' })} /></Section>}
 
-  const tier = ledgerService.getTier(wealthXP);
+    <Section title="HOST">
+      {user?.role === 'consumer' && <Row icon={UserPlus} label="Become a Host" detail="Apply for manual review" onPress={() => navigation.navigate('HostApplication')} />}
+      {pendingHost && <Row icon={UserCheck} label="Host Application Pending" detail={(user?.hostStatus?.verificationStatus || 'pending').replace(/_/g, ' ')} onPress={() => navigation.navigate('Application')} />}
+      {approvedHost && <Row icon={UserCheck} label="Host Dashboard" detail="Manage availability and activity" onPress={() => navigation.navigate('Dashboard')} />}
+    </Section>
 
-  const menuItems = [
-    { icon: <Award size={20} color="#FFD700" />, label: 'Global Leaderboard', screen: 'Leaderboard' },
-    { icon: <Gift size={20} color={COLORS.primary} />, label: isConsumer ? 'Gifts Sent' : 'My Gift Cabinet', screen: 'GiftLedger', params: { type: isConsumer ? 'sent' : 'received' } },
-    ...(isConsumer ? [{ icon: <Coins size={20} color="#FFD700" />, label: 'Recharge Hub', screen: 'RechargeHub' }] : []),
-    { icon: <Award size={20} color={COLORS.primary} />, label: 'VIP Store', screen: 'VIPStore' },
-    { icon: <Settings size={20} color="#666" />, label: 'Settings', screen: 'Settings' },
-    { icon: <Award size={20} color={COLORS.secondary} />, label: 'Help & Support', screen: 'HelpSupport' },
-  ];
-
-  const renderHeader = () => (
-    <View>
-      <View style={styles.header}>
-        <View style={styles.avatarContainer}>
-          <GlowAvatar size={100} isOnline={true} xp={isConsumer ? wealthXP : 0}>
-             <Image source={user.profilePic || user.photos?.[0] ? { uri: user.profilePic || user.photos[0] } : null} style={styles.profileImg} />
-          </GlowAvatar>
-        </View>
-        <View style={styles.nameContainer}>
-          <Text style={styles.name}>{user.username || 'Amira User'}</Text>
-          <VIPBadge totalSpent={totalSpent} />
-        </View>
-        {isConsumer && <Text style={styles.tierName}>{tier.name} Rank</Text>}
-        <View style={styles.profileStatsRow}>
-          <View style={styles.profileStatPill}>
-            <Coins color="#FFD700" size={16} />
-            <Text style={styles.profileStatText}>{user.wallet?.currency || 'GHS'} {(user.wallet?.creditBalance ?? coins ?? balance).toLocaleString()}</Text>
-          </View>
-          <View style={styles.profileStatPill}>
-            <Award color={COLORS.primary} size={16} />
-            <Text style={styles.profileStatText}>VIP 1</Text>
-          </View>
-        </View>
-        <Text style={styles.bio}>{user.bio || 'No bio yet'}</Text>
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => { hapticService.lightImpact(); navigation.navigate('EditProfile'); }}
-        >
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.dashboard}>
-        <TouchableOpacity style={styles.dashItem} onPress={() => navigation.navigate('GiftLedger', { type: 'received' })}>
-          <Gift color={COLORS.primary} size={24} />
-          <Text style={styles.dashValue}>{isConsumer ? totalReceivedCount : diamondBalance}</Text>
-          <Text style={styles.dashLabel}>{isConsumer ? 'Gifts Received' : 'Diamond Balance'}</Text>
-        </TouchableOpacity>
-        <View style={styles.dashItem}>
-          <ArrowUpCircle color="#4CD964" size={24} />
-          <Text style={styles.dashValue}>{upvotes}</Text>
-          <Text style={styles.dashLabel}>Upvotes</Text>
-        </View>
-        <TouchableOpacity style={styles.dashItem} onPress={() => navigation.navigate('GiftLedger', { type: 'sent' })}>
-          <ArrowUpCircle color="#007AFF" size={24} style={{ transform: [{ rotate: '180deg' }] }} />
-          <Text style={styles.dashValue}>{isConsumer ? wealthXP : totalSpent}</Text>
-          <Text style={styles.dashLabel}>{isConsumer ? 'Total Contributed' : 'Gifts Sent'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {!isConsumer && (
-        <View style={styles.portfolioContainer}>
-           <Text style={styles.sectionTitle}>Earnings Portfolio</Text>
-           <View style={styles.portfolioCard}>
-              <View style={styles.portfolioRow}>
-                 <View>
-                    <Text style={styles.portLabel}>Today's Diamonds</Text>
-                    <Text style={styles.portValue}>💎 {todayDiamonds}</Text>
-                 </View>
-                 <View>
-                    <Text style={styles.portLabel}>Total Diamonds</Text>
-                    <Text style={styles.portValue}>💎 {diamondBalance}</Text>
-                 </View>
-              </View>
-              <View style={styles.usdRow}>
-                 <Text style={styles.usdLabel}>Estimated USD Value</Text>
-                 <Text style={styles.usdValue}>${(diamondBalance * 0.05).toFixed(2)}</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.withdrawAction}
-                onPress={() => { hapticService.mediumImpact(); navigation.navigate('Withdrawal'); }}
-              >
-                 <Wallet color="white" size={18} />
-                 <Text style={styles.withdrawActionText}>Withdraw Earnings</Text>
-              </TouchableOpacity>
-           </View>
-        </View>
-      )}
-
-      <View style={styles.trophySection}>
-        <Text style={styles.sectionTitle}>Trophy Cabinet</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trophyCabinet}>
-          {trophyData.length > 0 ? trophyData.map((item) => (
-            <View key={item.id} style={styles.trophyItem}>
-              <View style={styles.trophyIcon}>
-                <Award color={COLORS.primary} size={32} />
-              </View>
-              <Text style={styles.trophyCount}>x{item.count}</Text>
-              <Text style={styles.trophyName} numberOfLines={1}>{item.name || 'Gift'}</Text>
-            </View>
-          )) : (
-            <Text style={styles.emptyTrophyText}>No gifts received yet.</Text>
-          )}
-        </ScrollView>
-      </View>
-    </View>
-  );
-
-  return (
-    <View style={styles.container}>
-      <FlatList
-        data={menuItems}
-        keyExtractor={(item) => item.label}
-        ListHeaderComponent={renderHeader}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => { hapticService.lightImpact(); navigation.navigate(item.screen, item.params); }}
-          >
-            <View style={styles.menuItemLeft}>
-              {item.icon}
-              <Text style={styles.menuItemLabel}>{item.label}</Text>
-            </View>
-            <ChevronRight size={20} color="#CCC" />
-          </TouchableOpacity>
-        )}
-        ListFooterComponent={<View style={{ height: 100 }} />}
-      />
-    </View>
-  );
+    <Section title="ACCOUNT & SUPPORT">
+      <Row icon={Settings} label="Settings" onPress={() => navigation.navigate('Settings')} />
+      <Row icon={Headphones} label="Help / Customer Service" onPress={() => navigation.navigate('HelpSupport')} />
+      <Row icon={LogOut} label="Log out" destructive onPress={logout} />
+    </Section>
+  </ScrollView>;
 };
 
+const Section = ({ title, children }) => <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text><View style={styles.sectionCard}>{children}</View></View>;
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F8F8' },
-  header: { alignItems: 'center', paddingVertical: 30, paddingHorizontal: 20, backgroundColor: COLORS.white },
-  avatarContainer: { marginBottom: 15 },
-  profileImg: { width: 100, height: 100, borderRadius: 50 },
-  nameContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
-  name: { fontSize: 24, fontWeight: 'bold', marginRight: 5 },
-  tierName: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary, marginBottom: 5 },
-  profileStatsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 12 },
-  profileStatPill: { minHeight: 34, paddingHorizontal: 12, borderRadius: 17, backgroundColor: '#F8F8F8', flexDirection: 'row', alignItems: 'center', marginHorizontal: 5, borderWidth: 1, borderColor: '#EEE' },
-  profileStatText: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginLeft: 6 },
-  bio: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 15, paddingHorizontal: 20, textAlign: 'center' },
-  editButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border },
-  editButtonText: { color: COLORS.textSecondary },
-  dashboard: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingVertical: 20, marginTop: 10 },
-  dashItem: { flex: 1, alignItems: 'center' },
-  dashValue: { fontSize: 18, fontWeight: 'bold', marginVertical: 4 },
-  dashLabel: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '500' },
-  portfolioContainer: { backgroundColor: 'white', marginTop: 10, paddingVertical: 20 },
-  portfolioCard: { backgroundColor: '#1A1A1A', marginHorizontal: 20, borderRadius: 20, padding: 20, elevation: 5 },
-  portfolioRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  portLabel: { color: '#888', fontSize: 12, marginBottom: 5 },
-  portValue: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-  usdRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  usdLabel: { color: '#888', fontSize: 14 },
-  usdValue: { color: '#4CD964', fontSize: 20, fontWeight: 'bold' },
-  withdrawAction: { backgroundColor: COLORS.primary, height: 45, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  withdrawActionText: { color: 'white', fontWeight: 'bold', marginLeft: 8 },
-  trophySection: { marginTop: 10, backgroundColor: COLORS.white, padding: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 15 },
-  trophyCabinet: { flexDirection: 'row' },
-  trophyItem: { alignItems: 'center', marginRight: 20, width: 80 },
-  trophyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#FFF5F7', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
-  trophyCount: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary },
-  trophyName: { fontSize: 12, color: COLORS.textSecondary },
-  emptyTrophyText: { color: COLORS.textSecondary, fontStyle: 'italic' },
-  menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', backgroundColor: 'white' },
-  menuItemLeft: { flexDirection: 'row', alignItems: 'center' },
-  menuItemLabel: { marginLeft: 15, fontSize: 16, fontWeight: '500', color: COLORS.text },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F8F8' },
-  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { color: COLORS.primary, fontSize: 16, textAlign: 'center' }
+  container: { flex: 1, backgroundColor: '#F7F7F9' }, content: { paddingBottom: 110 }, profileCard: { backgroundColor: 'white', alignItems: 'center', paddingTop: 64, paddingBottom: 24, paddingHorizontal: 20 }, avatar: { width: 104, height: 104, borderRadius: 52 }, avatarPlaceholder: { backgroundColor: '#E9D5FF', justifyContent: 'center', alignItems: 'center' }, avatarLetter: { color: '#7C3AED', fontSize: 42, fontWeight: '900' }, name: { color: COLORS.text, fontSize: 25, fontWeight: '900', marginTop: 13 }, country: { color: COLORS.textSecondary, marginTop: 5 }, edit: { borderWidth: 1, borderColor: '#DDD', borderRadius: 18, paddingHorizontal: 20, paddingVertical: 9, marginTop: 14 }, editText: { color: COLORS.text, fontWeight: '800' },
+  creditsCard: { backgroundColor: '#241532', margin: 16, borderRadius: 22, padding: 22 }, creditsLabel: { color: '#C4B5FD', fontWeight: '900', letterSpacing: 1 }, balanceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 13 }, balance: { color: 'white', fontSize: 35, fontWeight: '900' }, recharge: { backgroundColor: COLORS.primary, minHeight: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' }, rechargeText: { color: 'white', fontWeight: '900', fontSize: 16 },
+  section: { marginHorizontal: 16, marginTop: 14 }, sectionTitle: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '900', marginLeft: 5, marginBottom: 7, letterSpacing: 0.6 }, sectionCard: { backgroundColor: 'white', borderRadius: 18, overflow: 'hidden' }, row: { minHeight: 68, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E9E9ED' }, rowIcon: { width: 38 }, rowText: { flex: 1 }, rowLabel: { color: COLORS.text, fontSize: 16, fontWeight: '800' }, rowDetail: { color: COLORS.textSecondary, fontSize: 12, marginTop: 3, textTransform: 'capitalize' },
 });
-
 export default MyProfileScreen;

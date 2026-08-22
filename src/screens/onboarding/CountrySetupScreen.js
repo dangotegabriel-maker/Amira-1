@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../../data/countries';
 import { useUser } from '../../context/UserContext';
 import { dbService } from '../../services/firebaseService';
 import { COLORS } from '../../theme/COLORS';
+import CountrySelectorModal from '../../components/CountrySelectorModal';
 
 const CountrySetupScreen = () => {
   const { user, refreshUser } = useUser();
@@ -11,6 +12,7 @@ const CountrySetupScreen = () => {
     COUNTRIES.find((country) => country.cca2 === user?.countryCode) || DEFAULT_COUNTRY,
   );
   const [saving, setSaving] = useState(false);
+  const [showSelector, setShowSelector] = useState(false);
 
   const handleContinue = async () => {
     if (!user?.uid || !selectedCountry) return;
@@ -33,21 +35,11 @@ const CountrySetupScreen = () => {
     <View style={styles.container}>
       <Text style={styles.title}>Where are you based?</Text>
       <Text style={styles.subtitle}>This helps us show the correct region and calling code.</Text>
-      <FlatList
-        data={COUNTRIES}
-        keyExtractor={(item) => item.cca2}
-        style={styles.list}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.option, selectedCountry?.cca2 === item.cca2 && styles.selectedOption]}
-            onPress={() => setSelectedCountry(item)}
-            disabled={saving}
-          >
-            <Text style={styles.countryName}>{item.flag} {item.name}</Text>
-            <Text style={styles.countryMeta}>+{item.callingCode}</Text>
-          </TouchableOpacity>
-        )}
-      />
+      <TouchableOpacity style={[styles.option, styles.selectedOption]} onPress={() => setShowSelector(true)} disabled={saving}>
+        <Text style={styles.countryName}>{selectedCountry.flag} {selectedCountry.name}</Text>
+        <Text style={styles.countryMeta}>{selectedCountry.callingCode ? `+${selectedCountry.callingCode}` : '—'}</Text>
+      </TouchableOpacity>
+      <CountrySelectorModal visible={showSelector} onClose={() => setShowSelector(false)} onSelect={setSelectedCountry} />
       <TouchableOpacity style={styles.button} onPress={handleContinue} disabled={saving}>
         {saving ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.buttonText}>Continue</Text>}
       </TouchableOpacity>

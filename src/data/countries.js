@@ -1,11 +1,35 @@
-export const COUNTRIES = [
-  { cca2: 'GH', flag: '🇬🇭', name: 'Ghana', callingCode: '233', currency: 'GHS' },
-  { cca2: 'NG', flag: '🇳🇬', name: 'Nigeria', callingCode: '234', currency: 'NGN' },
-  { cca2: 'US', flag: '🇺🇸', name: 'United States', callingCode: '1', currency: 'USD' },
-  { cca2: 'GB', flag: '🇬🇧', name: 'United Kingdom', callingCode: '44', currency: 'GBP' },
-  { cca2: 'KE', flag: '🇰🇪', name: 'Kenya', callingCode: '254', currency: 'KES' },
-  { cca2: 'ZA', flag: '🇿🇦', name: 'South Africa', callingCode: '27', currency: 'ZAR' },
-  { cca2: 'CA', flag: '🇨🇦', name: 'Canada', callingCode: '1', currency: 'CAD' },
-];
+import countriesRaw from 'react-native-country-picker-modal/lib/assets/data/countries-emoji.json';
 
-export const DEFAULT_COUNTRY = COUNTRIES[0];
+export const countryCodeToFlag = (cca2 = '') => String(cca2)
+  .toUpperCase()
+  .replace(/[A-Z]/g, (letter) => String.fromCodePoint(127397 + letter.charCodeAt(0)));
+
+export const COUNTRIES = Object.entries(countriesRaw)
+  .map(([cca2, country]) => ({
+    cca2,
+    flag: countryCodeToFlag(cca2),
+    name: country?.name?.common || cca2,
+    callingCode: country?.callingCode?.[0] || '',
+    callingCodes: country?.callingCode || [],
+    currency: country?.currency?.[0] || '',
+    currencies: country?.currency || [],
+    region: country?.region || '',
+    subregion: country?.subregion || '',
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+export const DEFAULT_COUNTRY = COUNTRIES.find((country) => country.cca2 === 'GH') || COUNTRIES[0];
+
+export const getCountryByCode = (countryCode) => COUNTRIES.find(
+  (country) => country.cca2 === String(countryCode || '').toUpperCase(),
+);
+
+export const searchCountries = (query) => {
+  const normalized = String(query || '').trim().toLocaleLowerCase().replace(/^\+/, '');
+  if (!normalized) return COUNTRIES;
+  return COUNTRIES.filter((country) => (
+    country.name.toLocaleLowerCase().includes(normalized) ||
+    country.cca2.toLocaleLowerCase().includes(normalized) ||
+    country.callingCodes.some((code) => String(code).includes(normalized))
+  ));
+};

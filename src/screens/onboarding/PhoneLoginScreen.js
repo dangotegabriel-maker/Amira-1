@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal, FlatList } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { COUNTRIES, DEFAULT_COUNTRY } from '../../data/countries';
+import { DEFAULT_COUNTRY } from '../../data/countries';
+import CountrySelectorModal from '../../components/CountrySelectorModal';
 
 const GENERIC_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
@@ -57,29 +58,7 @@ const PhoneLoginScreen = ({ navigation }) => {
         />
       </View>
 
-      <Modal visible={showPicker} transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
-        <TouchableOpacity style={styles.countryOverlay} activeOpacity={1} onPress={() => setShowPicker(false)}>
-          <View style={styles.countryModal}>
-            <Text style={styles.countryTitle}>Select country</Text>
-            <FlatList
-              data={COUNTRIES}
-              keyExtractor={(item) => item.cca2}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.countryOption}
-                  onPress={() => {
-                    setSelectedCountry(item);
-                    setShowPicker(false);
-                  }}
-                >
-                  <Text style={styles.countryName}>{item.flag} {item.name}</Text>
-                  <Text style={styles.countryDial}>{item.cca2} +{item.callingCode}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      <CountrySelectorModal visible={showPicker} onClose={() => setShowPicker(false)} onSelect={setSelectedCountry} />
 
       <TouchableOpacity
         style={[styles.button, (getNationalNumber().length < 7 || loading) && styles.buttonDisabled]}

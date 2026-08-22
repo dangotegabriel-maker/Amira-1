@@ -1,13 +1,13 @@
 import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Compass, LayoutDashboard, MessageCircle, User, Wallet } from 'lucide-react-native';
+import { Compass, HeartHandshake, LayoutDashboard, MessageCircle, User, Wallet } from 'lucide-react-native';
 import { socketService } from '../services/socketService';
 import { useNavigation } from '@react-navigation/native';
 
 import HomeScreen from '../screens/main/HomeScreen';
 import MessageHomeScreen from '../screens/main/MessageHomeScreen';
 import MyProfileScreen from '../screens/main/MyProfileScreen';
-import WalletScreen from '../screens/main/WalletScreen';
+import MatchScreen from '../screens/main/MatchScreen';
 import HostDashboardScreen from '../screens/host/HostDashboardScreen';
 import HostEarningsScreen from '../screens/host/HostEarningsScreen';
 import HostPendingScreen from '../screens/host/HostPendingScreen';
@@ -23,6 +23,7 @@ const MainTabNavigator = () => {
   const pendingHost = user?.role === 'host' && !approvedHost;
 
   useEffect(() => {
+    if (!approvedHost) return undefined;
     const handleIncomingCall = (data) => {
       navigation.navigate('VideoCall', {
         name: data.callerName,
@@ -32,15 +33,17 @@ const MainTabNavigator = () => {
     };
     socketService.on('incoming_call', handleIncomingCall);
     return () => socketService.off('incoming_call', handleIncomingCall);
-  }, [navigation]);
+  }, [approvedHost, navigation]);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ color, size }) => {
-          if (route.name === 'Discover') {
+          if (route.name === 'Home') {
             return <Compass color={color} size={size} />;
-          } else if (route.name === 'Dashboard') {
+          } else if (route.name === 'Match') {
+            return <HeartHandshake color={color} size={size} />;
+          } else if (route.name === 'Dashboard' || route.name === 'Application') {
             return <LayoutDashboard color={color} size={size} />;
           } else if (route.name === 'Messages') {
             return <MessageCircle color={color} size={size} />;
@@ -64,15 +67,14 @@ const MainTabNavigator = () => {
         </>
       ) : pendingHost ? (
         <>
-          <Tab.Screen name="Dashboard" component={HostPendingScreen} />
-          <Tab.Screen name="Messages" component={MessageHomeScreen} />
+          <Tab.Screen name="Application" component={HostPendingScreen} />
           <Tab.Screen name="Profile" component={MyProfileScreen} />
         </>
       ) : (
         <>
-          <Tab.Screen name="Discover" component={HomeScreen} />
+          <Tab.Screen name="Home" component={HomeScreen} />
+          <Tab.Screen name="Match" component={MatchScreen} />
           <Tab.Screen name="Messages" component={MessageHomeScreen} />
-          <Tab.Screen name="Wallet" component={WalletScreen} />
           <Tab.Screen name="Profile" component={MyProfileScreen} />
         </>
       )}

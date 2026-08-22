@@ -83,6 +83,10 @@ export const DEFAULT_USER_PROFILE = {
   hostStatus: { ...DEFAULT_HOST_STATUS },
   wallet: { ...DEFAULT_WALLET },
   earnings: { ...DEFAULT_EARNINGS },
+  hostProfile: {
+    bio: '', interests: [], gallery: [], introVideoUrl: '',
+    introVideoPath: '', rateTier: 'STANDARD', videoRateCredits: 50,
+  },
   settings: {
     doNotDisturb: false,
   },
@@ -322,6 +326,7 @@ export const dbService = {
         hostStatus: canonicalInput.hostStatus,
         wallet: canonicalInput.wallet,
         earnings: canonicalInput.earnings,
+        hostProfile: canonicalInput.hostProfile,
         settings: canonicalInput.settings,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

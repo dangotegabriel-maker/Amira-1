@@ -27,6 +27,11 @@ export const DEFAULT_EARNINGS = Object.freeze({
   currency: 'GHS',
 });
 
+export const DEFAULT_HOST_PROFILE = Object.freeze({
+  bio: '', interests: [], gallery: [], introVideoUrl: '',
+  introVideoPath: '', rateTier: 'STANDARD', videoRateCredits: 50,
+});
+
 const finiteNumber = (value, fallback = 0) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -107,6 +112,15 @@ export const normalizeUser = (uid, data = {}, authUser = null) => {
       pending: finiteNumber(data?.earnings?.pending, 0),
       available: finiteNumber(data?.earnings?.available, 0),
       currency: earningsCurrency,
+    },
+    hostProfile: {
+      ...DEFAULT_HOST_PROFILE,
+      ...(data.hostProfile || {}),
+      bio: data?.hostProfile?.bio || data.bio || '',
+      interests: data?.hostProfile?.interests || data.interests || [],
+      gallery: data?.hostProfile?.gallery || data.photos || [],
+      introVideoUrl: data?.hostProfile?.introVideoUrl || data.introVideoUrl || '',
+      videoRateCredits: finiteNumber(data?.hostProfile?.videoRateCredits ?? data.call_price, 50),
     },
     settings: {
       doNotDisturb: false,

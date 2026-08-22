@@ -1,259 +1,82 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, Modal, ActivityIndicator, Alert } from "react-native";
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { BadgeCheck, ChevronLeft, Flag, MessageCircle, ShieldAlert, UserMinus, UserPlus, Video } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Award, ChevronLeft, Gift, ArrowUpCircle, MessageCircle, Phone, Heart, X, Coins, ChevronRight, ShieldAlert, UserMinus } from 'lucide-react-native';
-import { dbService } from '../../services/firebaseService';
-import { socketService } from '../../services/socketService';
-import { hapticService } from '../../services/hapticService';
 import { useUser } from '../../context/UserContext';
-import VIPBadge from '../../components/VIPBadge';
-import GiftingLeaderboard from '../../components/GiftingLeaderboard';
-import GlowAvatar from '../../components/GlowAvatar';
-import { Image } from 'expo-image';
+import { dbService } from '../../services/firebaseService';
+import { followService } from '../../services/followService';
+import { moderationService } from '../../services/moderationService';
+import { getCountryByCode } from '../../data/countries';
+import { isApprovedHost } from '../../models/userModel';
 import ReportUserModal from '../../components/ReportUserModal';
 
-const { width, height } = Dimensions.get('window');
-
-const LowBalanceSheet = ({ visible, onClose, navigation, required }) => (
-  <Modal visible={visible} transparent animationType="slide">
-     <View style={styles.sheetOverlay}>
-        <View style={styles.sheetContent}>
-           <View style={styles.sheetHandle} />
-           <View style={styles.sheetIconBox}>
-              <Coins color="#FFD700" size={40} />
-           </View>
-           <Text style={styles.sheetTitle}>Oops! Low Balance.</Text>
-           <Text style={styles.sheetSubtitle}>You need at least {required} coins to start this call. Top up now to connect.</Text>
-
-           <TouchableOpacity
-             style={styles.rechargeCTA}
-             onPress={() => { onClose(); navigation.navigate('RechargeHub'); }}
-           >
-              <Text style={styles.rechargeCTAText}>Go to Coin Store</Text>
-              <ChevronRight color="white" size={20} />
-           </TouchableOpacity>
-
-           <TouchableOpacity style={styles.closeSheetBtn} onPress={onClose}>
-              <Text style={styles.closeSheetText}>Maybe later</Text>
-           </TouchableOpacity>
-        </View>
-     </View>
-  </Modal>
-);
+const IntroVideo = ({ uri }) => {
+  const player = useVideoPlayer(uri, (instance) => { instance.loop = true; });
+  return <VideoView style={styles.video} player={player} nativeControls contentFit="cover" />;
+};
 
 const UserProfileScreen = ({ route, navigation }) => {
-  const { userId, name } = route.params;
-  const { user, fetchUserCoins } = useUser();
-  const [currentUser, setCurrentUser] = useState(null);
-  const [targetUser, setTargetUser] = useState(null);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
-  const [showLowBalance, setShowLowBalance] = useState(false);
+  const { user } = useUser();
+  const userId = route.params?.userId;
+  const [host, setHost] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  const [isStartingCall, setIsStartingCall] = useState(false);
 
   useEffect(() => {
-    loadData();
-    socketService.emitProfileView('current_user_id', userId);
+    Promise.all([dbService.getUserProfile(userId), followService.isFollowing(userId)])
+      .then(([profile, followState]) => { setHost(isApprovedHost(profile) ? profile : null); setFollowing(followState); })
+      .catch(() => setHost(null)).finally(() => setLoading(false));
   }, [userId]);
 
-  const loadData = async () => {
-    try {
-      const p = user?.uid ? await dbService.getUserProfile(user.uid) : null;
-      const t = await dbService.getUserProfile(userId);
-      setCurrentUser(p || user);
-      setTargetUser(t || {
-        uid: userId,
-        name,
-        gender: 'female',
-        call_price: 50,
-        bio: '',
-        photos: [],
-      });
-    } catch (error) {
-      console.log("PROFILE LOAD ERROR:", error?.code, error?.message);
-      setCurrentUser(user);
-      setTargetUser({
-        uid: userId,
-        name,
-        gender: 'female',
-        call_price: 50,
-        bio: '',
-        photos: [],
-      });
-    }
+  const toggleFollow = async () => {
+    if (user?.role !== 'consumer' || followBusy) return;
+    setFollowBusy(true);
+    try { setFollowing(following ? await followService.unfollowHost(userId) : await followService.followHost(userId)); }
+    catch (error) { Alert.alert('Unable to update follow', error.message); }
+    finally { setFollowBusy(false); }
   };
 
-  if (!targetUser || !currentUser) return (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#FFD700" />
-    </View>
-  );
+  const block = () => Alert.alert('Block host', `Block ${host?.username}?`, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Block', style: 'destructive', onPress: async () => { await moderationService.blockUser(user.uid, userId); navigation.goBack(); } },
+  ]);
 
-  const canInitiatePaidHostCall = currentUser.role === 'consumer' &&
-    targetUser.role === 'host' && targetUser.hostStatus?.isApproved === true;
-  const targetDisplayName = targetUser.username || targetUser.name || name || 'Amira User';
+  if (loading) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
+  if (!host) return <View style={styles.center}><ShieldAlert color={COLORS.primary} size={42} /><Text style={styles.unavailable}>This approved host profile is unavailable.</Text><TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.backText}>Go back</Text></TouchableOpacity></View>;
 
-  const handleBlock = () => {
-    Alert.alert(
-      "Block User",
-      `Are you sure you want to block ${targetDisplayName}? They will no longer be able to message or call you.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Block",
-          style: "destructive",
-          onPress: () => {
-            hapticService.mediumImpact();
-            navigation.goBack();
-          }
-        }
-      ]
-    );
-  };
-
-  const renderHeader = () => (
-    <View>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-           <ChevronLeft color={COLORS.text} size={28} />
-        </TouchableOpacity>
-
-        <GlowAvatar size={100} isOnline={true} />
-
-        <View style={styles.nameContainer}>
-          <Text style={styles.name}>{targetDisplayName}</Text>
-          <VIPBadge totalSpent={6000} />
-        </View>
-        <Text style={styles.bio}>{targetUser.bio}</Text>
-
-        <View style={styles.actionRow}>
-           {canInitiatePaidHostCall ? (
-             <>
-               <TouchableOpacity style={styles.primaryAction} disabled={isStartingCall} onPress={async () => {
-                 if (isStartingCall) return;
-                 setIsStartingCall(true);
-                 try {
-                   const currentCoins = await fetchUserCoins();
-                   const price = targetUser.call_price || 50;
-                   console.log("USER COINS:", currentCoins);
-                   if (currentCoins < price) {
-                     setShowLowBalance(true);
-                     return;
-                   }
-                   navigation.navigate('VideoCall', { name: targetDisplayName, userId: targetUser.uid });
-                 } catch (error) {
-                   console.log("CALL START ERROR:", error?.code, error?.message);
-                 } finally {
-                   setIsStartingCall(false);
-                 }
-               }}>
-                  <Phone color="white" size={20} />
-                  <Text style={styles.primaryActionText}>{isStartingCall ? 'Starting...' : 'Call Now'}</Text>
-               </TouchableOpacity>
-               <TouchableOpacity style={styles.secondaryAction}>
-                  <Gift color={COLORS.primary} size={20} />
-                  <Text style={styles.secondaryActionText}>Gift</Text>
-               </TouchableOpacity>
-             </>
-           ) : (
-             <>
-               <TouchableOpacity style={styles.primaryAction} onPress={() => navigation.navigate('ChatDetail', { name: targetDisplayName, userId: targetUser.uid })}>
-                  <MessageCircle color="white" size={20} />
-                  <Text style={styles.primaryActionText}>Message</Text>
-               </TouchableOpacity>
-               <TouchableOpacity style={styles.secondaryAction}>
-                  <Heart color={COLORS.primary} size={20} />
-                  <Text style={styles.secondaryActionText}>Follow</Text>
-               </TouchableOpacity>
-             </>
-           )}
-        </View>
+  const country = getCountryByCode(host.countryCode);
+  const gallery = host.hostProfile?.gallery || [];
+  return <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.hero}>
+        {host.profilePic ? <Image source={{ uri: host.profilePic }} style={styles.heroImage} /> : <View style={[styles.heroImage, styles.placeholder]}><Text style={styles.letter}>{host.username?.[0]}</Text></View>}
+        <View style={styles.scrim} />
+        <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}><ChevronLeft color="white" size={30} /></TouchableOpacity>
+        <View style={styles.heroInfo}><View style={styles.nameRow}><Text style={styles.name}>{host.username}</Text><BadgeCheck color="#60A5FA" size={23} /></View><Text style={styles.meta}>{host.age} · {country?.flag || ''} {host.countryName || country?.name}</Text><Text style={styles.availability}>{host.hostStatus.availability}</Text></View>
       </View>
 
-      <View style={styles.galleryContainer}>
-         <Text style={styles.sectionTitle}>Gallery</Text>
-         <View style={styles.photoGrid}>
-            {targetUser.photos?.map((photo, index) => (
-              <TouchableOpacity key={index} style={styles.photoWrapper} onPress={() => setSelectedPhoto(photo)}>
-                 <Image source={photo} style={styles.photo} />
-              </TouchableOpacity>
-            ))}
-         </View>
+      <View style={styles.actions}>
+        <TouchableOpacity style={[styles.action, following && styles.following]} onPress={toggleFollow} disabled={followBusy}>{following ? <UserMinus color={COLORS.primary} /> : <UserPlus color="white" />}<Text style={[styles.actionText, following && { color: COLORS.primary }]}>{following ? 'Following' : 'Follow'}</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.smallAction} onPress={() => navigation.navigate('ChatDetail', { userId, name: host.username })}><MessageCircle color={COLORS.primary} /><Text style={styles.smallText}>Message</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.smallAction} onPress={() => navigation.navigate('VideoCall', { userId, name: host.username, callRate: host.hostProfile?.videoRateCredits, demoOnly: true })}><Video color={COLORS.primary} /><Text style={styles.smallText}>Video</Text></TouchableOpacity>
       </View>
 
-      <GiftingLeaderboard />
-
-      <View style={styles.safetyActions}>
-         <TouchableOpacity style={styles.safetyBtn} onPress={() => setShowReport(true)}>
-            <ShieldAlert color={COLORS.textSecondary} size={20} />
-            <Text style={styles.safetyBtnText}>Report User</Text>
-         </TouchableOpacity>
-         <TouchableOpacity style={styles.safetyBtn} onPress={handleBlock}>
-            <UserMinus color="#FF3B30" size={20} />
-            <Text style={[styles.safetyBtnText, { color: '#FF3B30' }]}>Block User</Text>
-         </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  return (
-    <View style={{ flex: 1 }}>
-      <FlatList
-        data={[]}
-        renderItem={null}
-        ListHeaderComponent={renderHeader}
-        style={styles.container}
-      />
-      <LowBalanceSheet
-        visible={showLowBalance}
-        onClose={() => setShowLowBalance(false)}
-        navigation={navigation}
-        required={targetUser?.call_price || 50}
-      />
-
-      <ReportUserModal
-        visible={showReport}
-        onClose={() => setShowReport(false)}
-        userName={targetDisplayName}
-        onReport={() => {
-           Alert.alert("Report Received", "Thank you. Our team will investigate this profile.");
-        }}
-      />
-    </View>
-  );
+      <View style={styles.section}><Text style={styles.sectionTitle}>About</Text><Text style={styles.bio}>{host.hostProfile?.bio || 'No introduction yet.'}</Text><View style={styles.tags}>{(host.hostProfile?.interests || []).map((tag) => <Text key={tag} style={styles.tag}>{tag}</Text>)}</View><Text style={styles.rate}>{host.hostProfile?.videoRateCredits || 50} credits/min · video-call pricing preview</Text></View>
+      {gallery.length > 0 && <View style={styles.section}><Text style={styles.sectionTitle}>Gallery</Text><FlatList horizontal data={gallery} keyExtractor={(item, index) => `${item}-${index}`} showsHorizontalScrollIndicator={false} renderItem={({ item }) => <Image source={{ uri: typeof item === 'string' ? item : item.url }} style={styles.galleryImage} />} /></View>}
+      {host.hostProfile?.introVideoUrl ? <View style={styles.section}><Text style={styles.sectionTitle}>Introduction</Text><IntroVideo uri={host.hostProfile.introVideoUrl} /></View> : null}
+      <View style={styles.safety}><TouchableOpacity style={styles.safetyAction} onPress={() => setShowReport(true)}><Flag color={COLORS.textSecondary} /><Text style={styles.safetyText}>Report</Text></TouchableOpacity><TouchableOpacity style={styles.safetyAction} onPress={block}><UserMinus color="#DC2626" /><Text style={[styles.safetyText, { color: '#DC2626' }]}>Block</Text></TouchableOpacity></View>
+    </ScrollView>
+    <ReportUserModal visible={showReport} onClose={() => setShowReport(false)} userName={host.username} onReport={async (reason, info) => { await moderationService.reportUser(user.uid, userId, reason, info); Alert.alert('Report received', 'Thank you.'); }} />
+  </View>;
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F8F8' },
-  header: { alignItems: 'center', paddingVertical: 40, backgroundColor: 'white' },
-  backButton: { position: 'absolute', top: 50, left: 20 },
-  nameContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 15 },
-  name: { fontSize: 24, fontWeight: 'bold' },
-  bio: { fontSize: 14, color: COLORS.textSecondary, marginTop: 5, paddingHorizontal: 40, textAlign: 'center' },
-  actionRow: { flexDirection: 'row', width: '80%', justifyContent: 'space-between', marginTop: 20 },
-  primaryAction: { flex: 1, height: 45, backgroundColor: COLORS.primary, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  primaryActionText: { color: 'white', fontWeight: 'bold', marginLeft: 8 },
-  secondaryAction: { flex: 1, height: 45, backgroundColor: '#FFF5F7', borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.primary },
-  secondaryActionText: { color: COLORS.primary, fontWeight: 'bold', marginLeft: 8 },
-  galleryContainer: { backgroundColor: 'white', marginTop: 10, paddingVertical: 20 },
-  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10 },
-  photoWrapper: { width: (width - 40) / 3, height: (width - 40) / 3, margin: 5, borderRadius: 10, overflow: 'hidden' },
-  photo: { width: '100%', height: '100%' },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginLeft: 15 },
-  safetyActions: { padding: 20, backgroundColor: 'white', marginTop: 10 },
-  safetyBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
-  safetyBtnText: { marginLeft: 15, fontSize: 16, fontWeight: '500', color: COLORS.textSecondary },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F8F8' },
-  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  sheetContent: { backgroundColor: 'white', borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 30, alignItems: 'center' },
-  sheetHandle: { width: 40, height: 5, backgroundColor: '#EEE', borderRadius: 3, marginBottom: 20 },
-  sheetIconBox: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FFF9E6', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  sheetTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.text, marginBottom: 10 },
-  sheetSubtitle: { fontSize: 16, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 30, paddingHorizontal: 20 },
-  rechargeCTA: { width: '100%', height: 55, backgroundColor: COLORS.primary, borderRadius: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  rechargeCTAText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginRight: 10 },
-  closeSheetBtn: { marginTop: 20, padding: 10 },
-  closeSheetText: { color: COLORS.textSecondary, fontWeight: '600' }
+  container: { flex: 1, backgroundColor: '#F7F7F9' }, content: { paddingBottom: 60 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30, backgroundColor: '#F7F7F9' }, unavailable: { color: COLORS.text, fontSize: 19, fontWeight: '800', textAlign: 'center', marginTop: 15 }, backText: { color: COLORS.primary, fontWeight: '900', marginTop: 14 },
+  hero: { height: 410, backgroundColor: '#DDD' }, heroImage: { width: '100%', height: '100%' }, placeholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#E9D5FF' }, letter: { color: '#7C3AED', fontSize: 70, fontWeight: '900' }, scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.2)' }, back: { position: 'absolute', top: 50, left: 14, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' }, heroInfo: { position: 'absolute', left: 18, right: 18, bottom: 20 }, nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 }, name: { color: 'white', fontSize: 30, fontWeight: '900' }, meta: { color: 'white', marginTop: 5, fontSize: 16 }, availability: { color: '#86EFAC', fontWeight: '900', textTransform: 'capitalize', marginTop: 5 },
+  actions: { flexDirection: 'row', gap: 9, padding: 14 }, action: { flex: 1.4, minHeight: 58, borderRadius: 18, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 }, following: { backgroundColor: 'white', borderWidth: 1, borderColor: COLORS.primary }, actionText: { color: 'white', fontWeight: '900' }, smallAction: { flex: 1, minHeight: 58, backgroundColor: 'white', borderRadius: 18, alignItems: 'center', justifyContent: 'center' }, smallText: { color: COLORS.text, fontSize: 11, fontWeight: '800', marginTop: 2 },
+  section: { backgroundColor: 'white', marginHorizontal: 14, marginBottom: 12, borderRadius: 20, padding: 18 }, sectionTitle: { color: COLORS.text, fontSize: 20, fontWeight: '900', marginBottom: 10 }, bio: { color: COLORS.textSecondary, lineHeight: 21 }, tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 13 }, tag: { color: COLORS.primary, backgroundColor: '#FFF1F4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 13, fontWeight: '700' }, rate: { color: COLORS.text, fontWeight: '800', marginTop: 15 }, galleryImage: { width: 130, height: 165, borderRadius: 14, marginRight: 9 }, video: { height: 240, borderRadius: 15, overflow: 'hidden' }, safety: { flexDirection: 'row', marginHorizontal: 14, gap: 10 }, safetyAction: { flex: 1, minHeight: 54, borderRadius: 16, backgroundColor: 'white', flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }, safetyText: { color: COLORS.textSecondary, fontWeight: '800' },
 });
-
 export default UserProfileScreen;

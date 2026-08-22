@@ -32,6 +32,7 @@ import StoryViewerScreen from '../screens/main/StoryViewerScreen';
 import MomentsScreen from '../screens/main/MomentsScreen';
 import RoleSelectionScreen from '../screens/onboarding/RoleSelectionScreen';
 import CountrySetupScreen from '../screens/onboarding/CountrySetupScreen';
+import HostApplicationScreen from '../screens/host/HostApplicationScreen';
 import { getRequiredProfileStep, isProfileActuallyComplete } from '../models/userModel';
 
 const Stack = createNativeStackNavigator();
@@ -68,6 +69,7 @@ const RootNavigator = () => {
                   : nextProfileScreen === 'CountrySetup' ? CountrySetupScreen
                   : RoleSelectionScreen
           } />
+          <Stack.Screen name="HostApplication" component={HostApplicationScreen} />
         </Stack.Group>
       ) : (
         <>
@@ -89,6 +91,7 @@ const RootNavigator = () => {
           <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
           <Stack.Screen name="CallSummary" component={CallSummaryScreen} />
           <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ headerShown: true, title: 'Help & Support' }} />
+          <Stack.Screen name="HostApplication" component={HostApplicationScreen} />
         </>
       )}
     </Stack.Navigator>

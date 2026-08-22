@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator, Modal, FlatList } from "react-native";
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { ChevronLeft, Camera, Check } from 'lucide-react-native';
 import { useUser } from '../../context/UserContext';
-import { auth, db, authService } from '../../services/firebaseService';
-import { doc, setDoc } from 'firebase/firestore';
+import { auth, authService, dbService } from '../../services/firebaseService';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { COUNTRIES } from '../../data/countries';
 import { validateUsername } from '../../utils/usernameValidation';
+import CountrySelectorModal from '../../components/CountrySelectorModal';
+import { mediaService } from '../../services/mediaService';
 
 const EditProfileScreen = ({ navigation }) => {
   const { user, refreshUser } = useUser();
@@ -19,6 +20,22 @@ const EditProfileScreen = ({ navigation }) => {
     COUNTRIES.find((item) => item.cca2 === user?.countryCode) || COUNTRIES[0],
   );
   const [loading, setLoading] = useState(false);
+  const [profilePic, setProfilePic] = useState(user?.profilePic || '');
+
+  const updatePhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return Alert.alert('Permission required', 'Media library access is required.');
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+    if (result.canceled) return;
+    setLoading(true);
+    try {
+      const media = await mediaService.uploadUserMedia({ asset: result.assets[0], category: 'profile', kind: 'image' });
+      await dbService.updateUserProfile(user.uid, { profilePic: media.url, updatedAt: new Date() });
+      setProfilePic(media.url);
+      await refreshUser();
+    } catch (error) { Alert.alert('Upload failed', error.message || 'Please try again.'); }
+    finally { setLoading(false); }
+  };
 
   const handleSave = async () => {
     const validation = validateUsername(name);
@@ -38,14 +55,14 @@ const EditProfileScreen = ({ navigation }) => {
 
       console.log('UID:', currentAuthUser.uid);
       await authService.updateUserProfile({ displayName: validation.value });
-      await setDoc(doc(db, "users", currentAuthUser.uid), {
+      await dbService.updateUserProfile(currentAuthUser.uid, {
         username: validation.value,
         bio,
         countryCode: country.cca2,
         countryName: country.name,
         phoneCode: `+${country.callingCode}`,
         updatedAt: new Date(),
-      }, { merge: true });
+      });
       await refreshUser();
       Alert.alert("Success", "Profile updated successfully!");
       navigation.goBack();
@@ -70,6 +87,10 @@ const EditProfileScreen = ({ navigation }) => {
       </View>
 
       <ScrollView style={styles.content}>
+        <TouchableOpacity style={styles.photoButton} onPress={updatePhoto} disabled={loading}>
+          {profilePic ? <Image source={{ uri: profilePic }} style={styles.profilePhoto} /> : <View style={[styles.profilePhoto, styles.photoPlaceholder]}><Camera color={COLORS.primary} size={30} /></View>}
+          <Text style={styles.photoText}>Change profile photo</Text>
+        </TouchableOpacity>
         <View style={styles.section}>
           <Text style={styles.label}>Display Name</Text>
           <TextInput
@@ -95,37 +116,15 @@ const EditProfileScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Country and currency</Text>
+          <Text style={styles.label}>Country</Text>
           <TouchableOpacity style={styles.countryButton} onPress={() => setShowCountries(true)}>
             <Text style={styles.countryButtonText}>{country.flag} {country.name}</Text>
-            <Text style={styles.countryMeta}>+{country.callingCode} · {country.currency}</Text>
+            <Text style={styles.countryMeta}>+{country.callingCode} · Wallet currency is unchanged</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      <Modal visible={showCountries} transparent animationType="fade" onRequestClose={() => setShowCountries(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowCountries(false)}>
-          <View style={styles.countryModal}>
-            <Text style={styles.modalTitle}>Select country</Text>
-            <FlatList
-              data={COUNTRIES}
-              keyExtractor={(item) => item.cca2}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.countryOption}
-                  onPress={() => {
-                    setCountry(item);
-                    setShowCountries(false);
-                  }}
-                >
-                  <Text style={styles.countryButtonText}>{item.flag} {item.name}</Text>
-                  <Text style={styles.countryMeta}>+{item.callingCode} · {item.currency}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      <CountrySelectorModal visible={showCountries} onClose={() => setShowCountries(false)} onSelect={setCountry} />
     </View>
   );
 };
@@ -135,6 +134,7 @@ const styles = StyleSheet.create({
   header: { height: 100, paddingTop: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#EEE' },
   headerTitle: { fontSize: 18, fontWeight: 'bold' },
   content: { padding: 20 },
+  photoButton: { alignItems: 'center', marginBottom: 26 }, profilePhoto: { width: 104, height: 104, borderRadius: 52 }, photoPlaceholder: { backgroundColor: '#FFF1F4', alignItems: 'center', justifyContent: 'center' }, photoText: { color: COLORS.primary, fontWeight: '800', marginTop: 9 },
   section: { marginBottom: 25 },
   label: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 8, fontWeight: '600' },
   input: { fontSize: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingVertical: 10, color: COLORS.text },

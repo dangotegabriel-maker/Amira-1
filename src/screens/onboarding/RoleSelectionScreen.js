@@ -4,13 +4,17 @@ import { Heart, Video } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
 import { auth, dbService } from '../../services/firebaseService';
 import { useUser } from '../../context/UserContext';
-import { DEFAULT_HOST_STATUS, isProfileActuallyComplete } from '../../models/userModel';
+import { isProfileActuallyComplete } from '../../models/userModel';
 
-const RoleSelectionScreen = () => {
+const RoleSelectionScreen = ({ navigation }) => {
   const [saving, setSaving] = useState('');
   const { user, refreshUser } = useUser();
 
   const selectRole = async (role) => {
+    if (role === 'host') {
+      navigation.navigate('HostApplication');
+      return;
+    }
     const currentUser = auth.currentUser;
     if (!currentUser?.uid) {
       Alert.alert('Session Error', 'Please log in again.');
@@ -20,15 +24,7 @@ const RoleSelectionScreen = () => {
     setSaving(role);
     try {
       console.log('UID:', currentUser.uid);
-      const rolePatch = role === 'host'
-        ? {
-            role,
-            hostStatus: {
-              ...DEFAULT_HOST_STATUS,
-              hasApplied: true,
-            },
-          }
-        : { role };
+      const rolePatch = { role };
       await dbService.updateUserProfile(currentUser.uid, {
         ...rolePatch,
         isProfileComplete: isProfileActuallyComplete({ ...user, ...rolePatch }),

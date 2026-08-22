@@ -18,6 +18,7 @@ import { BlurView } from 'expo-blur';
 import { useUser } from '../../context/UserContext';
 import { DEV_FEATURES } from '../../config/devFeatures';
 import { isApprovedHost } from '../../models/userModel';
+import { CALL_FEATURES } from '../../config/callFeatures';
 
 const { width, height } = Dimensions.get('window');
 const CALL_RATE = 50;
@@ -145,7 +146,7 @@ const VideoCallScreen = ({ route, navigation }) => {
         setBalance(currentBalance);
 
         const isConsumer = profile.role === 'consumer';
-        if (isConsumer) {
+        if (isConsumer && CALL_FEATURES.enableClientBilling) {
            if (currentBalance < callRate) {
               Alert.alert("Low Balance", `You need at least ${callRate} to start a call.`);
               navigation.goBack();
@@ -161,7 +162,7 @@ const VideoCallScreen = ({ route, navigation }) => {
         setCameraActive(true);
         setIsConnecting(false);
 
-        if (isConsumer) {
+        if (isConsumer && CALL_FEATURES.enableClientBilling) {
            billingTimer.current = setInterval(async () => {
               const latestBalance = await fetchLatestCoins();
               console.log("USER COINS:", latestBalance);
@@ -279,7 +280,7 @@ const VideoCallScreen = ({ route, navigation }) => {
 
   useEffect(() => {
      const isHost = isApprovedHost(currentUser);
-     if (isHost && duration > 0 && duration % 60 === 0) {
+     if (isHost && CALL_FEATURES.enableClientBilling && duration > 0 && duration % 60 === 0) {
         creditMinute();
      }
   }, [duration]);
@@ -299,7 +300,7 @@ const VideoCallScreen = ({ route, navigation }) => {
 
   const isLowForNext = balance < callRate;
   const isConsumer = currentUser?.role === 'consumer';
-  const showWarning = secondsInMinute >= 50 && isConsumer && isLowForNext;
+  const showWarning = CALL_FEATURES.enableClientBilling && secondsInMinute >= 50 && isConsumer && isLowForNext;
 
   useEffect(() => {
      if (showWarning) setShowQuickRecharge(true);
@@ -316,7 +317,7 @@ const VideoCallScreen = ({ route, navigation }) => {
       <Animated.View style={[styles.fullVideo, { opacity: fadeAnim }]}>
          <View style={styles.remotePlaceholder}>
             <Text style={styles.remoteName}>{name}</Text>
-            <Text style={styles.remoteStatus}>{formatDuration(duration)}</Text>
+            <Text style={styles.remoteStatus}>{CALL_FEATURES.enableRtcTransport ? formatDuration(duration) : 'Video calling coming in a later batch'}</Text>
             {extendingCall && (
                <View style={styles.extendingOverlay}>
                   <Heart color={COLORS.primary} fill={COLORS.primary} size={48} />
