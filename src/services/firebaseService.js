@@ -85,11 +85,16 @@ export const DEFAULT_USER_PROFILE = {
   earnings: { ...DEFAULT_EARNINGS },
   hostProfile: {
     bio: '', interests: [], gallery: [], introVideoUrl: '',
-    introVideoPath: '', rateTier: 'STANDARD', videoRateCredits: 50,
+    introVideoPath: '', rateTier: 'ENTRY', videoRateCredits: 25,
   },
   settings: {
     doNotDisturb: false,
   },
+  vip: { tier: 'FREE', status: 'inactive', startsAt: null, expiresAt: null },
+  profileViewStats: { recentCount: 0, updatedAt: null },
+  referralCode: '',
+  referredBy: null,
+  referralStats: { qualifiedCount: 0, pendingCount: 0, updatedAt: null },
   createdAt: null,
   updatedAt: null,
 };
@@ -328,6 +333,11 @@ export const dbService = {
         earnings: canonicalInput.earnings,
         hostProfile: canonicalInput.hostProfile,
         settings: canonicalInput.settings,
+        vip: canonicalInput.vip,
+        profileViewStats: canonicalInput.profileViewStats,
+        referralCode: canonicalInput.referralCode,
+        referredBy: canonicalInput.referredBy,
+        referralStats: canonicalInput.referralStats,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };

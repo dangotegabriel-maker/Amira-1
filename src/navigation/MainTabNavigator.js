@@ -10,7 +10,6 @@ import MyProfileScreen from '../screens/main/MyProfileScreen';
 import MatchScreen from '../screens/main/MatchScreen';
 import HostDashboardScreen from '../screens/host/HostDashboardScreen';
 import HostEarningsScreen from '../screens/host/HostEarningsScreen';
-import HostPendingScreen from '../screens/host/HostPendingScreen';
 import { useUser } from '../context/UserContext';
 import { isApprovedHost } from '../models/userModel';
 
@@ -20,7 +19,6 @@ const MainTabNavigator = () => {
   const navigation = useNavigation();
   const { user } = useUser();
   const approvedHost = isApprovedHost(user);
-  const pendingHost = user?.role === 'host' && !approvedHost;
 
   useEffect(() => {
     if (!approvedHost) return undefined;
@@ -43,7 +41,7 @@ const MainTabNavigator = () => {
             return <Compass color={color} size={size} />;
           } else if (route.name === 'Match') {
             return <HeartHandshake color={color} size={size} />;
-          } else if (route.name === 'Dashboard' || route.name === 'Application') {
+          } else if (route.name === 'Dashboard') {
             return <LayoutDashboard color={color} size={size} />;
           } else if (route.name === 'Messages') {
             return <MessageCircle color={color} size={size} />;
@@ -63,11 +61,6 @@ const MainTabNavigator = () => {
           <Tab.Screen name="Dashboard" component={HostDashboardScreen} />
           <Tab.Screen name="Messages" component={MessageHomeScreen} />
           <Tab.Screen name="Earnings" component={HostEarningsScreen} />
-          <Tab.Screen name="Profile" component={MyProfileScreen} />
-        </>
-      ) : pendingHost ? (
-        <>
-          <Tab.Screen name="Application" component={HostPendingScreen} />
           <Tab.Screen name="Profile" component={MyProfileScreen} />
         </>
       ) : (

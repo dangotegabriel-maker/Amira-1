@@ -1,199 +1,23 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, FlatList } from "react-native";
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Bell, MessageCircle, Phone } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
-import { Search, UserPlus } from 'lucide-react-native';
-import { moderationService } from '../../services/moderationService';
-import VIPBadge from '../../components/VIPBadge';
-import GlowAvatar from '../../components/GlowAvatar';
-import NudgeInbox from '../../components/NudgeInbox';
+import { useUser } from '../../context/UserContext';
+import { messagingService } from '../../services/messagingService';
+import { presenceService } from '../../services/presenceService';
+import { noticeService } from '../../services/noticeService';
+import { callHistoryService } from '../../services/callHistoryService';
+import { dbService } from '../../services/firebaseService';
+import { isConversationUnreplied, toDate } from '../../utils/socialDomain';
 
-const { width } = Dimensions.get('window');
-
-const TABS = ['Active', 'Unreplied', 'Calls', 'Notices', 'Contacts'];
-
-const MessageHomeScreen = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState(0);
-  const scrollRef = useRef(null);
-
-  const handleTabPress = (index) => {
-    setActiveTab(index);
-    scrollRef.current?.scrollTo({ x: index * width, animated: true });
-  };
-
-  const handleScroll = (event) => {
-    const scrollOffset = event.nativeEvent.contentOffset.x;
-    const index = Math.round(scrollOffset / width);
-    setActiveTab(index);
-  };
-
-  // Mock Data
-  const contactsData = [
-    { id: '1', name: 'Jessica', depth: 'Inner Circle', lastSeen: '2m ago', totalSpent: 6000, isRankOne: true, isOnline: true },
-    { id: '2', name: 'Mark', depth: 'Friends', lastSeen: '1h ago', totalSpent: 1200, isOnline: false },
-    { id: '3', name: 'Sarah', depth: 'Inner Circle', lastSeen: 'Now', totalSpent: 500, isOnline: true },
-    { id: '4', name: 'David', depth: 'Friends', lastSeen: '3h ago', totalSpent: 0, isOnline: false },
-  ];
-
-  const activeChatsData = [
-    { id: '1', name: 'Jessica', msg: 'Hey!', time: '10:30 AM', userId: '1', totalSpent: 6000, isRankOne: true, isOnline: true }
-  ];
-
-  const [contactFilter, setContactFilter] = useState('All');
-
-  // Filter out blocked users
-  const filteredContacts = contactsData.filter(c =>
-    !moderationService.isBlocked('current_user_id', c.id) &&
-    (contactFilter === 'All' || c.depth === contactFilter)
-  );
-
-  const filteredActiveChats = activeChatsData.filter(c =>
-    !moderationService.isBlocked('current_user_id', c.userId)
-  );
-
-  const renderActive = () => (
-    <View style={styles.page}>
-      <FlatList
-        data={filteredActiveChats}
-        keyExtractor={item => item.id}
-        ListHeaderComponent={<NudgeInbox navigation={navigation} />}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.listItem}
-            onPress={() => navigation.navigate('ChatDetail', { name: item.name, userId: item.userId, totalSpent: item.totalSpent })}
-          >
-            <GlowAvatar size={50} isRankOne={item.isRankOne} isOnline={item.isOnline} />
-            <View style={styles.itemContent}>
-              <View style={styles.itemHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <VIPBadge totalSpent={item.totalSpent} />
-                </View>
-                <Text style={styles.itemTime}>{item.time}</Text>
-              </View>
-              <Text style={styles.itemSubtext}>{item.msg}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-      />
-    </View>
-  );
-
-  const renderContacts = () => (
-    <View style={styles.page}>
-      <View style={styles.filterBar}>
-        {['All', 'Inner Circle', 'Friends'].map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterChip, contactFilter === f && styles.filterChipActive]}
-            onPress={() => setContactFilter(f)}
-          >
-            <Text style={[styles.filterText, contactFilter === f && styles.filterTextActive]}>{f}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <FlatList
-        data={filteredContacts}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.listItem}
-            onPress={() => navigation.navigate('UserProfile', { userId: item.id, name: item.name, totalSpent: item.totalSpent, isOnline: item.isOnline, isRankOne: item.isRankOne })}
-          >
-            <GlowAvatar size={50} isRankOne={item.isRankOne} isOnline={item.isOnline} />
-            <View style={styles.itemContent}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <VIPBadge totalSpent={item.totalSpent} />
-              </View>
-              <Text style={styles.itemSubtext}>{item.depth} • {item.lastSeen}</Text>
-            </View>
-            <TouchableOpacity style={styles.chatIcon} onPress={() => navigation.navigate('ChatDetail', { name: item.name, userId: item.id, totalSpent: item.totalSpent })}>
-               <UserPlus size={20} color={COLORS.primary} />
-            </TouchableOpacity>
-          </TouchableOpacity>
-        )}
-      />
-    </View>
-  );
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
-        <TouchableOpacity>
-          <Search color={COLORS.text} size={24} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.tabBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {TABS.map((tab, index) => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tab, activeTab === index && styles.activeTab]}
-              onPress={() => handleTabPress(index)}
-            >
-              <Text style={[styles.tabText, activeTab === index && styles.activeTabText]}>{tab}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={handleScroll}
-      >
-        {renderActive()}
-        <View style={styles.page}><Text style={styles.emptyText}>No unreplied messages</Text></View>
-        <View style={styles.page}><Text style={styles.emptyText}>No recent calls</Text></View>
-        <View style={styles.page}><Text style={styles.emptyText}>No new notices</Text></View>
-        {renderContacts()}
-      </ScrollView>
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.white },
-  header: {
-    height: 100,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingBottom: 15,
-    paddingHorizontal: 20
-  },
-  title: { fontSize: 28, fontWeight: 'bold' },
-  tabBar: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    paddingHorizontal: 10
-  },
-  tab: {
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    marginHorizontal: 5
-  },
-  activeTab: { borderBottomWidth: 2, borderBottomColor: COLORS.primary },
-  tabText: { fontSize: 16, color: COLORS.textSecondary },
-  activeTabText: { color: COLORS.primary, fontWeight: 'bold' },
-  page: { width: width, flex: 1 },
-  emptyText: { textAlign: 'center', marginTop: 100, color: COLORS.textSecondary, fontSize: 16 },
-  listItem: { flexDirection: 'row', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F0F0F0', alignItems: 'center' },
-  itemContent: { flex: 1, marginLeft: 15 },
-  itemHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-  itemName: { fontSize: 17, fontWeight: 'bold' },
-  itemTime: { color: COLORS.textSecondary, fontSize: 13 },
-  itemSubtext: { color: COLORS.textSecondary, fontSize: 15 },
-  filterBar: { flexDirection: 'row', padding: 15, backgroundColor: '#F9F9F9', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 12, backgroundColor: '#E9E9EB', borderWidth: 1, borderColor: '#DDD' },
-  filterChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  filterText: { color: '#666', fontSize: 14, fontWeight: '500' },
-  filterTextActive: { color: COLORS.white, fontWeight: 'bold' },
-  chatIcon: { padding: 8 }
-});
-
-export default MessageHomeScreen;
+const TABS=['All','Online','Unreplied','Calls','Notices'];
+const relative=(value)=>{const date=toDate(value);if(!date)return '';const seconds=Math.max(0,(Date.now()-date.getTime())/1000);if(seconds<60)return 'Now';if(seconds<3600)return `${Math.floor(seconds/60)}m`;if(seconds<86400)return `${Math.floor(seconds/3600)}h`;return `${Math.floor(seconds/86400)}d`;};
+const MessageHomeScreen=({navigation})=>{const{user}=useUser();const[active,setActive]=useState('All');const[conversations,setConversations]=useState([]);const[presence,setPresence]=useState({});const[notices,setNotices]=useState([]);const[calls,setCalls]=useState([]);const[loading,setLoading]=useState(true);
+useEffect(()=>messagingService.subscribeInbox(async(items)=>{setConversations(items);const others=items.map((item)=>item.participantIds.find((id)=>id!==user.uid)).filter(Boolean);const states=await Promise.all(others.map(async(uid)=>[uid,await presenceService.get(uid).catch(()=>null)]));setPresence(Object.fromEntries(states));setLoading(false);},()=>setLoading(false)),[user.uid]);
+useEffect(()=>noticeService.subscribe(setNotices,()=>{}),[]);
+useEffect(()=>{callHistoryService.list().then(async(records)=>{const ids=[...new Set(records.flatMap((record)=>record.participantIds||[]).filter((id)=>id!==user.uid))];const states=await Promise.all(ids.map(async(uid)=>[uid,await presenceService.get(uid).catch(()=>null)]));const online=Object.fromEntries(states.map(([uid,state])=>[uid,presenceService.isOnline(state)]));const grouped=callHistoryService.groupContacts(records,user.uid,online);const profiles=await Promise.all(grouped.map(async(item)=>({...item,profile:await dbService.getUserProfile(item.uid).catch(()=>null)})));setCalls(profiles);}).catch(()=>{});},[user.uid]);
+const rows=useMemo(()=>active==='Online'?conversations.filter((item)=>presenceService.isOnline(presence[item.participantIds.find((id)=>id!==user.uid)])):active==='Unreplied'?conversations.filter((item)=>isConversationUnreplied(item,user.uid)):conversations,[active,conversations,presence,user.uid]);
+const empty={All:'No conversations yet.',Online:'None of your conversations are online right now.',Unreplied:"You're all caught up.",Calls:'No call history yet.',Notices:'No notices yet.'}[active];
+const renderConversation=({item})=>{const otherUid=item.participantIds.find((id)=>id!==user.uid);const other=item.participants?.[otherUid]||{};const online=presenceService.isOnline(presence[otherUid]);const unread=item.unreadCounts?.[user.uid]||0;return <TouchableOpacity style={styles.row} onPress={()=>navigation.navigate('ChatDetail',{userId:otherUid,name:other.username})}>{other.profilePic?<Image source={{uri:other.profilePic}} style={styles.avatar}/>:<View style={styles.avatar}/>}<View style={styles.rowBody}><View style={styles.nameRow}><Text style={styles.name}>{other.username||'Amira user'}</Text>{online&&<View style={styles.online}/>}<Text style={styles.time}>{relative(item.lastMessageAt)}</Text></View><Text style={[styles.preview,unread&&styles.unreadText]} numberOfLines={1}>{item.lastMessage?.text||'Start a conversation'}</Text></View>{unread>0&&<View style={styles.badge}><Text style={styles.badgeText}>{unread>99?'99+':unread}</Text></View>}</TouchableOpacity>;};
+const data=active==='Notices'?notices:active==='Calls'?calls:rows;return <View style={styles.container}><View style={styles.header}><Text style={styles.title}>Messages</Text><Text style={styles.subtitle}>Conversations and Amira updates</Text></View><ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs}>{TABS.map((tab)=><TouchableOpacity key={tab} style={[styles.tab,active===tab&&styles.active]} onPress={()=>setActive(tab)}><Text style={[styles.tabText,active===tab&&styles.activeText]}>{tab.toUpperCase()}</Text></TouchableOpacity>)}</ScrollView>{loading&&active!=='Calls'&&active!=='Notices'?<ActivityIndicator style={{marginTop:80}} color={COLORS.primary}/>:<FlatList data={data} keyExtractor={(item)=>item.id||item.uid} contentContainerStyle={styles.list} renderItem={active==='Notices'?({item})=><TouchableOpacity style={styles.notice} onPress={()=>noticeService.markRead(item.id)}><Bell color={item.isRead?COLORS.textSecondary:COLORS.primary}/><View style={styles.rowBody}><Text style={styles.name}>{item.title}</Text><Text style={styles.preview}>{item.body}</Text></View></TouchableOpacity>:active==='Calls'?({item})=><TouchableOpacity style={styles.row} onPress={()=>navigation.navigate('ChatDetail',{userId:item.uid,name:item.profile?.username})}><Phone color={item.isOnline?'#16A34A':COLORS.primary}/><View style={styles.rowBody}><Text style={styles.name}>{item.profile?.username||'Amira user'}</Text><Text style={styles.preview}>{item.lastCall?.status||'Call'} · {relative(item.lastCall?.createdAt)}</Text></View></TouchableOpacity>:renderConversation} ListEmptyComponent={<View style={styles.empty}>{active==='Notices'?<Bell color={COLORS.primary} size={40}/>:<MessageCircle color={COLORS.primary} size={40}/>}<Text style={styles.emptyText}>{empty}</Text></View>}/>}</View>};
+const styles=StyleSheet.create({container:{flex:1,backgroundColor:'#F7F7F9'},header:{backgroundColor:'white',paddingTop:56,paddingHorizontal:18,paddingBottom:13},title:{fontSize:29,fontWeight:'900',color:COLORS.text},subtitle:{color:COLORS.textSecondary,marginTop:2},tabs:{backgroundColor:'white',maxHeight:50,paddingHorizontal:9},tab:{paddingHorizontal:13,paddingVertical:14},active:{borderBottomWidth:3,borderBottomColor:COLORS.primary},tabText:{fontSize:10,fontWeight:'900',color:COLORS.textSecondary},activeText:{color:COLORS.primary},list:{padding:12,flexGrow:1},row:{backgroundColor:'white',borderRadius:17,padding:12,marginBottom:8,flexDirection:'row',alignItems:'center',gap:11},avatar:{width:54,height:54,borderRadius:27,backgroundColor:'#DDD'},rowBody:{flex:1},nameRow:{flexDirection:'row',alignItems:'center'},name:{fontSize:16,fontWeight:'900',color:COLORS.text},online:{width:8,height:8,borderRadius:4,backgroundColor:'#16A34A',marginLeft:6},time:{marginLeft:'auto',color:COLORS.textSecondary,fontSize:11},preview:{color:COLORS.textSecondary,marginTop:4},unreadText:{color:COLORS.text,fontWeight:'700'},badge:{minWidth:23,height:23,borderRadius:12,backgroundColor:COLORS.primary,alignItems:'center',justifyContent:'center'},badgeText:{color:'white',fontSize:10,fontWeight:'900'},notice:{backgroundColor:'white',borderRadius:17,padding:15,marginBottom:8,flexDirection:'row',gap:12},empty:{alignItems:'center',marginTop:90},emptyText:{color:COLORS.textSecondary,marginTop:12}});export default MessageHomeScreen;

@@ -29,7 +29,7 @@ export const DEFAULT_EARNINGS = Object.freeze({
 
 export const DEFAULT_HOST_PROFILE = Object.freeze({
   bio: '', interests: [], gallery: [], introVideoUrl: '',
-  introVideoPath: '', rateTier: 'STANDARD', videoRateCredits: 50,
+  introVideoPath: '', rateTier: 'ENTRY', videoRateCredits: 25,
 });
 
 const finiteNumber = (value, fallback = 0) => {
@@ -66,7 +66,6 @@ export const getRequiredProfileStep = (user) => {
   if (!user.dob || age === null || age < 18) return 'BirthdaySetup';
   if (!['female', 'male', 'other'].includes(user.gender)) return 'GenderSetup';
   if (!user.countryCode) return 'CountrySetup';
-  if (![USER_ROLES.CONSUMER, USER_ROLES.HOST].includes(user.role)) return 'RoleSelection';
   return null;
 };
 
@@ -77,7 +76,10 @@ export const normalizeUser = (uid, data = {}, authUser = null) => {
   const profilePic = data.profilePic || data.photoURL || data.photo || data.photos?.[0] || authUser?.photoURL || '';
   const legacyApproved = data.isApproved === true || data.is_verified === true;
   const legacyAvailability = data.isOnline === true ? HOST_AVAILABILITY.ONLINE : HOST_AVAILABILITY.OFFLINE;
-  const role = [USER_ROLES.CONSUMER, USER_ROLES.HOST].includes(data.role) ? data.role : '';
+  const hasCreatorCapability = legacyApproved || data?.hostStatus?.hasApplied === true;
+  const role = [USER_ROLES.CONSUMER, USER_ROLES.HOST].includes(data.role)
+    ? data.role
+    : hasCreatorCapability ? USER_ROLES.HOST : USER_ROLES.CONSUMER;
   const walletCurrency = data?.wallet?.currency || data.currency || 'GHS';
   const earningsCurrency = data?.earnings?.currency || walletCurrency;
   const normalized = {
@@ -120,11 +122,28 @@ export const normalizeUser = (uid, data = {}, authUser = null) => {
       interests: data?.hostProfile?.interests || data.interests || [],
       gallery: data?.hostProfile?.gallery || data.photos || [],
       introVideoUrl: data?.hostProfile?.introVideoUrl || data.introVideoUrl || '',
-      videoRateCredits: finiteNumber(data?.hostProfile?.videoRateCredits ?? data.call_price, 50),
+      videoRateCredits: finiteNumber(data?.hostProfile?.videoRateCredits ?? data.call_price, 25),
     },
     settings: {
       doNotDisturb: false,
       ...(data.settings || {}),
+    },
+    vip: {
+      tier: ['FREE', 'VIP_1', 'VIP_2', 'VIP_3'].includes(data?.vip?.tier) ? data.vip.tier : 'FREE',
+      status: ['inactive', 'active', 'expired'].includes(data?.vip?.status) ? data.vip.status : 'inactive',
+      startsAt: data?.vip?.startsAt || null,
+      expiresAt: data?.vip?.expiresAt || null,
+    },
+    profileViewStats: {
+      recentCount: Number.isFinite(Number(data?.profileViewStats?.recentCount)) ? Number(data.profileViewStats.recentCount) : 0,
+      updatedAt: data?.profileViewStats?.updatedAt || null,
+    },
+    referralCode: data.referralCode || `AMIRA-${String(uid || '').slice(0, 8).toUpperCase()}`,
+    referredBy: data.referredBy || null,
+    referralStats: {
+      qualifiedCount: Number.isFinite(Number(data?.referralStats?.qualifiedCount)) ? Number(data.referralStats.qualifiedCount) : 0,
+      pendingCount: Number.isFinite(Number(data?.referralStats?.pendingCount)) ? Number(data.referralStats.pendingCount) : 0,
+      updatedAt: data?.referralStats?.updatedAt || null,
     },
     createdAt: data.createdAt || data.created_at || null,
     updatedAt: data.updatedAt || null,

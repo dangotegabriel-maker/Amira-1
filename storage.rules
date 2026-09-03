@@ -3,8 +3,8 @@ service firebase.storage {
   match /b/{bucket}/o {
     function owns(uid) { return request.auth != null && request.auth.uid == uid; }
     function admin() { return request.auth != null && request.auth.token.admin == true; }
-    function imageUnder8MB() { return request.resource.size < 8 * 1024 * 1024 && request.resource.contentType.matches('image/.*'); }
-    function videoUnder40MB() { return request.resource.size < 40 * 1024 * 1024 && request.resource.contentType.matches('video/.*'); }
+    function imageUnder8MB() { return request.resource.size <= 8 * 1024 * 1024 && request.resource.contentType.matches('image/(jpeg|png|webp|heic|heif)'); }
+    function videoUnder40MB() { return request.resource.size <= 40 * 1024 * 1024 && request.resource.contentType.matches('video/(mp4|quicktime|webm)'); }
 
     match /users/{uid}/profile/{fileName} {
       allow read: if request.auth != null;

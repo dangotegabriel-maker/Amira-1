@@ -9,6 +9,7 @@ const requireConsumer = async () => {
   if (profile?.role !== 'consumer') throw new Error('Only consumers can follow hosts.');
   return current.uid;
 };
+export const followingSnapshotToIds = (snapshot) => snapshot.docs.map((entry) => entry.id);
 
 export const followService = {
   followHost: async (hostId) => {
@@ -34,6 +35,6 @@ export const followService = {
     const consumerId = auth.currentUser?.uid;
     if (!consumerId) return [];
     const snapshot = await getDocs(collection(db, 'users', consumerId, 'following'));
-    return snapshot.docs.map((entry) => entry.id);
+    return followingSnapshotToIds(snapshot);
   },
 };

@@ -1,0 +1,10 @@
+import { getDirectConversationId, groupCallContacts, isConversationUnreplied, isMessagingBlocked, isPresenceFresh, shouldCountProfileView } from '../socialDomain';
+
+describe('Batch 3 social domain', () => {
+  test('direct conversation IDs are deterministic', () => expect(getDirectConversationId('z-user','a-user')).toBe('a-user__z-user'));
+  test('unreplied means the other participant sent last', () => { expect(isConversationUnreplied({lastMessage:{senderId:'other'}},'me')).toBe(true);expect(isConversationUnreplied({lastMessage:{senderId:'me'}},'me')).toBe(false); });
+  test('presence requires an online and fresh signal', () => { const now=new Date('2026-09-03T12:00:00Z');expect(isPresenceFresh({state:'online',lastSeenAt:new Date('2026-09-03T11:58:00Z')},now)).toBe(true);expect(isPresenceFresh({state:'online',lastSeenAt:new Date('2026-09-03T11:50:00Z')},now)).toBe(false); });
+  test('profile views honor self-view and cooldown rules', () => { const now=new Date('2026-09-03T12:00:00Z');expect(shouldCountProfileView({ownerUid:'a',viewerUid:'a',now})).toBe(false);expect(shouldCountProfileView({ownerUid:'a',viewerUid:'b',lastViewedAt:new Date('2026-09-03T11:45:00Z'),now})).toBe(false);expect(shouldCountProfileView({ownerUid:'a',viewerUid:'b',lastViewedAt:new Date('2026-09-03T11:00:00Z'),now})).toBe(true); });
+  test('blocking either direction prevents messaging', () => { expect(isMessagingBlocked({blockedByMe:true})).toBe(true);expect(isMessagingBlocked({blockedMe:true})).toBe(true);expect(isMessagingBlocked({})).toBe(false); });
+  test('call contacts dedupe and sort online first then recent', () => { const records=[{id:'1',callerId:'me',receiverId:'a',createdAt:'2026-09-01'},{id:'2',callerId:'a',receiverId:'me',createdAt:'2026-09-03'},{id:'3',callerId:'me',receiverId:'b',createdAt:'2026-09-02'}];const grouped=groupCallContacts(records,'me',{b:true});expect(grouped.map((item)=>item.uid)).toEqual(['b','a']);expect(grouped.find((item)=>item.uid==='a').lastCall.id).toBe('2'); });
+});

@@ -1,0 +1,18 @@
+{
+  "indexes": [
+    { "collectionGroup": "conversations", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" },
+      { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "callHistory", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]},
+    { "collectionGroup": "calls", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "receiverId", "order": "ASCENDING" },
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ]}
+  ],
+  "fieldOverrides": []
+}

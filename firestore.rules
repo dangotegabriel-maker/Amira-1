@@ -4,67 +4,115 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function owns(uid) { return signedIn() && request.auth.uid == uid; }
     function admin() { return signedIn() && request.auth.token.admin == true; }
-    function approvedHost(data) {
-      return data.role == 'host' && data.hostStatus.isApproved == true;
+    function approvedHost(data) { return data.role == 'host' && data.hostStatus.isApproved == true; }
+    function participant(data) { return signedIn() && request.auth.uid in data.participantIds; }
+    function otherUid(data) { return data.participantIds[0] == request.auth.uid ? data.participantIds[1] : data.participantIds[0]; }
+    function blockedBetween(firstUid, secondUid) {
+      return exists(/databases/$(database)/documents/users/$(firstUid)/blocked/$(secondUid))
+        || exists(/databases/$(database)/documents/users/$(secondUid)/blocked/$(firstUid));
     }
-    function financialFieldsUnchanged() {
-      return request.resource.data.wallet == resource.data.wallet
-        && request.resource.data.earnings == resource.data.earnings;
-    }
-    function approvalUnchanged() {
-      return request.resource.data.hostStatus.isApproved == resource.data.hostStatus.isApproved;
-    }
-    function validHostApplicationTransition() {
-      return resource.data.role != 'host'
-        && request.resource.data.role == 'host'
-        && request.resource.data.hostStatus.hasApplied == true
-        && request.resource.data.hostStatus.isApproved == false
-        && request.resource.data.hostStatus.verificationStatus == 'pending'
-        && request.resource.data.hostStatus.availability == 'offline';
-    }
-    function validAvailabilityChange() {
-      return approvedHost(resource.data)
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.hostStatus.isApproved == resource.data.hostStatus.isApproved
-        && request.resource.data.hostStatus.hasApplied == resource.data.hostStatus.hasApplied
-        && request.resource.data.hostStatus.verificationStatus == resource.data.hostStatus.verificationStatus
-        && request.resource.data.hostStatus.availability in ['offline', 'online', 'busy'];
-    }
+    function financialFieldsUnchanged() { return request.resource.data.wallet == resource.data.wallet && request.resource.data.earnings == resource.data.earnings; }
+    function approvalUnchanged() { return request.resource.data.hostStatus.isApproved == resource.data.hostStatus.isApproved; }
+    function vipUnchanged() { return request.resource.data.vip == resource.data.vip; }
+    function visitorStatsUnchanged() { return request.resource.data.profileViewStats == resource.data.profileViewStats; }
+    function referralRewardsUnchanged() { return request.resource.data.referralStats == resource.data.referralStats; }
+    function canReadVisitorIdentities(uid) { let user = get(/databases/$(database)/documents/users/$(uid)).data; return approvedHost(user) || (user.vip.status == 'active' && user.vip.tier in ['VIP_1', 'VIP_2', 'VIP_3']); }
+    function validHostApplicationTransition() { return resource.data.role != 'host' && request.resource.data.role == 'host' && request.resource.data.hostStatus.hasApplied == true && request.resource.data.hostStatus.isApproved == false && request.resource.data.hostStatus.verificationStatus == 'pending' && request.resource.data.hostStatus.availability == 'offline'; }
+    function validAvailabilityChange() { return approvedHost(resource.data) && request.resource.data.role == resource.data.role && request.resource.data.hostStatus.isApproved == resource.data.hostStatus.isApproved && request.resource.data.hostStatus.hasApplied == resource.data.hostStatus.hasApplied && request.resource.data.hostStatus.verificationStatus == resource.data.hostStatus.verificationStatus && request.resource.data.hostStatus.availability in ['offline', 'online', 'busy']; }
+    function validReadUpdate() { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCounts', 'lastReadAt', 'updatedAt']) && request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(resource.data)] == resource.data.unreadCounts[otherUid(resource.data)] && request.resource.data.lastReadAt[otherUid(resource.data)] == resource.data.lastReadAt[otherUid(resource.data)]; }
+    function validMessageCreate() { return request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(request.resource.data)] == 1; }
+    function validEmptyConversationCreate() { return request.resource.data.lastMessage == null && request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(request.resource.data)] == 0; }
+    function validMessageUpdate() { return request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(resource.data)] == resource.data.unreadCounts[otherUid(resource.data)] + 1 && request.resource.data.lastReadAt[otherUid(resource.data)] == resource.data.lastReadAt[otherUid(resource.data)] && request.resource.data.lastMessageAt == request.time; }
+    function callParticipantsUnchanged() { return request.resource.data.callerId == resource.data.callerId && request.resource.data.receiverId == resource.data.receiverId && request.resource.data.participantIds == resource.data.participantIds; }
+    function callAuthorityFieldsUnchanged() { return request.resource.data.ratePerMinute == resource.data.ratePerMinute && request.resource.data.previewEligible == resource.data.previewEligible && request.resource.data.previewConsumed == resource.data.previewConsumed && request.resource.data.billedCredits == resource.data.billedCredits && request.resource.data.billingMode == resource.data.billingMode; }
 
     match /users/{uid} {
       allow read: if signedIn();
-      allow create: if owns(uid)
-        && request.resource.data.uid == uid
-        && request.resource.data.hostStatus.isApproved == false
-        && request.resource.data.wallet.creditBalance == 0
-        && request.resource.data.earnings.pending == 0
-        && request.resource.data.earnings.available == 0;
-      allow update: if admin() || (owns(uid)
-        && financialFieldsUnchanged()
-        && approvalUnchanged()
-        && (request.resource.data.role == resource.data.role
-          || validHostApplicationTransition())
-        && (request.resource.data.hostStatus == resource.data.hostStatus
-          || validHostApplicationTransition()
-          || validAvailabilityChange()));
+      allow create: if owns(uid) && request.resource.data.uid == uid && request.resource.data.hostStatus.isApproved == false && request.resource.data.wallet.creditBalance == 0 && request.resource.data.earnings.pending == 0 && request.resource.data.earnings.available == 0 && request.resource.data.vip.tier == 'FREE' && request.resource.data.vip.status == 'inactive' && request.resource.data.profileViewStats.recentCount == 0 && request.resource.data.referralStats.qualifiedCount == 0 && request.resource.data.referralStats.pendingCount == 0;
+      allow update: if admin() || (owns(uid) && financialFieldsUnchanged() && approvalUnchanged() && vipUnchanged() && visitorStatsUnchanged() && referralRewardsUnchanged() && (request.resource.data.role == resource.data.role || validHostApplicationTransition()) && (request.resource.data.hostStatus == resource.data.hostStatus || validHostApplicationTransition() || validAvailabilityChange()));
       allow delete: if false;
 
       match /following/{hostId} {
         allow read: if owns(uid);
-        allow create: if owns(uid)
-          && request.resource.data.consumerId == uid
-          && request.resource.data.hostId == hostId
-          && approvedHost(get(/databases/$(database)/documents/users/$(hostId)).data);
+        allow create: if owns(uid) && request.resource.data.consumerId == uid && request.resource.data.hostId == hostId && approvedHost(get(/databases/$(database)/documents/users/$(hostId)).data);
         allow delete: if owns(uid);
         allow update: if false;
       }
+      match /blocked/{blockedUid} {
+        allow read: if owns(uid) || owns(blockedUid);
+        allow create: if owns(uid) && blockedUid != uid && request.resource.data.blockedUid == blockedUid && request.resource.data.createdAt == request.time;
+        allow delete: if owns(uid);
+        allow update: if false;
+      }
+      match /profileViews/{viewerUid} {
+        allow read: if owns(uid) && canReadVisitorIdentities(uid);
+        allow create: if owns(viewerUid) && viewerUid != uid && request.resource.data.viewerUid == viewerUid && request.resource.data.viewCount == 1 && request.resource.data.firstViewedAt == request.time && request.resource.data.lastViewedAt == request.time;
+        allow update: if owns(viewerUid) && viewerUid != uid && request.resource.data.viewerUid == resource.data.viewerUid && request.resource.data.firstViewedAt == resource.data.firstViewedAt && request.resource.data.lastViewedAt == request.time && request.resource.data.viewCount == resource.data.viewCount + 1 && request.time - resource.data.lastViewedAt >= duration.value(30, 'm');
+        allow delete: if owns(uid);
+      }
+      match /notices/{noticeId} {
+        allow read: if owns(uid);
+        allow create, delete: if admin();
+        allow update: if admin() || (owns(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt']) && request.resource.data.isRead == true);
+      }
+      match /entitlements/{entitlementId} {
+        allow read: if owns(uid);
+        allow write: if admin();
+      }
     }
 
+    match /presence/{uid} {
+      allow read: if signedIn();
+      allow create: if owns(uid) && request.resource.data.uid == uid && request.resource.data.state in ['online', 'offline'];
+      allow update: if owns(uid) && request.resource.data.uid == uid && request.resource.data.state in ['online', 'offline'] && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'state', 'lastSeenAt', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if participant(resource.data);
+      allow create: if participant(request.resource.data) && request.resource.data.participantIds.size() == 2 && conversationId in [request.resource.data.participantIds[0] + '__' + request.resource.data.participantIds[1], request.resource.data.participantIds[1] + '__' + request.resource.data.participantIds[0]] && (validMessageCreate() || validEmptyConversationCreate()) && !blockedBetween(request.resource.data.participantIds[0], request.resource.data.participantIds[1]);
+      allow update: if participant(resource.data) && request.resource.data.participantIds == resource.data.participantIds && request.resource.data.participants == resource.data.participants && request.resource.data.createdAt == resource.data.createdAt && (validReadUpdate() || (request.resource.data.lastMessage.senderId == request.auth.uid && validMessageUpdate() && !blockedBetween(resource.data.participantIds[0], resource.data.participantIds[1])));
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function parentAfter() { return getAfter(/databases/$(database)/documents/conversations/$(conversationId)).data; }
+        allow read: if participant(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
+        allow create: if participant(parentAfter()) && request.resource.data.id == messageId && request.resource.data.conversationId == conversationId && request.resource.data.senderId == request.auth.uid && request.resource.data.receiverId in parentAfter().participantIds && request.resource.data.receiverId != request.auth.uid && request.resource.data.type == 'text' && request.resource.data.status == 'sent' && request.resource.data.createdAt == request.time && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000 && !blockedBetween(request.resource.data.senderId, request.resource.data.receiverId);
+        allow update, delete: if false;
+      }
+    }
+
+    match /reports/{reportId} {
+      allow create: if signedIn() && request.resource.data.reporterId == request.auth.uid && request.resource.data.reportedUserId != request.auth.uid && request.resource.data.status == 'submitted' && request.resource.data.createdAt == request.time;
+      allow read: if admin();
+      allow update, delete: if admin();
+    }
+    match /callHistory/{callId} {
+      allow read: if participant(resource.data);
+      allow create, update: if admin();
+      allow delete: if false;
+    }
+    match /calls/{callId} {
+      allow read: if participant(resource.data);
+      allow create: if signedIn()
+        && request.resource.data.callerId == request.auth.uid
+        && request.resource.data.receiverId != request.auth.uid
+        && request.resource.data.participantIds == [request.auth.uid, request.resource.data.receiverId]
+        && request.resource.data.status == 'requesting'
+        && request.resource.data.previewConsumed == false
+        && request.resource.data.billedCredits == 0
+        && approvedHost(get(/databases/$(database)/documents/users/$(request.resource.data.receiverId)).data)
+        && !blockedBetween(request.auth.uid, request.resource.data.receiverId);
+      allow update: if admin() || (participant(resource.data) && callParticipantsUnchanged() && callAuthorityFieldsUnchanged() && (
+        (request.auth.uid == resource.data.receiverId && resource.data.status == 'requesting' && request.resource.data.status in ['ringing', 'rejected'])
+        || (request.auth.uid == resource.data.receiverId && resource.data.status == 'ringing' && request.resource.data.status in ['accepted', 'rejected'])
+        || (request.auth.uid == resource.data.callerId && resource.data.status in ['requesting', 'ringing', 'accepted', 'connecting'] && request.resource.data.status == 'cancelled')
+      ));
+      allow delete: if false;
+    }
     match /hostApplications/{uid} {
       allow read: if owns(uid) || admin();
-      allow create, update: if owns(uid)
-        && request.resource.data.ownerUid == uid
-        && request.resource.data.status in ['in_progress', 'submitted'];
+      allow create, update: if owns(uid) && request.resource.data.ownerUid == uid && request.resource.data.status in ['in_progress', 'submitted'];
       allow update, delete: if admin();
     }
   }

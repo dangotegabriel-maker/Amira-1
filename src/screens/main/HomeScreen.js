@@ -1,92 +1,26 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Filter, Search, SlidersHorizontal } from 'lucide-react-native';
+import { SlidersHorizontal } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
 import { discoveryService } from '../../services/discoveryService';
 import HostCard from '../../components/HostCard';
-import CountrySelectorModal from '../../components/CountrySelectorModal';
+import DiscoveryFilterModal, { EMPTY_DISCOVERY_FILTERS } from '../../components/DiscoveryFilterModal';
+import { startVideoCall } from '../../services/callNavigationService';
 
-const TABS = ['For You', 'Online', 'Following'];
-
-const HomeScreen = ({ navigation, route }) => {
-  const [activeTab, setActiveTab] = useState('For You');
-  const [hosts, setHosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [country, setCountry] = useState(null);
-  const [showCountries, setShowCountries] = useState(false);
-
-  useEffect(() => {
-    if (TABS.includes(route.params?.initialTab)) {
-      setActiveTab(route.params.initialTab);
-      navigation.setParams({ initialTab: undefined });
-    }
-  }, [route.params?.initialTab]);
-
-  const loadHosts = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const result = activeTab === 'Following'
-        ? await discoveryService.getFollowingHosts()
-        : await discoveryService.getApprovedHosts({ onlineOnly: activeTab === 'Online' });
-      setHosts(result);
-    } catch (loadError) {
-      console.log('DISCOVERY ERROR:', loadError);
-      setError('Marketplace profiles could not be loaded. Pull back and try again.');
-      setHosts([]);
-    } finally { setLoading(false); }
-  }, [activeTab]);
-
-  useFocusEffect(useCallback(() => { loadHosts(); }, [loadHosts]));
-
-  const filteredHosts = useMemo(() => discoveryService.searchAndFilter(hosts, {
-    search,
-    countryCode: country?.cca2 || '',
-    onlineOnly: activeTab === 'Online',
-  }), [hosts, search, country, activeTab]);
-
-  const emptyCopy = error || (activeTab === 'Following'
-    ? 'Follow approved hosts to see them here.'
-    : activeTab === 'Online'
-      ? 'No approved hosts are online right now.'
-      : 'No approved hosts are available yet.');
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Discover</Text>
-        <Text style={styles.subtitle}>Real, approved Amira hosts</Text>
-        <View style={styles.tabs}>{TABS.map((tab) => <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.activeTab]} onPress={() => setActiveTab(tab)}><Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text></TouchableOpacity>)}</View>
-        <View style={styles.searchRow}>
-          <View style={styles.searchBox}><Search color={COLORS.textSecondary} size={18} /><TextInput value={search} onChangeText={setSearch} style={styles.searchInput} placeholder="Search hosts or interests" placeholderTextColor={COLORS.textSecondary} /></View>
-          <TouchableOpacity style={[styles.filterButton, country && styles.filterActive]} onPress={() => setShowCountries(true)}><Filter color={country ? 'white' : COLORS.text} size={20} /></TouchableOpacity>
-        </View>
-        {country && <View style={styles.activeFilter}><Text style={styles.activeFilterText}>{country.flag} {country.name}</Text><TouchableOpacity onPress={() => setCountry(null)}><Text style={styles.clear}>Clear</Text></TouchableOpacity></View>}
-      </View>
-
-      {loading ? <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View> : (
-        <FlatList
-          data={filteredHosts}
-          keyExtractor={(item) => item.uid}
-          contentContainerStyle={styles.list}
-          refreshing={loading}
-          onRefresh={loadHosts}
-          renderItem={({ item }) => <HostCard host={item} onPress={() => navigation.navigate('UserProfile', { userId: item.uid })} />}
-          ListEmptyComponent={<View style={styles.empty}><SlidersHorizontal color={COLORS.primary} size={38} /><Text style={styles.emptyTitle}>Nothing to show</Text><Text style={styles.emptyText}>{emptyCopy}</Text>{(search || country) && <TouchableOpacity onPress={() => { setSearch(''); setCountry(null); }}><Text style={styles.clearFilters}>Clear filters</Text></TouchableOpacity>}</View>}
-        />
-      )}
-      <CountrySelectorModal visible={showCountries} onClose={() => setShowCountries(false)} onSelect={setCountry} title="Filter by country" />
-    </View>
-  );
+const TABS = ['For You', 'New', 'Following'];
+const HomeScreen = ({ navigation }) => {
+  const [activeTab,setActiveTab]=useState('For You'); const [hosts,setHosts]=useState([]); const [loading,setLoading]=useState(true); const [error,setError]=useState('');
+  const [filters,setFilters]=useState(EMPTY_DISCOVERY_FILTERS); const [filterOpen,setFilterOpen]=useState(false);
+  const loadHosts=useCallback(async()=>{setLoading(true);setError('');try{setHosts(activeTab==='Following'?await discoveryService.getFollowingHosts():await discoveryService.getApprovedHosts());}catch(e){console.log('DISCOVERY ERROR:',e);setHosts([]);setError('Marketplace profiles could not be loaded. Try again.');}finally{setLoading(false);}},[activeTab]);
+  useFocusEffect(useCallback(()=>{loadHosts();},[loadHosts]));
+  const visibleHosts=useMemo(()=>discoveryService.searchAndFilter(hosts.filter((host)=>activeTab!=='New'||discoveryService.isNewHost(host)),{search:filters.search,onlineOnly:filters.onlineOnly,countryCode:filters.country?.cca2||'',minAge:filters.minAge?Number(filters.minAge):undefined,maxAge:filters.maxAge?Number(filters.maxAge):undefined,interest:filters.interest.trim()||'',priceTier:filters.priceTier}),[hosts,activeTab,filters]);
+  const activeFilterCount=[filters.search,filters.onlineOnly,filters.country,filters.minAge,filters.maxAge,filters.interest,filters.priceTier].filter(Boolean).length;
+  const storyHosts=hosts.filter((host)=>host.hasActiveStory&&host.stories?.length);
+  const openProfile=(host)=>navigation.navigate('UserProfile',{userId:host.uid,demoHost:host.isDemo?host:undefined});
+  const openStory=(host)=>navigation.navigate('StoryViewer',{stories:host.stories,userName:host.username});
+  const empty=error||(activeTab==='Following'?'Follow approved hosts to browse them here.':activeTab==='New'?'No hosts were approved in the last 7 days.':'No approved hosts are available yet.');
+  return <View style={styles.container}><View style={styles.header}><Text style={styles.title}>Discover</Text><View style={styles.tabs}>{TABS.map((tab)=><TouchableOpacity key={tab} style={[styles.tab,activeTab===tab&&styles.activeTab]} onPress={()=>setActiveTab(tab)}><Text style={[styles.tabText,activeTab===tab&&styles.activeTabText]}>{tab.toUpperCase()}</Text></TouchableOpacity>)}<TouchableOpacity style={[styles.filter,activeFilterCount&&styles.filterActive]} onPress={()=>setFilterOpen(true)}><SlidersHorizontal color={activeFilterCount?'white':COLORS.text} size={19}/>{activeFilterCount>0&&<View style={styles.count}><Text style={styles.countText}>{activeFilterCount}</Text></View>}</TouchableOpacity></View>{activeFilterCount>0&&<Text style={styles.filtered}>Filters applied · tap the filter icon to edit or clear</Text>}</View>
+    {loading?<View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large"/></View>:<FlatList data={visibleHosts} numColumns={2} columnWrapperStyle={styles.columns} keyExtractor={(item)=>item.uid} contentContainerStyle={styles.list} refreshing={loading} onRefresh={loadHosts} ListHeaderComponent={storyHosts.length?<View style={styles.storyBlock}><Text style={styles.storyTitle}>Stories</Text><ScrollView horizontal showsHorizontalScrollIndicator={false}>{storyHosts.map((host)=><TouchableOpacity key={host.uid} style={styles.story} onPress={()=>openStory(host)}><View style={styles.storyRing}><Image source={{uri:host.storyThumbnail||host.profilePic}} style={styles.storyImage}/></View><Text style={styles.storyName} numberOfLines={1}>{host.username}</Text></TouchableOpacity>)}</ScrollView></View>:null} renderItem={({item,index})=><HostCard host={item} showNewBadge={activeTab==='New'} autoCycle={index<4} onPress={()=>openProfile(item)} onStoryPress={()=>openStory(item)} onCallPress={()=>startVideoCall({navigation,creator:item})}/>} ListEmptyComponent={<View style={styles.empty}><SlidersHorizontal color={COLORS.primary} size={38}/><Text style={styles.emptyTitle}>Nothing to show</Text><Text style={styles.emptyText}>{empty}</Text>{activeFilterCount>0&&<TouchableOpacity onPress={()=>setFilters(EMPTY_DISCOVERY_FILTERS)}><Text style={styles.clear}>Clear filters</Text></TouchableOpacity>}</View>}/>}<DiscoveryFilterModal visible={filterOpen} value={filters} onClose={()=>setFilterOpen(false)} onApply={setFilters}/></View>;
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F7F9' }, header: { backgroundColor: 'white', paddingTop: 54, paddingHorizontal: 16, paddingBottom: 12 },
-  title: { color: COLORS.text, fontSize: 29, fontWeight: '900' }, subtitle: { color: COLORS.textSecondary, marginTop: 2 }, tabs: { flexDirection: 'row', gap: 8, marginTop: 18 }, tab: { paddingHorizontal: 15, paddingVertical: 9, borderRadius: 17, backgroundColor: '#F1F1F4' }, activeTab: { backgroundColor: COLORS.primary }, tabText: { color: COLORS.textSecondary, fontWeight: '800' }, activeTabText: { color: 'white' },
-  searchRow: { flexDirection: 'row', gap: 8, marginTop: 13 }, searchBox: { flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F4F4F6', borderRadius: 15, paddingHorizontal: 13 }, searchInput: { flex: 1, color: COLORS.text, fontSize: 15 }, filterButton: { width: 48, height: 48, borderRadius: 15, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F1F4' }, filterActive: { backgroundColor: COLORS.primary },
-  activeFilter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }, activeFilterText: { color: COLORS.text, fontWeight: '700' }, clear: { color: COLORS.primary, fontWeight: '800' }, list: { padding: 14, paddingBottom: 100 }, center: { flex: 1, justifyContent: 'center', alignItems: 'center' }, empty: { alignItems: 'center', marginTop: 80, paddingHorizontal: 28 }, emptyTitle: { color: COLORS.text, fontSize: 21, fontWeight: '900', marginTop: 13 }, emptyText: { color: COLORS.textSecondary, textAlign: 'center', lineHeight: 21, marginTop: 7 }, clearFilters: { color: COLORS.primary, fontWeight: '900', marginTop: 15 },
-});
-export default HomeScreen;
+const styles=StyleSheet.create({container:{flex:1,backgroundColor:'#F7F7F9'},header:{backgroundColor:'white',paddingTop:54,paddingHorizontal:14,paddingBottom:12},title:{fontSize:29,fontWeight:'900',color:COLORS.text},tabs:{flexDirection:'row',gap:5,marginTop:17,alignItems:'center'},tab:{flex:1,paddingVertical:9,borderRadius:16,backgroundColor:'#F1F1F4',alignItems:'center'},activeTab:{backgroundColor:COLORS.primary},tabText:{fontSize:10,fontWeight:'900',color:COLORS.textSecondary},activeTabText:{color:'white'},filter:{width:39,height:39,borderRadius:14,backgroundColor:'#F1F1F4',alignItems:'center',justifyContent:'center'},filterActive:{backgroundColor:COLORS.primary},count:{position:'absolute',right:-3,top:-5,minWidth:16,height:16,borderRadius:8,backgroundColor:'#111',alignItems:'center',justifyContent:'center'},countText:{color:'white',fontSize:9,fontWeight:'900'},filtered:{color:COLORS.textSecondary,fontSize:11,marginTop:9},list:{padding:10,paddingBottom:100},columns:{justifyContent:'space-between'},center:{flex:1,alignItems:'center',justifyContent:'center'},storyBlock:{marginBottom:13},storyTitle:{fontSize:17,fontWeight:'900',margin:4,color:COLORS.text},story:{width:72,alignItems:'center',marginRight:5},storyRing:{width:59,height:59,borderRadius:30,borderWidth:3,borderColor:COLORS.primary,padding:3},storyImage:{width:'100%',height:'100%',borderRadius:25},storyName:{fontSize:11,fontWeight:'700',color:COLORS.text,marginTop:4,maxWidth:66},empty:{alignItems:'center',paddingHorizontal:30,marginTop:80,width:'100%'},emptyTitle:{fontSize:21,fontWeight:'900',color:COLORS.text,marginTop:12},emptyText:{color:COLORS.textSecondary,textAlign:'center',marginTop:7,lineHeight:20},clear:{color:COLORS.primary,fontWeight:'900',marginTop:14}});export default HomeScreen;

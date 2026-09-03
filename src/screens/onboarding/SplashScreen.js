@@ -1,15 +1,8 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Image } from "react-native";
+import React from 'react';
+import { View, Text, StyleSheet } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 
-const SplashScreen = ({ navigation }) => {
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      navigation.replace('Login');
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [navigation]);
-
+const SplashScreen = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.logo}>AMIRA</Text>

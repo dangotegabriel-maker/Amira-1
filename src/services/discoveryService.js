@@ -2,8 +2,19 @@ import { collection, documentId, getDocs, limit, query, where } from 'firebase/f
 import { db } from './firebaseService';
 import { normalizeUser } from '../models/userModel';
 import { followService } from './followService';
+import { DEV_FEATURES } from '../config/devFeatures';
+import { DEMO_HOSTS } from '../data/demoHosts';
+import { isNewHost, NEW_HOST_WINDOW_DAYS } from '../utils/hostRecency';
+import { blockService } from './blockService';
 
 const DISCOVERY_LIMIT = 60;
+export { isNewHost, NEW_HOST_WINDOW_DAYS };
+
+const includeDemoFallback = (hosts) => (!hosts.length && DEV_FEATURES.enableDemoHosts ? DEMO_HOSTS : hosts);
+const rankForYou = (hosts) => [...hosts].sort((a, b) => {
+  const score = (host) => (host.hostStatus?.availability === 'online' ? 100 : 0) + (isNewHost(host) ? 20 : 0);
+  return score(b) - score(a) || a.uid.localeCompare(b.uid);
+});
 
 const normalizeHostDocs = (snapshot) => snapshot.docs
   .map((entry) => normalizeUser(entry.id, entry.data()))
@@ -17,17 +28,23 @@ export const discoveryService = {
     ];
     if (onlineOnly) constraints.push(where('hostStatus.availability', '==', 'online'));
     constraints.push(limit(DISCOVERY_LIMIT));
-    return normalizeHostDocs(await getDocs(query(collection(db, 'users'), ...constraints)));
+    const [snapshot, blockedIds] = await Promise.all([getDocs(query(collection(db, 'users'), ...constraints)), blockService.getBlockedIds()]);
+    const blocked = new Set(blockedIds);
+    const realHosts = normalizeHostDocs(snapshot).filter((host) => !blocked.has(host.uid));
+    const hosts = includeDemoFallback(realHosts).filter((host) => !blocked.has(host.uid) && (!onlineOnly || host.hostStatus?.availability === 'online'));
+    return rankForYou(hosts);
   },
   getFollowingHosts: async () => {
-    const ids = await followService.getFollowingHostIds();
-    if (!ids.length) return [];
+    const [ids, blockedIds] = await Promise.all([followService.getFollowingHostIds(), blockService.getBlockedIds()]);
+    const blocked = new Set(blockedIds);
+    if (!ids.length) return DEV_FEATURES.enableDemoHosts ? DEMO_HOSTS.filter((host) => host.demoFollowing) : [];
     const chunks = [];
     for (let index = 0; index < ids.length; index += 30) chunks.push(ids.slice(index, index + 30));
     const snapshots = await Promise.all(chunks.map((chunk) => getDocs(query(
       collection(db, 'users'), where(documentId(), 'in', chunk),
     ))));
-    return snapshots.flatMap(normalizeHostDocs);
+    const realHosts = snapshots.flatMap(normalizeHostDocs).filter((host) => !blocked.has(host.uid));
+    return !realHosts.length && DEV_FEATURES.enableDemoHosts ? DEMO_HOSTS.filter((host) => host.demoFollowing) : realHosts;
   },
   searchAndFilter: (hosts, filters = {}) => {
     const search = String(filters.search || '').trim().toLocaleLowerCase();
@@ -36,13 +53,15 @@ export const discoveryService = {
       if (filters.countryCode && host.countryCode !== filters.countryCode) return false;
       if (Number.isFinite(filters.minAge) && host.age < filters.minAge) return false;
       if (Number.isFinite(filters.maxAge) && host.age > filters.maxAge) return false;
-      if (filters.interest && !(host.hostProfile?.interests || []).includes(filters.interest)) return false;
+      if (filters.interest && !(host.hostProfile?.interests || []).some((interest) => interest.toLocaleLowerCase().includes(filters.interest.toLocaleLowerCase()))) return false;
+      if (filters.priceTier && host.hostProfile?.rateTier !== filters.priceTier) return false;
       if (!search) return true;
       const haystack = [host.username, host.countryName, ...(host.hostProfile?.interests || [])]
         .filter(Boolean).join(' ').toLocaleLowerCase();
       return haystack.includes(search);
     });
   },
+  isNewHost,
   getBestMatch: (hosts, consumer, skippedIds = []) => {
     const skipped = new Set(skippedIds);
     return hosts

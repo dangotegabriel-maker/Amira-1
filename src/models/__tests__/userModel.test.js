@@ -45,6 +45,21 @@ describe('canonical user model', () => {
     expect(getRequiredProfileStep(completeUser)).toBeNull();
   });
 
+  it('does not require an account-type mutation for consumer access', () => {
+    const { role, ...withoutRole } = completeUser;
+    expect(getRequiredProfileStep(withoutRole)).toBeNull();
+    expect(normalizeUser('consumer-1', withoutRole).role).toBe('consumer');
+  });
+
+  it('preserves approved and pending creator capability during normalization', () => {
+    const approved = normalizeUser('approved-1', { ...completeUser, role: undefined, hostStatus: { hasApplied: true, isApproved: true, verificationStatus: 'approved' } });
+    const pending = normalizeUser('pending-1', { ...completeUser, role: undefined, hostStatus: { hasApplied: true, isApproved: false, verificationStatus: 'pending' } });
+    expect(approved.role).toBe('host');
+    expect(approved.hostStatus.isApproved).toBe(true);
+    expect(pending.role).toBe('host');
+    expect(pending.hostStatus.verificationStatus).toBe('pending');
+  });
+
   it('does not trust a legacy completion boolean when DOB is missing', () => {
     const user = normalizeUser('uid-1', { ...completeUser, dob: '', isProfileComplete: true });
     expect(user.isProfileComplete).toBe(false);

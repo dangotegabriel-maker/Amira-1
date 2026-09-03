@@ -48,8 +48,8 @@ export const hostApplicationService = {
           gallery: (application.media?.gallery || []).map((item) => item.url),
           introVideoUrl: application.media.introVideo.url,
           introVideoPath: application.media.introVideo.path,
-          rateTier: application.details?.rateTier || 'STANDARD',
-          videoRateCredits: application.details?.videoRateCredits || 50,
+          rateTier: 'ENTRY',
+          videoRateCredits: 25,
         },
         hostStatus: {
           hasApplied: true,

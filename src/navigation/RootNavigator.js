@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useUser } from '../context/UserContext';
 
 // Onboarding Screens
-import SplashScreen from '../screens/onboarding/SplashScreen';
 import LoginScreen from '../screens/onboarding/LoginScreen';
 import PhoneLoginScreen from '../screens/onboarding/PhoneLoginScreen';
 import OTPScreen from '../screens/onboarding/OTPScreen';
@@ -30,9 +29,14 @@ import PaymentScreen from '../screens/main/PaymentScreen';
 import PaymentMethodScreen from '../screens/main/PaymentMethodScreen';
 import StoryViewerScreen from '../screens/main/StoryViewerScreen';
 import MomentsScreen from '../screens/main/MomentsScreen';
-import RoleSelectionScreen from '../screens/onboarding/RoleSelectionScreen';
 import CountrySetupScreen from '../screens/onboarding/CountrySetupScreen';
 import HostApplicationScreen from '../screens/host/HostApplicationScreen';
+import FollowingScreen from '../screens/main/FollowingScreen';
+import HostVisitorsScreen from '../screens/host/HostVisitorsScreen';
+import WhoViewedMeScreen from '../screens/main/WhoViewedMeScreen';
+import VipInfoScreen from '../screens/main/VipInfoScreen';
+import InviteEarnScreen from '../screens/main/InviteEarnScreen';
+import BlockedUsersScreen from '../screens/main/BlockedUsersScreen';
 import { getRequiredProfileStep, isProfileActuallyComplete } from '../models/userModel';
 
 const Stack = createNativeStackNavigator();
@@ -55,19 +59,18 @@ const RootNavigator = () => {
     >
       {!user ? (
         <>
-          <Stack.Screen name="Splash" component={SplashScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
           <Stack.Screen name="OTP" component={OTPScreen} />
         </>
       ) : !isProfileComplete ? (
         <Stack.Group key={nextProfileScreen || 'profile-completion'}>
-          <Stack.Screen name={nextProfileScreen || 'RoleSelection'} component={
+          <Stack.Screen name={nextProfileScreen || 'NameSetup'} component={
             nextProfileScreen === 'NameSetup' ? NameSetupScreen
               : nextProfileScreen === 'BirthdaySetup' ? BirthdaySetupScreen
                 : nextProfileScreen === 'GenderSetup' ? GenderSetupScreen
                   : nextProfileScreen === 'CountrySetup' ? CountrySetupScreen
-                  : RoleSelectionScreen
+                  : NameSetupScreen
           } />
           <Stack.Screen name="HostApplication" component={HostApplicationScreen} />
         </Stack.Group>
@@ -92,6 +95,12 @@ const RootNavigator = () => {
           <Stack.Screen name="CallSummary" component={CallSummaryScreen} />
           <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ headerShown: true, title: 'Help & Support' }} />
           <Stack.Screen name="HostApplication" component={HostApplicationScreen} />
+          <Stack.Screen name="FollowingList" component={FollowingScreen} options={{ headerShown: true, title: 'Following' }} />
+          <Stack.Screen name="HostVisitors" component={HostVisitorsScreen} options={{ headerShown: true, title: 'Profile Visitors' }} />
+          <Stack.Screen name="WhoViewedMe" component={WhoViewedMeScreen} options={{ headerShown: true, title: 'Who Viewed Me' }} />
+          <Stack.Screen name="VipInfo" component={VipInfoScreen} options={{ headerShown: true, title: 'Amira VIP' }} />
+          <Stack.Screen name="InviteEarn" component={InviteEarnScreen} options={{ headerShown: true, title: 'Invite & Earn' }} />
+          <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ headerShown: true, title: 'Blocked Users' }} />
         </>
       )}
     </Stack.Navigator>

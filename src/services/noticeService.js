@@ -1,0 +1,3 @@
+import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { auth, db } from './firebaseService';
+export const noticeService={subscribe:(onValue,onError)=>{const uid=auth.currentUser?.uid;if(!uid)return()=>{};return onSnapshot(query(collection(db,'users',uid,'notices'),orderBy('createdAt','desc'),limit(100)),(snapshot)=>onValue(snapshot.docs.map((entry)=>({id:entry.id,...entry.data()}))),onError);},markRead:async(id)=>{const uid=auth.currentUser?.uid;if(!uid)return;await updateDoc(doc(db,'users',uid,'notices',id),{isRead:true,readAt:serverTimestamp()});}};

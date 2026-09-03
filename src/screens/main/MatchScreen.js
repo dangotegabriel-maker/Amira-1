@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { MessageCircle, RefreshCw, Sparkles, UserRound, Video } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
 import { discoveryService } from '../../services/discoveryService';
 import HostCard from '../../components/HostCard';
+import { startVideoCall } from '../../services/callNavigationService';
 
 const MatchScreen = ({ navigation }) => {
   const { user } = useUser();
@@ -36,7 +37,9 @@ const MatchScreen = ({ navigation }) => {
   if (loading) return <View style={styles.center}><Sparkles color={COLORS.primary} size={44} /><Text style={styles.finding}>Finding someone for you...</Text><ActivityIndicator color={COLORS.primary} /></View>;
   if (!match) return <View style={styles.center}><Sparkles color={COLORS.primary} size={44} /><Text style={styles.emptyTitle}>No online match right now</Text><Text style={styles.emptyText}>Approved hosts may be offline. Try again later or browse Home.</Text><TouchableOpacity style={styles.primary} onPress={() => findMatch([])}><RefreshCw color="white" /><Text style={styles.primaryText}>Try Again</Text></TouchableOpacity></View>;
 
-  return <View style={styles.container}><Text style={styles.title}>Your Amira Match</Text><Text style={styles.subtitle}>Matching is free. Calls are not connected or billed in this batch.</Text><HostCard host={match} compact onPress={() => navigation.navigate('UserProfile', { userId: match.uid })} /><View style={styles.actions}><TouchableOpacity style={styles.secondary} onPress={() => navigation.navigate('UserProfile', { userId: match.uid })}><UserRound color={COLORS.primary} /><Text style={styles.secondaryText}>Profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={() => navigation.navigate('ChatDetail', { userId: match.uid, name: match.username })}><MessageCircle color={COLORS.primary} /><Text style={styles.secondaryText}>Message</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={() => navigation.navigate('VideoCall', { userId: match.uid, name: match.username, callRate: match.hostProfile?.videoRateCredits, demoOnly: true })}><Video color={COLORS.primary} /><Text style={styles.secondaryText}>Video</Text></TouchableOpacity></View><TouchableOpacity style={styles.primary} onPress={next}><RefreshCw color="white" /><Text style={styles.primaryText}>Next Match</Text></TouchableOpacity></View>;
+  const openProfile=()=>navigation.navigate('UserProfile',{userId:match.uid,demoHost:match.isDemo?match:undefined});
+  const message=()=>match.isDemo?Alert.alert('Development profile','Messaging this demo profile is unavailable.'):navigation.navigate('ChatDetail',{userId:match.uid,name:match.username});
+  return <View style={styles.container}><Text style={styles.title}>Your Amira Match</Text><Text style={styles.subtitle}>Discover someone new and start a conversation.</Text><HostCard host={match} compact showNewBadge={false} onPress={openProfile} onCallPress={() => startVideoCall({ navigation, creator: match })} /><View style={styles.actions}><TouchableOpacity style={styles.secondary} onPress={openProfile}><UserRound color={COLORS.primary} /><Text style={styles.secondaryText}>Profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={message}><MessageCircle color={COLORS.primary} /><Text style={styles.secondaryText}>Message</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={() => startVideoCall({ navigation, creator: match })}><Video color={COLORS.primary} /><Text style={styles.secondaryText}>Video</Text></TouchableOpacity></View><TouchableOpacity style={styles.primary} onPress={next}><RefreshCw color="white" /><Text style={styles.primaryText}>Next Match</Text></TouchableOpacity></View>;
 };
 
 const styles = StyleSheet.create({
