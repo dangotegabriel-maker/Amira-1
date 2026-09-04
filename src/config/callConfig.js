@@ -11,6 +11,8 @@ export const TERMINAL_CALL_STATUSES = Object.freeze(['ended', 'rejected', 'misse
 export const CALL_RING_TIMEOUT_SECONDS = 30;
 export const DAILY_FREE_PREVIEW_SECONDS = 30;
 export const BILLING_INCREMENT_SECONDS = 10;
+export const RTC_TOKEN_LIFETIME_SECONDS = 900;
+export const RTC_RECONNECT_GRACE_SECONDS = 20;
 export const CALL_ENTITLEMENT_TIMEZONE = 'UTC';
 
 export const ALLOWED_CALL_TRANSITIONS = Object.freeze({

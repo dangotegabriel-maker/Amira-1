@@ -7,12 +7,10 @@ import { dbService } from '../services/firebaseService';
 const IncomingCallCard = ({ call, navigation, onDismiss }) => {
   const [caller, setCaller] = useState(null);
   useEffect(() => { dbService.getUserProfile(call.callerId).then(setCaller).catch(()=>{}); }, [call.callerId]);
-  const decline = async () => { await callService.transition(call, 'rejected', { endedAt:new Date(), endedBy:'receiver', endReason:'declined' }); onDismiss?.(); };
+  const decline = async () => { await callService.respond({callId:call.callId||call.id,action:'decline'}); onDismiss?.(); };
   const accept = async () => {
-    let ringing = call;
-    if (call.status === 'requesting') ringing = await callService.transition(call, 'ringing');
-    const accepted = await callService.transition(ringing, 'accepted', { acceptedAt:new Date() });
-    navigation.navigate('VideoCall', { call:accepted, creator:caller }); onDismiss?.();
+    const accepted = await callService.respond({callId:call.callId||call.id,action:'accept'});
+    navigation.navigate('VideoCall', { call:{...call,...accepted}, creator:caller }); onDismiss?.();
   };
   return <View style={styles.overlay}><View style={styles.card}>{caller?.profilePic&&<Image source={{uri:caller.profilePic}} style={styles.avatar}/>}<Text style={styles.label}>Incoming video call</Text><Text style={styles.name}>{caller?.username || 'Amira member'}</Text>{caller?.countryName&&<Text style={styles.country}>{caller.countryName}</Text>}<View style={styles.actions}><TouchableOpacity style={styles.decline} onPress={decline}><Text style={styles.white}>Decline</Text></TouchableOpacity><TouchableOpacity style={styles.accept} onPress={accept}><Text style={styles.white}>Accept</Text></TouchableOpacity></View></View></View>;
 };

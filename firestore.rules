@@ -23,8 +23,6 @@ service cloud.firestore {
     function validMessageCreate() { return request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(request.resource.data)] == 1; }
     function validEmptyConversationCreate() { return request.resource.data.lastMessage == null && request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(request.resource.data)] == 0; }
     function validMessageUpdate() { return request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(resource.data)] == resource.data.unreadCounts[otherUid(resource.data)] + 1 && request.resource.data.lastReadAt[otherUid(resource.data)] == resource.data.lastReadAt[otherUid(resource.data)] && request.resource.data.lastMessageAt == request.time; }
-    function callParticipantsUnchanged() { return request.resource.data.callerId == resource.data.callerId && request.resource.data.receiverId == resource.data.receiverId && request.resource.data.participantIds == resource.data.participantIds; }
-    function callAuthorityFieldsUnchanged() { return request.resource.data.ratePerMinute == resource.data.ratePerMinute && request.resource.data.previewEligible == resource.data.previewEligible && request.resource.data.previewConsumed == resource.data.previewConsumed && request.resource.data.billedCredits == resource.data.billedCredits && request.resource.data.billingMode == resource.data.billingMode; }
 
     match /users/{uid} {
       allow read: if signedIn();
@@ -94,21 +92,15 @@ service cloud.firestore {
     }
     match /calls/{callId} {
       allow read: if participant(resource.data);
-      allow create: if signedIn()
-        && request.resource.data.callerId == request.auth.uid
-        && request.resource.data.receiverId != request.auth.uid
-        && request.resource.data.participantIds == [request.auth.uid, request.resource.data.receiverId]
-        && request.resource.data.status == 'requesting'
-        && request.resource.data.previewConsumed == false
-        && request.resource.data.billedCredits == 0
-        && approvedHost(get(/databases/$(database)/documents/users/$(request.resource.data.receiverId)).data)
-        && !blockedBetween(request.auth.uid, request.resource.data.receiverId);
-      allow update: if admin() || (participant(resource.data) && callParticipantsUnchanged() && callAuthorityFieldsUnchanged() && (
-        (request.auth.uid == resource.data.receiverId && resource.data.status == 'requesting' && request.resource.data.status in ['ringing', 'rejected'])
-        || (request.auth.uid == resource.data.receiverId && resource.data.status == 'ringing' && request.resource.data.status in ['accepted', 'rejected'])
-        || (request.auth.uid == resource.data.callerId && resource.data.status in ['requesting', 'ringing', 'accepted', 'connecting'] && request.resource.data.status == 'cancelled')
-      ));
+      allow create, update: if admin();
       allow delete: if false;
+    }
+    match /activeCallLocks/{uid} {
+      allow read, write: if admin();
+    }
+    match /creditTransactions/{transactionId} {
+      allow read: if signedIn() && request.auth.uid in [resource.data.consumerId, resource.data.creatorId];
+      allow write: if admin();
     }
     match /hostApplications/{uid} {
       allow read: if owns(uid) || admin();

@@ -75,3 +75,67 @@ Provider secrets and wallet mutation must never be placed in the Expo client.
 For local UX testing only, set `EXPO_PUBLIC_ENABLE_CALL_SIMULATOR=true` in a development build.
 The simulator cannot run when `__DEV__` is false, does not contact demo UIDs, does not mutate wallets,
 and does not write fake settlements. UTC (`YYYY-MM-DD`) is the daily-preview calendar policy.
+
+## Batch 5: Agora and trusted call backend setup
+
+Standard Expo Go cannot load `react-native-agora`. Use an Android development build. No Agora
+certificate, RTC token, Firebase auth token, or Paystack secret belongs in `.env` or client code.
+
+### A–E. Create Agora configuration
+
+1. Create an Agora account at https://console.agora.io and create an RTC project.
+2. Copy its App ID. Add this public identifier to the app's local `.env`:
+   `EXPO_PUBLIC_AGORA_APP_ID=your_app_id`.
+3. Enable App Certificate/token security in the Agora project and copy the certificate privately.
+4. Configure the same App ID as the Functions parameter when prompted during deployment, or in a
+   local emulator parameter file. Never prefix the certificate with `EXPO_PUBLIC_`.
+5. Store the certificate using Firebase Secret Manager:
+   `firebase functions:secrets:set AGORA_APP_CERTIFICATE`.
+
+### F–I. Install and deploy
+
+```sh
+cd functions
+npm install
+npm test
+cd ..
+firebase deploy --only functions
+firebase deploy --only firestore:rules,firestore:indexes
+npx expo prebuild --platform android
+eas build --profile development --platform android
+```
+
+The Functions deployment prompts for the non-secret `AGORA_APP_ID` parameter. The certificate is
+available only to `getVideoCallRtcCredentials`. For local emulator testing, start the Auth,
+Firestore, and Functions emulators with `firebase emulators:start`; never point billing tests at a
+production project.
+
+### J–T. Two-device acceptance test
+
+1. Install the development APK on two physical Android devices.
+2. Sign in as a consumer on device 1 and an approved creator on device 2.
+3. On device 2, open Creator Dashboard and select **Available for Calls**.
+4. On device 1, tap the creator's video/rate affordance.
+5. Verify device 2 shows the caller identity and Accept/Decline controls.
+6. Accept and verify both local and remote video render before the call becomes connected.
+7. Verify the consumer sees `FREE PREVIEW`, the authoritative rate, and the 30-second countdown.
+8. At expiry, verify billing remains paused until **Continue** is tapped.
+9. Verify 10-second ledger entries, wallet reduction, gross creator pending earnings, and no
+   duplicate entries after retries. Platform commission is intentionally pending product policy.
+10. End from each side and verify call history and restored creator availability.
+11. Repeat with Decline and with no answer for 30 seconds; neither may consume preview or credits.
+12. Call a second creator on the same UTC date and verify no second preview; repeat after the next
+    UTC date and verify preview eligibility resets.
+
+### Operational notes
+
+- RTC tokens last 15 minutes and use random call-scoped channels and distinct numeric Agora UIDs.
+- Firestore display timers are local; settlement is server-authoritative and idempotent by
+  `callId_incrementNumber`. No Firestore writes occur every second.
+- Ringing calls are reconciled every five minutes in bounded batches; their exact visible timeout
+  is 30 seconds. A production operations pass should add alerting and a task-based stale-connected
+  reconciliation path before large-scale launch.
+- Connection authority currently requires both authenticated participants to report Agora's remote
+  user event. A higher-assurance Agora server-side channel-presence verification can be added when
+  the Agora REST credentials/product tier are selected.
+- Firebase Storage remains disabled and is not required for calling.
