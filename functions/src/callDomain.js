@@ -1,5 +1,6 @@
 'use strict';
 const RING_TIMEOUT_SECONDS=30, PREVIEW_SECONDS=30, BILLING_INCREMENT_SECONDS=10, RTC_TOKEN_SECONDS=900, RECONNECT_GRACE_SECONDS=20;
+const PAID_DECISION_SECONDS = 60;
 const ACTIVE_STATUSES=new Set(['requesting','ringing','accepted','connecting','connected']);
 const TERMINAL_STATUSES=new Set(['ended','rejected','missed','cancelled','failed']);
 const BILLING_MODES=Object.freeze({PREVIEW:'preview',AWAITING_PAID_CONFIRMATION:'awaiting_paid_confirmation',PAID:'paid',ENDED:'ended'});
@@ -19,4 +20,4 @@ const authoritativeRate=(creator)=>{const rate=creator?.hostProfile?.videoRateCr
 const canSettle=({status,billingMode})=>status==='connected'&&billingMode===BILLING_MODES.PAID;
 const debitWithoutDebt=(balance,credits)=>{if(!Number.isInteger(balance)||balance<credits)throw new Error('insufficient-credits');return balance-credits;};
 const idempotentFinalize=(status)=>TERMINAL_STATUSES.has(status);
-module.exports={RING_TIMEOUT_SECONDS,PREVIEW_SECONDS,BILLING_INCREMENT_SECONDS,RTC_TOKEN_SECONDS,RECONNECT_GRACE_SECONDS,ACTIVE_STATUSES,TERMINAL_STATUSES,BILLING_MODES,utcDateKey,incrementCredits,validateStart,isExpired,validateAcceptance,assertParticipant,previewEligible,shouldConnect,payableIncrementCount,settlementId,sanitizeRtcUid,requireAuthUid,authoritativeRate,canSettle,debitWithoutDebt,idempotentFinalize};
+module.exports={PAID_DECISION_SECONDS,RING_TIMEOUT_SECONDS,PREVIEW_SECONDS,BILLING_INCREMENT_SECONDS,RTC_TOKEN_SECONDS,RECONNECT_GRACE_SECONDS,ACTIVE_STATUSES,TERMINAL_STATUSES,BILLING_MODES,utcDateKey,incrementCredits,validateStart,isExpired,validateAcceptance,assertParticipant,previewEligible,shouldConnect,payableIncrementCount,settlementId,sanitizeRtcUid,requireAuthUid,authoritativeRate,canSettle,debitWithoutDebt,idempotentFinalize};

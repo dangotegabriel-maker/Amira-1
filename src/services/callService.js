@@ -26,7 +26,10 @@ const invoke = async (name, data) => {
   catch (error) {
     if (__DEV__) console.warn(`CALL FUNCTION ${name}:`, error?.code, error?.message);
     const known = String(error?.message || '').replace(/^FirebaseError:\s*/,'');
-    throw new Error(known || 'Video calling is temporarily unavailable.');
+    const failure = new Error(known || 'Video calling is temporarily unavailable.');
+    failure.code = error?.code;
+    failure.details = error?.details;
+    throw failure;
   }
 };
 
@@ -41,6 +44,7 @@ export const callService = Object.freeze({
   respond: async ({callId,action}) => invoke('respondToVideoCall',{callId,action}),
   getRtcCredentials: async (callId) => invoke('getVideoCallRtcCredentials',{callId}),
   acknowledgeConnected: async (callId) => invoke('acknowledgeVideoConnected',{callId}),
+  syncPaymentState: async (callId) => invoke('syncVideoCallPaymentState',{callId}),
   confirmPaid: async (callId) => invoke('confirmPaidContinuation',{callId}),
   settleIncrement: async (callId) => invoke('settleVideoCallIncrement',{callId}),
   end: async (callId,reason) => invoke('endVideoCall',{callId,reason}),

@@ -9,7 +9,7 @@ import { Image } from 'expo-image';
 const { width } = Dimensions.get('window');
 
 const CallSummaryScreen = ({ route, navigation }) => {
-  const { duration, coinsSpent, diamondsEarned, targetUserId, targetUserName, targetUserPhoto, isMale } = route.params;
+  const { duration, coinsSpent, targetUserId, targetUserName, targetUserPhoto, isConsumer } = route.params;
   const [rating, setRating] = useState(0);
   const [isFollowing, setIsFollowing] = useState(false);
 
@@ -47,12 +47,10 @@ const CallSummaryScreen = ({ route, navigation }) => {
             <Text style={styles.statLabel}>Duration</Text>
             <Text style={styles.statValue}>{formatDuration(duration)}</Text>
           </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>{isMale ? 'Coins Spent' : 'Diamonds Earned'}</Text>
-            <Text style={[styles.statValue, { color: isMale ? COLORS.primary : '#4CD964' }]}>
-              {isMale ? `🪙 ${coinsSpent}` : `💎 ${diamondsEarned}`}
-            </Text>
-          </View>
+          {isConsumer === true && <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Credits used</Text>
+            <Text style={[styles.statValue, { color: COLORS.primary }]}>{coinsSpent ?? 0}</Text>
+          </View>}
         </View>
 
         <View style={styles.interactionSection}>
