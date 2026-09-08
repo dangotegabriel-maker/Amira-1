@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Compass, HeartHandshake, LayoutDashboard, MessageCircle, User, Wallet } from 'lucide-react-native';
+import { Compass, HeartHandshake, Activity, MessageCircle, User } from 'lucide-react-native';
 import { socketService } from '../services/socketService';
 import { useNavigation } from '@react-navigation/native';
 
@@ -9,7 +9,7 @@ import MessageHomeScreen from '../screens/main/MessageHomeScreen';
 import MyProfileScreen from '../screens/main/MyProfileScreen';
 import MatchScreen from '../screens/main/MatchScreen';
 import HostDashboardScreen from '../screens/host/HostDashboardScreen';
-import HostEarningsScreen from '../screens/host/HostEarningsScreen';
+import HostActivityScreen from '../screens/host/HostActivityScreen';
 import { useUser } from '../context/UserContext';
 import { isApprovedHost } from '../models/userModel';
 
@@ -41,12 +41,12 @@ const MainTabNavigator = () => {
             return <Compass color={color} size={size} />;
           } else if (route.name === 'Match') {
             return <HeartHandshake color={color} size={size} />;
-          } else if (route.name === 'Dashboard') {
-            return <LayoutDashboard color={color} size={size} />;
+          } else if (route.name === 'Connect') {
+            return <HeartHandshake color={color} size={size} />;
           } else if (route.name === 'Messages') {
             return <MessageCircle color={color} size={size} />;
-          } else if (route.name === 'Wallet' || route.name === 'Earnings') {
-            return <Wallet color={color} size={size} />;
+          } else if (route.name === 'Activity') {
+            return <Activity color={color} size={size} />;
           } else if (route.name === 'Profile') {
             return <User color={color} size={size} />;
           }
@@ -58,9 +58,9 @@ const MainTabNavigator = () => {
     >
       {approvedHost ? (
         <>
-          <Tab.Screen name="Dashboard" component={HostDashboardScreen} />
+          <Tab.Screen name="Connect" component={HostDashboardScreen} />
           <Tab.Screen name="Messages" component={MessageHomeScreen} />
-          <Tab.Screen name="Earnings" component={HostEarningsScreen} />
+          <Tab.Screen name="Activity" component={HostActivityScreen} />
           <Tab.Screen name="Profile" component={MyProfileScreen} />
         </>
       ) : (

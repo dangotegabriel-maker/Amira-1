@@ -5,7 +5,7 @@ import { BadgeCheck, ChevronLeft, Flag, MessageCircle, ShieldAlert, UserMinus, U
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
 import { dbService } from '../../services/firebaseService';
-import { followService } from '../../services/followService';
+import { canFollowProfile, followService } from '../../services/followService';
 import { blockService } from '../../services/blockService';
 import { reportService } from '../../services/reportService';
 import { profileViewService } from '../../services/profileViewService';
@@ -44,10 +44,10 @@ const UserProfileScreen = ({ route, navigation }) => {
   useEffect(() => { if (userId && !route.params?.demoHost) blockService.getRelationship(userId).then((relationship) => { setBlockState(relationship); if (!relationship.blocked) profileViewService.track(userId).catch(() => {}); }).catch(() => {}); }, [userId, route.params?.demoHost]);
 
   const toggleFollow = async () => {
-    if (user?.role !== 'consumer' || !isApprovedHost(host) || followBusy) return;
+    if (!canFollowProfile(user, host) || blockState.blocked || followBusy) return;
     if (host?.isDemo) { setFollowing((value) => !value); return; }
     setFollowBusy(true);
-    try { setFollowing(following ? await followService.unfollowHost(userId) : await followService.followHost(userId)); }
+    try { setFollowing(following ? await followService.unfollow(userId) : await followService.follow(userId)); }
     catch (error) { Alert.alert('Unable to update follow', error.message); }
     finally { setFollowBusy(false); }
   };
@@ -63,6 +63,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   if (loading) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
   if (!host) return <View style={styles.center}><ShieldAlert color={COLORS.primary} size={42} /><Text style={styles.unavailable}>This profile is unavailable.</Text><TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.backText}>Go back</Text></TouchableOpacity></View>;
 
+  const approvedHost = isApprovedHost(host);
   const country = getCountryByCode(host.countryCode);
   const gallery = host.hostProfile?.gallery || [];
   return <View style={styles.container}>
@@ -72,18 +73,18 @@ const UserProfileScreen = ({ route, navigation }) => {
         <View style={styles.scrim} />
         <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}><ChevronLeft color="white" size={30} /></TouchableOpacity>
         {host.hasActiveStory && <TouchableOpacity style={styles.storyRing} onPress={() => navigation.navigate('StoryViewer', { stories: host.stories || [], userName: host.username })}><Image source={{ uri: host.storyThumbnail || host.profilePic }} style={styles.storyAvatar} /></TouchableOpacity>}
-        <View style={styles.heroInfo}><View style={styles.nameRow}><Text style={styles.name}>{host.username}</Text><BadgeCheck color="#60A5FA" size={23} /></View><Text style={styles.meta}>{host.age} · {country?.flag || ''} {host.countryName || country?.name}</Text><Text style={styles.availability}>{host.hostStatus.availability}</Text></View>
+        <View style={styles.heroInfo}><View style={styles.nameRow}><Text style={styles.name}>{host.username}</Text>{approvedHost && <BadgeCheck color="#60A5FA" size={23} />}</View><Text style={styles.meta}>{host.age} · {country?.flag || ''} {host.countryName || country?.name}</Text>{approvedHost && <Text style={styles.availability}>{host.hostStatus?.availability || 'offline'}</Text>}</View>
       </View>
 
       <View style={styles.actions}>
-        {isApprovedHost(host) && user?.role === 'consumer' && <TouchableOpacity style={[styles.action, following && styles.following]} onPress={toggleFollow} disabled={followBusy}>{following ? <UserMinus color={COLORS.primary} /> : <UserPlus color="white" />}<Text style={[styles.actionText, following && { color: COLORS.primary }]}>{following ? 'Following' : 'Follow'}</Text></TouchableOpacity>}
+        {canFollowProfile(user, host) && !blockState.blocked && <TouchableOpacity style={[styles.action, following && styles.following]} onPress={toggleFollow} disabled={followBusy}>{following ? <UserMinus color={COLORS.primary} /> : <UserPlus color="white" />}<Text style={[styles.actionText, following && { color: COLORS.primary }]}>{following ? 'Following' : 'Follow'}</Text></TouchableOpacity>}
         <TouchableOpacity style={styles.smallAction} onPress={() => host.isDemo ? Alert.alert('Development profile', 'Messaging this demo profile is unavailable.') : navigation.navigate('ChatDetail', { userId, name: host.username })}><MessageCircle color={COLORS.primary} /><Text style={styles.smallText}>Message</Text></TouchableOpacity>
         {isApprovedHost(host) && <TouchableOpacity style={styles.smallAction} onPress={() => startVideoCall({ navigation, creator: host })}><Video color={COLORS.primary} /><Text style={styles.smallText}>Video</Text></TouchableOpacity>}
       </View>
 
-      <View style={styles.section}><Text style={styles.sectionTitle}>About</Text><Text style={styles.bio}>{host.hostProfile?.bio || host.bio || 'No introduction yet.'}</Text><View style={styles.tags}>{(host.hostProfile?.interests || []).map((tag) => <Text key={tag} style={styles.tag}>{tag}</Text>)}</View>{isApprovedHost(host) && <Text style={styles.rate}>{host.hostProfile?.videoRateCredits || 25} credits/min · video-call pricing preview</Text>}</View>
+      <View style={styles.section}><Text style={styles.sectionTitle}>About</Text><Text style={styles.bio}>{host.hostProfile?.bio || host.bio || 'No introduction yet.'}</Text><View style={styles.tags}>{(host.hostProfile?.interests?.length ? host.hostProfile.interests : host.interests || []).map((tag) => <Text key={tag} style={styles.tag}>{tag}</Text>)}</View>{isApprovedHost(host) && <Text style={styles.rate}>{host.hostProfile?.videoRateCredits || 25} credits/min · video-call pricing preview</Text>}</View>
       {gallery.length > 0 && <View style={styles.section}><Text style={styles.sectionTitle}>Gallery</Text><FlatList horizontal data={gallery} keyExtractor={(item, index) => `${item}-${index}`} showsHorizontalScrollIndicator={false} renderItem={({ item }) => <Image source={{ uri: typeof item === 'string' ? item : item.url }} style={styles.galleryImage} />} /></View>}
-      {host.hostProfile?.introVideoUrl ? <View style={styles.section}><Text style={styles.sectionTitle}>Introduction</Text><IntroVideo uri={host.hostProfile.introVideoUrl} /></View> : null}
+      {approvedHost && host.hostProfile?.introVideoUrl ? <View style={styles.section}><Text style={styles.sectionTitle}>Introduction</Text><IntroVideo uri={host.hostProfile.introVideoUrl} /></View> : null}
       <View style={styles.safety}><TouchableOpacity style={styles.safetyAction} onPress={() => setShowReport(true)}><Flag color={COLORS.textSecondary} /><Text style={styles.safetyText}>Report</Text></TouchableOpacity><TouchableOpacity style={styles.safetyAction} onPress={block}><UserMinus color="#DC2626" /><Text style={[styles.safetyText, { color: '#DC2626' }]}>{blockState.blockedByMe ? 'Unblock' : 'Block'}</Text></TouchableOpacity></View>
     </ScrollView>
     <ReportUserModal visible={showReport} onClose={() => setShowReport(false)} userName={host.username} onReport={async (reason, info) => { await reportService.submit({ reportedUserId:userId, contextType:'profile', contextId:userId, reason, details:info }); Alert.alert('Report received', 'Thank you.'); }} />

@@ -18,5 +18,11 @@
       { "fieldPath": "expiresAtMs", "order": "ASCENDING" }
     ]}
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    { "collectionGroup": "following", "fieldPath": "hostId", "indexes": [
+      { "order": "ASCENDING", "queryScope": "COLLECTION" },
+      { "order": "DESCENDING", "queryScope": "COLLECTION" },
+      { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+    ]}
+  ]
 }

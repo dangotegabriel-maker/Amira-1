@@ -30,9 +30,23 @@ service cloud.firestore {
       allow update: if admin() || (owns(uid) && financialFieldsUnchanged() && approvalUnchanged() && vipUnchanged() && visitorStatsUnchanged() && referralRewardsUnchanged() && (request.resource.data.role == resource.data.role || validHostApplicationTransition()) && (request.resource.data.hostStatus == resource.data.hostStatus || validHostApplicationTransition() || validAvailabilityChange()));
       allow delete: if false;
 
-      match /following/{hostId} {
+      match /following/{targetUid} {
+        function validRelationship() {
+          let source = get(/databases/$(database)/documents/users/$(uid)).data;
+          let target = get(/databases/$(database)/documents/users/$(targetUid)).data;
+          let data = request.resource.data;
+          return (source.role == 'consumer' && approvedHost(target)
+              && data.keys().hasOnly(['consumerId', 'hostId', 'createdAt'])
+              && data.consumerId == uid && data.hostId == targetUid)
+            || (approvedHost(source) && target.role == 'consumer'
+              && data.keys().hasOnly(['sourceId', 'targetId', 'sourceRole', 'targetRole', 'createdAt'])
+              && data.sourceId == uid && data.targetId == targetUid
+              && data.sourceRole == 'host' && data.targetRole == 'consumer');
+        }
         allow read: if owns(uid);
-        allow create: if owns(uid) && request.resource.data.consumerId == uid && request.resource.data.hostId == hostId && approvedHost(get(/databases/$(database)/documents/users/$(hostId)).data);
+        allow create: if owns(uid) && uid != targetUid
+          && request.resource.data.createdAt == request.time
+          && !blockedBetween(uid, targetUid) && validRelationship();
         allow delete: if owns(uid);
         allow update: if false;
       }
@@ -57,6 +71,13 @@ service cloud.firestore {
         allow read: if owns(uid);
         allow write: if admin();
       }
+    }
+
+    // Only the recipient host can query incoming consumer follow records.
+    // Writes remain restricted to the owned users/{uid}/following path above.
+    match /{path=**}/following/{targetUid} {
+      allow read: if signedIn() && resource.data.hostId == request.auth.uid
+        && approvedHost(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
     }
 
     match /presence/{uid} {

@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore,
+  connectFirestoreEmulator,
   doc,
   getDoc,
   increment,
@@ -65,6 +66,19 @@ const getFirebaseAuth = () => {
 
 export const auth = getFirebaseAuth();
 export const db = getFirestore(app);
+
+if (
+  __DEV__ &&
+  process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === 'true'
+) {
+  const emulatorHost =
+    process.env.EXPO_PUBLIC_FIREBASE_EMULATOR_HOST || '10.37.182.53';
+
+  connectFirestoreEmulator(db, emulatorHost, 8080);
+
+  console.log(`DEV: Firestore emulator connected at ${emulatorHost}:8080`);
+}
+
 export { app, firebaseConfig, firebaseSignOut, onAuthStateChanged };
 
 export const DEFAULT_USER_PROFILE = {

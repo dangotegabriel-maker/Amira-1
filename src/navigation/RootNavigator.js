@@ -32,12 +32,13 @@ import MomentsScreen from '../screens/main/MomentsScreen';
 import CountrySetupScreen from '../screens/onboarding/CountrySetupScreen';
 import HostApplicationScreen from '../screens/host/HostApplicationScreen';
 import FollowingScreen from '../screens/main/FollowingScreen';
+import HostEarningsScreen from '../screens/host/HostEarningsScreen';
 import HostVisitorsScreen from '../screens/host/HostVisitorsScreen';
 import WhoViewedMeScreen from '../screens/main/WhoViewedMeScreen';
 import VipInfoScreen from '../screens/main/VipInfoScreen';
 import InviteEarnScreen from '../screens/main/InviteEarnScreen';
 import BlockedUsersScreen from '../screens/main/BlockedUsersScreen';
-import { getRequiredProfileStep, isProfileActuallyComplete } from '../models/userModel';
+import { getRequiredProfileStep, isProfileActuallyComplete, isApprovedHost } from '../models/userModel';
 
 const Stack = createNativeStackNavigator();
 
@@ -96,6 +97,7 @@ const RootNavigator = () => {
           <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ headerShown: true, title: 'Help & Support' }} />
           <Stack.Screen name="HostApplication" component={HostApplicationScreen} />
           <Stack.Screen name="FollowingList" component={FollowingScreen} options={{ headerShown: true, title: 'Following' }} />
+          {isApprovedHost(user) && <Stack.Screen name="HostEarnings" component={HostEarningsScreen} options={{ headerShown: true, title: 'Earnings' }} />}
           <Stack.Screen name="HostVisitors" component={HostVisitorsScreen} options={{ headerShown: true, title: 'Profile Visitors' }} />
           <Stack.Screen name="WhoViewedMe" component={WhoViewedMeScreen} options={{ headerShown: true, title: 'Who Viewed Me' }} />
           <Stack.Screen name="VipInfo" component={VipInfoScreen} options={{ headerShown: true, title: 'Amira VIP' }} />
