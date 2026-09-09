@@ -123,6 +123,28 @@ service cloud.firestore {
       allow read: if signedIn() && request.auth.uid in [resource.data.consumerId, resource.data.creatorId];
       allow write: if admin();
     }
+    // Private economy documents. Admin SDK transactions bypass client rules;
+    // ordinary clients can never award rewards or author accounting splits.
+    match /consumerRewards/{uid} {
+      allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
+      allow write: if false;
+      match /claims/{dateKey} {
+        allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
+        allow write: if false;
+      }
+    }
+    match /hostEarnings/{uid} {
+      allow read: if admin() || (owns(uid) && approvedHost(get(/databases/$(database)/documents/users/$(uid)).data));
+      allow write: if false;
+    }
+    match /platformRevenue/{documentId} {
+      allow read: if admin();
+      allow write: if false;
+    }
+    match /economyConfig/{documentId} {
+      allow read: if admin();
+      allow write: if false;
+    }
     match /hostApplications/{uid} {
       allow read: if owns(uid) || admin();
       allow create, update: if owns(uid) && request.resource.data.ownerUid == uid && request.resource.data.status in ['in_progress', 'submitted'];

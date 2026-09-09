@@ -166,7 +166,7 @@ const VideoCallScreen = ({ route, navigation }) => {
       if (current.simulated && current.billingMode === 'preview' && state.previewRemaining === 0) {
         setCall((value) => ({ ...value, billingMode: 'awaiting_paid_confirmation' }));
       } else if (!current.simulated && current.billingMode !== 'paid'
-          && (!clockReady || state.mediaPaused) && Date.now() - lastSync.current >= 2000) {
+          && (!clockReady || state.mediaPaused || current.freeVideoSource === 'consumer_rewards') && Date.now() - lastSync.current >= 2000) {
         syncRef.current();
       }
     }, 250);
@@ -223,7 +223,7 @@ const VideoCallScreen = ({ route, navigation }) => {
   ]);
   const waitingText = 'Waiting for ' + (remoteProfile?.username || 'the consumer') + ' to continue';
   const status = phase === 'connected'
-    ? (mode === 'preview' ? 'FREE PREVIEW · ' + formatTime(previewRemaining)
+    ? (mode === 'preview' ? (call?.freeVideoSource === 'consumer_rewards' ? 'FREE VIDEO TIME · ' : 'FREE PREVIEW · ') + formatTime(previewRemaining)
       : mode === 'paid' ? 'PAID · ' + rate + ' credits/min' : isConsumer ? 'Payment decision' : waitingText)
     : phase === 'ringing' ? 'Calling…' : phase === 'reconnecting' ? 'Connection interrupted…' : 'Connecting video…';
 

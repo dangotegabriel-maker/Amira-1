@@ -1,12 +1,13 @@
 'use strict';
 const D = require('./callDomain');
+const { prepareFreeVideoConsumption } = require('./freeVideoEntitlement');
 
 // Persist deadlines once. Client ticks only display these server-owned times.
-const connectedPaymentFields = (nowMs, previewEligible) => {
-  const previewEndsAtMs = nowMs + (previewEligible ? D.PREVIEW_SECONDS * 1000 : 0);
+const connectedPaymentFields = (nowMs, previewEligible, freeSeconds = previewEligible ? D.PREVIEW_SECONDS : 0) => {
+  const previewEndsAtMs = nowMs + freeSeconds * 1000;
   const paymentDecisionDeadlineMs = previewEndsAtMs + D.PAID_DECISION_SECONDS * 1000;
   return { previewEndsAtMs, paymentDecisionDeadlineMs,
-    expiresAtMs: previewEligible ? previewEndsAtMs : paymentDecisionDeadlineMs };
+    expiresAtMs: freeSeconds > 0 ? previewEndsAtMs : paymentDecisionDeadlineMs };
 };
 const awaitingPaymentFields = (nowMs) => ({
   billingMode: D.BILLING_MODES.AWAITING_PAID_CONFIRMATION,
@@ -41,6 +42,7 @@ const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError }) => {
     if (!Number.isFinite(deadline) || !Number.isFinite(previewEndsAtMs)) {
       throw new HttpsError('failed-precondition', 'Call timing is unavailable. End this call and try again.');
     }
+    const consumeFreeVideo = await prepareFreeVideoConsumption({ tx, db, FieldValue, callRef: ref, call, nowMs });
     if (nowMs >= deadline) {
       const hostRef = db.doc(`users/${call.receiverId}`);
       const locks = [db.doc(`activeCallLocks/${call.callerId}`), db.doc(`activeCallLocks/${call.receiverId}`)];
@@ -52,6 +54,7 @@ const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError }) => {
         durationSeconds: Math.max(0, Math.floor((deadline - call.connectedAtMs) / 1000)),
         paidDurationSeconds: call.paidDurationSeconds || 0,
       };
+      consumeFreeVideo();
       tx.update(ref, patch);
       tx.set(db.doc(`callHistory/${callId}`), {
         callId, participantIds: call.participantIds, callerId: call.callerId, receiverId: call.receiverId,
@@ -75,6 +78,7 @@ const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError }) => {
       ? D.BILLING_MODES.AWAITING_PAID_CONFIRMATION : call.billingMode;
     const patch = { billingMode: mode, previewEndsAtMs, paymentDecisionDeadlineMs: deadline,
       expiresAtMs: mode === 'preview' ? previewEndsAtMs : deadline };
+    consumeFreeVideo();
     if (Object.entries(patch).some(([key, value]) => call[key] !== value)) tx.update(ref, patch);
     return result(callId, { ...call, ...patch }, nowMs);
   });

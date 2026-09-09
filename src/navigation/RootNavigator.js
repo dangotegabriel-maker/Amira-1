@@ -16,6 +16,7 @@ import ChatDetailScreen from '../screens/main/ChatDetailScreen';
 import UserProfileScreen from '../screens/main/UserProfileScreen';
 import VideoCallScreen from '../screens/main/VideoCallScreen';
 import WalletScreen from '../screens/main/WalletScreen';
+import RewardsScreen from '../screens/main/RewardsScreen';
 import VIPStoreScreen from '../screens/main/VIPStoreScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 import EditProfileScreen from '../screens/main/EditProfileScreen';
@@ -82,6 +83,7 @@ const RootNavigator = () => {
           <Stack.Screen name="UserProfile" component={UserProfileScreen} />
           <Stack.Screen name="VideoCall" component={VideoCallScreen} />
           <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: true, title: 'Wallet' }} />
+          {user?.role === 'consumer' && <Stack.Screen name="Rewards" component={RewardsScreen} options={{ headerShown: true, title: 'Rewards & Tasks' }} />}
           <Stack.Screen name="VIPStore" component={VIPStoreScreen} options={{ headerShown: true, title: 'VIP Store' }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} />
           <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Edit Profile' }} />

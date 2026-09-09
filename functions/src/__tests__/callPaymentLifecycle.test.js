@@ -309,3 +309,120 @@ test('insufficient-credit pause has a deadline and resumption preserves unique i
   expect(ledger()).toEqual([`creditTransactions/${callId}_1`, `creditTransactions/${callId}_2`]);
   expect(balance()).toBe(15);
 });
+
+test('consumer Daily Check-In atomically records server-day history and non-monetary reward', async () => {
+  const before = clone(mockDocs.get('users/consumer'));
+  const result = await invoke('claimDailyCheckIn', 'consumer', { dateKey: '2099-01-01', freeMessages: 9999, balance: 9999 });
+  expect(result).toMatchObject({ claimed: true, dateKey: '2026-09-08', reward: { freeMessages: 3 }, balances: { freeMessages: 3, freeVideoSeconds: 0 } });
+  expect(mockDocs.get('consumerRewards/consumer/claims/2026-09-08')).toMatchObject({ rewardDay: 1, consumerUid: 'consumer' });
+  expect(mockDocs.get('users/consumer')).toEqual(before);
+  expect(ledger()).toEqual([]);
+});
+
+test('concurrent and repeated same-day check-ins cannot award twice', async () => {
+  const results = await Promise.all([1, 2, 3].map(() => invoke('claimDailyCheckIn', 'consumer', {})));
+  expect(results.filter((item) => item.claimed)).toHaveLength(1);
+  expect(results.filter((item) => item.alreadyClaimed)).toHaveLength(2);
+  expect(mockDocs.get('consumerRewards/consumer')).toMatchObject({ freeMessages: 3, checkIn: { totalClaims: 1 } });
+});
+
+test.each(['host', null])('%s cannot claim or read a consumer rewards dashboard', async (uid) => {
+  for (const name of ['claimDailyCheckIn', 'getConsumerRewards']) {
+    await expect(invoke(name, uid, { consumerUid: 'consumer' })).rejects.toMatchObject({ code: uid ? 'permission-denied' : 'unauthenticated' });
+  }
+  expect(mockDocs.has('consumerRewards/host')).toBe(false);
+  expect(mockDocs.has('consumerRewards/consumer')).toBe(false);
+});
+
+test('check-in sequence advances on actual claimed UTC days without missed-day resets', async () => {
+  for (let index = 0; index < 8; index++) {
+    jest.setSystemTime(new Date(Date.UTC(2026, 8, 8 + index * 2)));
+    const result = await invoke('claimDailyCheckIn', 'consumer', {});
+    expect(result.checkIn.lastRewardDay).toBe(index % 7 + 1);
+  }
+  expect(mockDocs.get('consumerRewards/consumer')).toMatchObject({ freeMessages: 14, freeVideoSeconds: 35,
+    quickMatchCount: 1, promotionalGifts: { generic: 2 }, checkIn: { totalClaims: 8 } });
+});
+
+test('dashboard does not create balances and claim cannot redirect reward to another user', async () => {
+  const empty = await invoke('getConsumerRewards', 'consumer', {});
+  expect(empty).toMatchObject({ alreadyClaimed: false, nextDay: 1, balances: { freeMessages: 0 } });
+  expect(mockDocs.has('consumerRewards/consumer')).toBe(false);
+  await invoke('claimDailyCheckIn', 'consumer', { uid: 'host' });
+  expect(mockDocs.has('consumerRewards/host')).toBe(false);
+});
+
+test('settlement uses trusted split config, atomically allocates once, and never invents payout money', async () => {
+  mockDocs.set('economyConfig/current', { platformCommissionBasisPoints: 4000, version: 'trusted-test' });
+  const callId = await connect(); await expirePreview(callId);
+  await invoke('confirmPaidContinuation', 'consumer', { callId });
+  jest.setSystemTime(Date.now() + 10000);
+  await Promise.all(['consumer', 'host', 'consumer'].map((uid) => invoke('settleVideoCallIncrement', uid, {
+    callId, platformFeeCredits: 0, hostShareCreditsEquivalent: 999, platformCommissionBasisPoints: 0,
+  })));
+  expect(ledger()).toHaveLength(1);
+  expect(balance()).toBe(95);
+  expect(mockDocs.get(`creditTransactions/${callId}_1`)).toMatchObject({ grossCreditsSpent: 5,
+    platformFeeCredits: 2, hostShareCreditsEquivalent: 3, consumerUid: 'consumer', hostUid: 'host',
+    commissionPolicyVersion: 'trusted-test', transactionType: 'video_call_increment' });
+  expect(mockDocs.get('hostEarnings/host').pendingCreditsEquivalent).toBe(3);
+  expect(mockDocs.get('platformRevenue/creditsEquivalent').accruedCreditsEquivalent).toBe(2);
+  expect(mockDocs.get('users/host').earnings).toEqual({ pending: 0, available: 0 });
+});
+
+const enableEarnedVideo = (seconds) => {
+  mockDocs.set('economyConfig/current', { enableEarnedVideoSeconds: true, enableLegacyDailyPreview: false });
+  mockDocs.set('consumerRewards/consumer', { freeVideoSeconds: seconds, freeMessages: 3, promotionalGifts: { generic: 1 } });
+};
+test('earned video adapter debits only authoritative connected elapsed seconds, idempotently', async () => {
+  enableEarnedVideo(15);
+  const callId = await connect();
+  expect(callData(callId)).toMatchObject({ freeVideoSource: 'consumer_rewards', freeVideoAllowanceSeconds: 15, billingMode: 'preview' });
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(15);
+  jest.setSystemTime(Date.now() + 5000);
+  await Promise.all(['consumer', 'host'].map((uid) => invoke('syncVideoCallPaymentState', uid, { callId, consumedSeconds: 999 })));
+  expect(mockDocs.get('consumerRewards/consumer')).toMatchObject({ freeVideoSeconds: 10, freeMessages: 3 });
+  expect(callData(callId).freeVideoConsumedSeconds).toBe(5);
+  jest.setSystemTime(Date.now() + 2000);
+  await invoke('endVideoCall', 'consumer', { callId });
+  await invoke('endVideoCall', 'consumer', { callId });
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(8);
+  expect(balance()).toBe(100);
+});
+
+test.each(['rejected', 'missed', 'failed'])('earned video adapter consumes nothing for %s before connection', async (outcome) => {
+  enableEarnedVideo(15);
+  const { callId } = await start();
+  if (outcome === 'rejected') await invoke('respondToVideoCall', 'host', { callId, action: 'decline' });
+  else if (outcome === 'missed') { jest.setSystemTime(Date.now() + 31000); await api.reconcileExpiredVideoCalls(); }
+  else { await invoke('respondToVideoCall', 'host', { callId, action: 'accept' }); await invoke('endVideoCall', 'consumer', { callId, reason: 'rtc_failure' }); }
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(15);
+});
+
+test('exhausted earned time preserves explicit paid consent and never silently charges', async () => {
+  enableEarnedVideo(10);
+  const callId = await connect();
+  await expirePreview(callId);
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(0);
+  expect(callData(callId).billingMode).toBe('awaiting_paid_confirmation');
+  expect(balance()).toBe(100); expect(ledger()).toEqual([]);
+  await invoke('confirmPaidContinuation', 'consumer', { callId });
+  expect(callData(callId).billingMode).toBe('paid');
+});
+
+test('default compatibility uses daily preview without spending earned seconds', async () => {
+  mockDocs.set('consumerRewards/consumer', { freeVideoSeconds: 15 });
+  const callId = await connect(); await expirePreview(callId);
+  expect(callData(callId).freeVideoSource).toBe('daily_preview');
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(15);
+});
+
+test('check-in earned during a call does not extend its captured allowance', async () => {
+  enableEarnedVideo(10);
+  mockDocs.get('consumerRewards/consumer').checkIn = { totalClaims: 1, lastClaimDate: '2026-09-07' };
+  const callId = await connect();
+  await invoke('claimDailyCheckIn', 'consumer', {});
+  await expirePreview(callId);
+  expect(callData(callId).freeVideoAllowanceSeconds).toBe(10);
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(10);
+});

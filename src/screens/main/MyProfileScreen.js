@@ -47,6 +47,8 @@ const MyProfileScreen = ({ navigation }) => {
 
     {approvedHost && <Section title="CREATOR"><Row icon={Coins} label="Earnings" detail="View your earnings balance" onPress={() => navigation.navigate('HostEarnings')} /></Section>}
 
+    {user?.role === 'consumer' && <Section title="REWARDS"><Row icon={Gift} label="Rewards & Tasks" detail="Your rewards and Daily Check-In" onPress={() => navigation.navigate('Rewards')} /></Section>}
+
     <Section title="SOCIAL"><Row icon={Users} label="Following" detail="Manage creators you follow" onPress={() => navigation.navigate('FollowingList')} /><Row icon={Eye} label="Who Viewed Me" detail={`${profileViewCount} recent profile views`} onPress={() => navigation.navigate('WhoViewedMe')} /><Row icon={Crown} label="Amira VIP" detail="Explore VIP access and benefits" onPress={() => navigation.navigate('VipInfo')} /></Section>
 
     <View style={styles.opportunity}><View style={styles.opportunityIcon}><Sparkles color="white" size={25}/></View><Text style={styles.opportunityTitle}>{approvedHost ? 'Creator Connect' : creatorCopy.title}</Text><Text style={styles.opportunityText}>{creatorCopy.description}</Text><TouchableOpacity style={styles.opportunityButton} disabled={creatorState==='pending'} onPress={()=>approvedHost?navigation.navigate('Connect'):navigation.navigate('HostApplication')}><Text style={styles.opportunityButtonText}>{approvedHost ? 'Open Connect' : creatorCopy.cta}</Text><ChevronRight color="white" size={18}/></TouchableOpacity></View>
