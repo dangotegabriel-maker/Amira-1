@@ -1,6 +1,7 @@
 'use strict';
 const E = require('./economyDomain');
 const { utcDateKey } = require('./callDomain');
+const M = require('./messageEntitlements');
 
 const createConsumerRewards = ({ db, FieldValue, HttpsError }) => {
   const requireConsumer = (profile) => {
@@ -27,6 +28,9 @@ const createConsumerRewards = ({ db, FieldValue, HttpsError }) => {
     tx.set(rewardRef, { ...balances, checkIn, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     tx.create(claimRef, { consumerUid: uid, dateKey, rewardDay: day, reward, scheduleVersion: policy.version,
       createdAt: FieldValue.serverTimestamp(), idempotencyKey: `daily_check_in:${uid}:${dateKey}` });
+    if (reward.freeMessages > 0) tx.create(db.doc(`consumerRewards/${uid}/messageTransactions/${M.eventId('daily_check_in', dateKey)}`),
+      M.transactionData({ uid, delta: reward.freeMessages, balance: balances.freeMessages, source: 'daily_check_in',
+        sourceId: dateKey, policyVersion: policy.version, createdAt: FieldValue.serverTimestamp() }));
     return { ...response, balances, checkIn, reward, alreadyClaimed: false, claimed: true, nextDay: (day % 7) + 1 };
   });
   return { dashboard: (uid) => getState(uid), claim: (uid) => getState(uid, true) };

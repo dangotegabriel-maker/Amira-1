@@ -66,6 +66,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [reportOpen, setReportOpen] = useState(false);
 
   const list = useRef(null);
+  const pendingSend = useRef(null);
 
   useEffect(() => {
     navigation.setOptions({
@@ -186,17 +187,30 @@ const ChatDetailScreen = ({ route, navigation }) => {
     if (sending || !text.trim()) return;
 
     setSending(true);
+    if (!pendingSend.current || pendingSend.current.text !== text || pendingSend.current.receiverId !== receiverId) {
+      pendingSend.current = { text, receiverId, id: messagingService.createMessageId() };
+    }
 
     try {
       await messagingService.sendText(
         receiverId,
         text,
-        conversationExists
+        conversationExists,
+        pendingSend.current.id
       );
 
       setConversationExists(true);
+      pendingSend.current = null;
       setText('');
     } catch (error) {
+      if (error.details?.reason === 'insufficient_messages') {
+        Alert.alert('You’re out of free messages',
+          'Earn more from Daily Check-In in Rewards or by becoming Friends. Membership and recharge message bonuses are not active yet.', [
+            { text: 'View Rewards', onPress: () => navigation.navigate('Rewards') },
+            { text: 'Cancel', style: 'cancel' },
+          ]);
+        return;
+      }
       Alert.alert(
         'Message not sent',
         error.message
@@ -294,6 +308,9 @@ const ChatDetailScreen = ({ route, navigation }) => {
             </Text>
           }
           renderItem={({ item }) => {
+            if (item.type === 'friendship_created') return (
+              <Text style={styles.systemMessage}>You and {name} are now friends 🎉</Text>
+            );
             const mine =
               item.senderId === user.uid;
 
@@ -357,6 +374,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
             />
 
             <TouchableOpacity
+              accessibilityLabel="Send message"
               style={[
                 styles.send,
                 (!text.trim() || sending) &&
@@ -425,6 +443,8 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 90,
   },
+
+  systemMessage: { alignSelf: 'center', color: COLORS.textSecondary, textAlign: 'center', marginVertical: 12, fontSize: 13 },
 
   bubble: {
     maxWidth: '78%',

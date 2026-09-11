@@ -16,10 +16,10 @@ service cloud.firestore {
     function vipUnchanged() { return request.resource.data.vip == resource.data.vip; }
     function visitorStatsUnchanged() { return request.resource.data.profileViewStats == resource.data.profileViewStats; }
     function referralRewardsUnchanged() { return request.resource.data.referralStats == resource.data.referralStats; }
-    function canReadVisitorIdentities(uid) { let user = get(/databases/$(database)/documents/users/$(uid)).data; return approvedHost(user) || (user.vip.status == 'active' && user.vip.tier in ['VIP_1', 'VIP_2', 'VIP_3']); }
+    function canReadVisitorIdentities(uid) { let user = get(/databases/$(database)/documents/users/$(uid)).data; return approvedHost(user) || (user.vip.status == 'active' && user.vip.tier in ['VIP_1', 'VIP_2', 'VIP_3'] && (user.vip.get('expiresAt', null) == null || user.vip.expiresAt > request.time)); }
     function validHostApplicationTransition() { return resource.data.role != 'host' && request.resource.data.role == 'host' && request.resource.data.hostStatus.hasApplied == true && request.resource.data.hostStatus.isApproved == false && request.resource.data.hostStatus.verificationStatus == 'pending' && request.resource.data.hostStatus.availability == 'offline'; }
     function validAvailabilityChange() { return approvedHost(resource.data) && request.resource.data.role == resource.data.role && request.resource.data.hostStatus.isApproved == resource.data.hostStatus.isApproved && request.resource.data.hostStatus.hasApplied == resource.data.hostStatus.hasApplied && request.resource.data.hostStatus.verificationStatus == resource.data.hostStatus.verificationStatus && request.resource.data.hostStatus.availability in ['offline', 'online', 'busy']; }
-    function validReadUpdate() { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCounts', 'lastReadAt', 'updatedAt']) && request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(resource.data)] == resource.data.unreadCounts[otherUid(resource.data)] && request.resource.data.lastReadAt[otherUid(resource.data)] == resource.data.lastReadAt[otherUid(resource.data)]; }
+    function validReadUpdate() { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCounts', 'lastReadAt', 'updatedAt']) && request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(resource.data)] == resource.data.unreadCounts[otherUid(resource.data)] && request.resource.data.lastReadAt.get(otherUid(resource.data), null) == resource.data.lastReadAt.get(otherUid(resource.data), null); }
     function validMessageCreate() { return request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(request.resource.data)] == 1; }
     function validEmptyConversationCreate() { return request.resource.data.lastMessage == null && request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(request.resource.data)] == 0; }
     function validMessageUpdate() { return request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(resource.data)] == resource.data.unreadCounts[otherUid(resource.data)] + 1 && request.resource.data.lastReadAt[otherUid(resource.data)] == resource.data.lastReadAt[otherUid(resource.data)] && request.resource.data.lastMessageAt == request.time; }
@@ -43,7 +43,8 @@ service cloud.firestore {
               && data.sourceId == uid && data.targetId == targetUid
               && data.sourceRole == 'host' && data.targetRole == 'consumer');
         }
-        allow read: if owns(uid);
+        allow get: if owns(uid) || owns(targetUid);
+        allow list: if owns(uid);
         allow create: if owns(uid) && uid != targetUid
           && request.resource.data.createdAt == request.time
           && !blockedBetween(uid, targetUid) && validRelationship();
@@ -58,8 +59,7 @@ service cloud.firestore {
       }
       match /profileViews/{viewerUid} {
         allow read: if owns(uid) && canReadVisitorIdentities(uid);
-        allow create: if owns(viewerUid) && viewerUid != uid && request.resource.data.viewerUid == viewerUid && request.resource.data.viewCount == 1 && request.resource.data.firstViewedAt == request.time && request.resource.data.lastViewedAt == request.time;
-        allow update: if owns(viewerUid) && viewerUid != uid && request.resource.data.viewerUid == resource.data.viewerUid && request.resource.data.firstViewedAt == resource.data.firstViewedAt && request.resource.data.lastViewedAt == request.time && request.resource.data.viewCount == resource.data.viewCount + 1 && request.time - resource.data.lastViewedAt >= duration.value(30, 'm');
+        allow create, update: if false; // Trusted profile-view transaction only.
         allow delete: if owns(uid);
       }
       match /notices/{noticeId} {
@@ -89,14 +89,14 @@ service cloud.firestore {
 
     match /conversations/{conversationId} {
       allow read: if participant(resource.data);
-      allow create: if participant(request.resource.data) && request.resource.data.participantIds.size() == 2 && conversationId in [request.resource.data.participantIds[0] + '__' + request.resource.data.participantIds[1], request.resource.data.participantIds[1] + '__' + request.resource.data.participantIds[0]] && (validMessageCreate() || validEmptyConversationCreate()) && !blockedBetween(request.resource.data.participantIds[0], request.resource.data.participantIds[1]);
-      allow update: if participant(resource.data) && request.resource.data.participantIds == resource.data.participantIds && request.resource.data.participants == resource.data.participants && request.resource.data.createdAt == resource.data.createdAt && (validReadUpdate() || (request.resource.data.lastMessage.senderId == request.auth.uid && validMessageUpdate() && !blockedBetween(resource.data.participantIds[0], resource.data.participantIds[1])));
+      allow create: if false; // Trusted atomic send / friendship event only.
+      allow update: if participant(resource.data) && validReadUpdate();
       allow delete: if false;
 
       match /messages/{messageId} {
         function parentAfter() { return getAfter(/databases/$(database)/documents/conversations/$(conversationId)).data; }
         allow read: if participant(get(/databases/$(database)/documents/conversations/$(conversationId)).data);
-        allow create: if participant(parentAfter()) && request.resource.data.id == messageId && request.resource.data.conversationId == conversationId && request.resource.data.senderId == request.auth.uid && request.resource.data.receiverId in parentAfter().participantIds && request.resource.data.receiverId != request.auth.uid && request.resource.data.type == 'text' && request.resource.data.status == 'sent' && request.resource.data.createdAt == request.time && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000 && !blockedBetween(request.resource.data.senderId, request.resource.data.receiverId);
+        allow create: if false; // Entitlement consumption cannot be bypassed.
         allow update, delete: if false;
       }
     }
@@ -128,10 +128,18 @@ service cloud.firestore {
     match /consumerRewards/{uid} {
       allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
       allow write: if false;
+      match /messageTransactions/{transactionId} {
+        allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
+        allow write: if false;
+      }
       match /claims/{dateKey} {
         allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
         allow write: if false;
       }
+    }
+    match /friendships/{pairId} {
+      allow read: if participant(resource.data);
+      allow write: if false;
     }
     match /hostEarnings/{uid} {
       allow read: if admin() || (owns(uid) && approvedHost(get(/databases/$(database)/documents/users/$(uid)).data));

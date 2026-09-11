@@ -1,3 +1,4 @@
+import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -21,6 +22,8 @@ const IntroVideo = ({ uri }) => {
 
 const UserProfileScreen = ({ route, navigation }) => {
   const { user } = useUser();
+  const focused = useIsFocused();
+  const [relationshipLabel, setRelationshipLabel] = useState('Follow');
   const userId = route.params?.userId;
   const [host, setHost] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,7 +44,14 @@ const UserProfileScreen = ({ route, navigation }) => {
       .catch(() => setHost(null)).finally(() => setLoading(false));
   }, [userId, route.params?.demoHost]);
 
-  useEffect(() => { if (userId && !route.params?.demoHost) blockService.getRelationship(userId).then((relationship) => { setBlockState(relationship); if (!relationship.blocked) profileViewService.track(userId).catch(() => {}); }).catch(() => {}); }, [userId, route.params?.demoHost]);
+  useEffect(() => { if (focused && userId && !route.params?.demoHost) blockService.getRelationship(userId).then((relationship) => { setBlockState(relationship); if (!relationship.blocked) profileViewService.track(userId).catch(() => console.warn('Profile view could not be recorded.')); }).catch(() => {}); }, [userId, focused, route.params?.demoHost]);
+
+  useEffect(() => {
+    if (!focused || route.params?.demoHost) return undefined;
+    return followService.subscribeRelationship(userId, (value) => {
+      setFollowing(value.following); setRelationshipLabel(value.label); setBlockState(value);
+    }, () => setRelationshipLabel('Follow'));
+  }, [userId, focused, route.params?.demoHost]);
 
   const toggleFollow = async () => {
     if (!canFollowProfile(user, host) || blockState.blocked || followBusy) return;
@@ -77,7 +87,7 @@ const UserProfileScreen = ({ route, navigation }) => {
       </View>
 
       <View style={styles.actions}>
-        {canFollowProfile(user, host) && !blockState.blocked && <TouchableOpacity style={[styles.action, following && styles.following]} onPress={toggleFollow} disabled={followBusy}>{following ? <UserMinus color={COLORS.primary} /> : <UserPlus color="white" />}<Text style={[styles.actionText, following && { color: COLORS.primary }]}>{following ? 'Following' : 'Follow'}</Text></TouchableOpacity>}
+        {canFollowProfile(user, host) && !blockState.blocked && <TouchableOpacity style={[styles.action, following && styles.following]} onPress={toggleFollow} disabled={followBusy}>{following ? <UserMinus color={COLORS.primary} /> : <UserPlus color="white" />}<Text style={[styles.actionText, following && { color: COLORS.primary }]}>{host.isDemo ? (following ? 'Following' : 'Follow') : relationshipLabel}</Text></TouchableOpacity>}
         <TouchableOpacity style={styles.smallAction} onPress={() => host.isDemo ? Alert.alert('Development profile', 'Messaging this demo profile is unavailable.') : navigation.navigate('ChatDetail', { userId, name: host.username })}><MessageCircle color={COLORS.primary} /><Text style={styles.smallText}>Message</Text></TouchableOpacity>
         {isApprovedHost(host) && <TouchableOpacity style={styles.smallAction} onPress={() => startVideoCall({ navigation, creator: host })}><Video color={COLORS.primary} /><Text style={styles.smallText}>Video</Text></TouchableOpacity>}
       </View>

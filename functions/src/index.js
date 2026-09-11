@@ -18,6 +18,7 @@ const region='us-central1';
 const callable={region,enforceAppCheck:false};
 const paymentLifecycle=P.createCallPaymentLifecycle({db,FieldValue,HttpsError});
 const consumerRewards=createConsumerRewards({db,FieldValue,HttpsError});
+const socialMessaging=require('./socialMessaging').createSocialMessaging({db,FieldValue,HttpsError});
 const requireAuth=(request)=>{if(!request.auth?.uid)throw new HttpsError('unauthenticated','Sign in is required.');return request.auth.uid;};
 const textId=(value,name)=>{if(typeof value!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(value))throw new HttpsError('invalid-argument',`Invalid ${name}.`);return value;};
 const mapError=(error)=>{if(error instanceof HttpsError)return error;const code={
@@ -63,3 +64,14 @@ exports.claimDailyCheckIn=onCall(callable,async(request)=>{
   try { return await consumerRewards.claim(requireAuth(request)); } catch(e) { throw mapError(e); }
 });
 exports._test={mapError};
+
+exports.sendTextMessage=onCall(callable,(request)=>socialMessaging.sendText(requireAuth(request),request.data));
+exports.trackProfileView=onCall(callable,(request)=>socialMessaging.trackProfileView(requireAuth(request),request.data?.ownerUid));
+exports.listProfileViews=onCall(callable,(request)=>socialMessaging.listProfileViews(requireAuth(request)));
+exports.syncFriendship=onCall(callable,(request)=>socialMessaging.syncFriendship(requireAuth(request),request.data?.targetUid));
+// Trigger retries and out-of-order deliveries re-read both current follow records.
+const {onDocumentWritten}=require('firebase-functions/v2/firestore');
+exports.onFollowFriendship=onDocumentWritten({region,document:'users/{uid}/following/{targetUid}',retry:true},async(event)=>{
+  try { await socialMessaging.syncFriendship(event.params.uid,event.params.targetUid); }
+  catch(error) { if(!['not-found','permission-denied','invalid-argument'].includes(error.code)) throw error; }
+});

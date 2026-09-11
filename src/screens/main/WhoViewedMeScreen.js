@@ -1,3 +1,4 @@
+import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Eye, Lock } from 'lucide-react-native';
@@ -5,21 +6,27 @@ import { useUser } from '../../context/UserContext';
 import { profileViewService } from '../../services/profileViewService';
 import { dbService } from '../../services/firebaseService';
 import { canSeeProfileVisitors } from '../../services/vipService';
+import { isApprovedHost } from '../../models/userModel';
 import { COLORS } from '../../theme/COLORS';
 
 const WhoViewedMeScreen = ({ navigation }) => {
+  const focused = useIsFocused();
+  const [error, setError] = useState(false);
   const { user } = useUser();
   const [views, setViews] = useState([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const reveal = canSeeProfileVisitors(user);
+  const reveal = isApprovedHost(user) || canSeeProfileVisitors(user);
   useEffect(() => {
+    if (!focused) return;
+    setLoading(true); setError(false);
     const work = reveal
       ? profileViewService.list(user.uid).then(async (items) => { setViews(await Promise.all(items.map(async (item) => ({ ...item, profile: await dbService.getUserProfile(item.viewerUid).catch(() => null) })))); setCount(items.length); })
       : profileViewService.getAggregateCount(user.uid).then(setCount);
-    work.finally(() => setLoading(false));
-  }, [user.uid, reveal]);
+    work.catch(() => setError(true)).finally(() => setLoading(false));
+  }, [user.uid, reveal, focused]);
   if (loading) return <ActivityIndicator style={{ marginTop: 100 }} color={COLORS.primary} />;
+  if (error) return <View style={styles.center}><Text style={styles.body}>Visitors could not be loaded. Reopen this screen to retry.</Text></View>;
   if (!count) return <View style={styles.center}><Eye color={COLORS.primary} size={45} /><Text style={styles.title}>No one has viewed your profile yet.</Text></View>;
   if (!reveal) return <View style={styles.center}><Lock color={COLORS.primary} size={48} /><Text style={styles.title}>{count} people viewed you</Text><Text style={styles.body}>You can see how many people viewed your profile. Upgrade to VIP to reveal who viewed you.</Text><TouchableOpacity style={styles.button} onPress={() => navigation.navigate('VipInfo')}><Text style={styles.buttonText}>Explore VIP</Text></TouchableOpacity></View>;
   return <FlatList style={styles.container} contentContainerStyle={{ padding: 14 }} data={views} keyExtractor={(item) => item.viewerUid} renderItem={({ item }) => <View style={styles.row}>{item.profile?.profilePic ? <Image source={{ uri: item.profile.profilePic }} style={styles.avatar} /> : <View style={styles.avatar} />}<View><Text style={styles.name}>{item.profile?.username || 'Amira user'}</Text><Text style={styles.meta}>{item.viewCount || 1} views</Text></View></View>} />;

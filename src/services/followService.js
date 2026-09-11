@@ -20,6 +20,8 @@ const requireSource = async () => {
 };
 
 export const followingSnapshotToIds = (snapshot) => snapshot.docs.map((entry) => entry.id);
+export const resolveFollowLabel = ({ following, followedBy, blocked = false, valid = true }) =>
+  blocked || !valid ? 'Follow' : following && followedBy ? 'Friends' : following ? 'Following' : 'Follow';
 
 const follow = async (targetId) => {
   const source = await requireSource();
@@ -46,6 +48,34 @@ const unfollow = async (targetId) => {
 };
 
 export const followService = {
+  subscribeRelationship: (targetId, onValue, onError) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !targetId || uid === targetId) return () => {};
+    const state = {}, ready = new Set();
+    let active = true, synced = false;
+    const paths = {
+      source: ['users', uid], target: ['users', targetId],
+      following: ['users', uid, 'following', targetId], followedBy: ['users', targetId, 'following', uid],
+      blockedByMe: ['users', uid, 'blocked', targetId], blockedMe: ['users', targetId, 'blocked', uid],
+    };
+    const stops = Object.entries(paths).map(([key, path]) => onSnapshot(doc(db, ...path), { includeMetadataChanges: true }, (snapshot) => {
+      if (snapshot.metadata?.hasPendingWrites) return;
+      state[key] = key === 'source' || key === 'target' ? { ...snapshot.data(), uid: key === 'source' ? uid : targetId } : snapshot.exists();
+      ready.add(key);
+      if (!active || ready.size !== 6) return;
+      const value = { following: state.following, followedBy: state.followedBy,
+        blocked: state.blockedByMe || state.blockedMe, blockedByMe: state.blockedByMe, blockedMe: state.blockedMe,
+        valid: canFollowProfile(state.source, state.target) };
+      value.label = resolveFollowLabel(value);
+      onValue(value);
+      if (value.label === 'Friends' && !synced) {
+        synced = true;
+        Promise.resolve().then(() => require('./socialBackend').invokeSocial('syncFriendship', { targetUid: targetId }))
+          .catch((error) => { synced = false; if (active) onError?.(error); });
+      }
+    }, onError));
+    return () => { active = false; stops.forEach((stop) => stop()); };
+  },
   follow,
   unfollow,
   followHost: follow,

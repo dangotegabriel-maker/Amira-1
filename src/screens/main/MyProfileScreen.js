@@ -1,3 +1,4 @@
+import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ChevronRight, Coins, Crown, Eye, Gift, Headphones, LogOut, Settings, ShieldCheck, Sparkles, Users } from 'lucide-react-native';
@@ -20,6 +21,7 @@ const Row = ({ icon: Icon, label, detail, onPress, destructive = false }) => (
 );
 
 const MyProfileScreen = ({ navigation }) => {
+  const focused = useIsFocused();
   const { user } = useUser();
   const [profileViewCount, setProfileViewCount] = useState(0);
   const [applicationStatus, setApplicationStatus] = useState('');
@@ -27,7 +29,7 @@ const MyProfileScreen = ({ navigation }) => {
   const approvedHost = isApprovedHost(user);
   const creatorState = getCreatorCardState(user, applicationStatus);
   const creatorCopy = CREATOR_CARD_COPY[creatorState];
-  useEffect(() => { if (user?.uid) profileViewService.getAggregateCount(user.uid).then(setProfileViewCount).catch(() => {}); }, [user?.uid]);
+  useEffect(() => { if (focused && user?.uid) profileViewService.getAggregateCount(user.uid).then(setProfileViewCount).catch(() => {}); }, [user?.uid, focused]);
   useEffect(() => { if (user?.uid) hostApplicationService.getApplication().then((application)=>setApplicationStatus(application?.status||'')).catch(()=>{}); }, [user?.uid]);
 
   const logout = () => Alert.alert('Log out', 'Are you sure you want to log out?', [
