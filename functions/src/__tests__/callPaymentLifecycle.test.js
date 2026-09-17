@@ -3,7 +3,7 @@
 const mockDocs = new Map();
 let mockQueue = Promise.resolve(), mockSequence = 0;
 const clone = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-const ref = (path) => ({ path, id: path.split('/').pop() });
+const ref = (path) => ({ path, id: path.split('/').pop(), get: async () => snapshot(ref(path)) });
 const snapshot = (reference) => ({ ...reference, ref: reference, exists: mockDocs.has(reference.path), data: () => clone(mockDocs.get(reference.path)) });
 const apply = (operation, reference, data, options) => {
   if (operation === 'delete') return mockDocs.delete(reference.path);
@@ -37,15 +37,17 @@ const mockDb = {
   doc: ref,
   collection: (path) => {
     const filters = [];
-    let max = Infinity;
+    let max = Infinity, after = '';
     const query = {
       doc: () => ref(`${path}/generated-${++mockSequence}`),
       where: (key, op, expected) => { filters.push([key, op, expected]); return query; },
+      orderBy: () => query,
+      startAfter: (cursor) => {after=cursor.path;return query;},
       limit: (count) => { max = count; return query; },
       get: async () => ({ docs: [...mockDocs.entries()]
-        .filter(([key, value]) => key.startsWith(path + '/') && key.split('/').length === 2
-          && filters.every(([field, op, expected]) => op === 'in' ? expected.includes(value[field])
-            : op === '<=' ? typeof value[field] === 'number' && value[field] <= expected : value[field] === expected))
+        .filter(([key, value]) => key>after && key.startsWith(path + '/') && key.split('/').length === 2
+          && filters.every(([field, op, expected]) => op === 'in' ? expected.includes(field.split('.').reduce((x,k)=>x?.[k],value))
+            : op === '<=' ? typeof value[field] === 'number' && value[field] <= expected : field.split('.').reduce((x,k)=>x?.[k],value) === expected))
         .slice(0, max).map(([key]) => snapshot(ref(key))) }),
     };
     return query;
@@ -91,9 +93,27 @@ const connect = async () => {
   await invoke('acknowledgeVideoConnected', 'host', { callId });
   return callId;
 };
+// Model both live devices renewing their RTC evidence as time advances.
+// Tests that exercise crashes intentionally use jest.setSystemTime directly.
+const advanceTo = async (value) => {
+  const target = value instanceof Date ? value.getTime() : value;
+  while(Date.now() < target) {
+    jest.setSystemTime(Math.min(target, Date.now()+3000));
+    for(const [path, call] of [...mockDocs.entries()]) {
+      if(path.startsWith('calls/') && call.accountingVersion===2 && call.connection?.state==='connected') {
+        for(const uid of call.participantIds) {
+          const current=callData(call.id);
+          if(current.connection.state!=='connected')break;
+          await invoke('reportVideoCallConnection',uid,{callId:call.id,state:'connected',epoch:current.connection.epoch,
+            sequence:(current.connection.participants[uid]?.sequence||0)+1});
+        }
+      }
+    }
+  }
+};
 const expirePreview = async (callId) => {
-  jest.setSystemTime(callData(callId).previewEndsAtMs);
-  return invoke('syncVideoCallPaymentState', 'consumer', { callId });
+  await advanceTo(callData(callId).connectedAtMs + callData(callId).freeVideoAllowanceSeconds*1000);
+  return invoke('syncVideoCallPaymentState','consumer',{callId});
 };
 
 beforeEach(() => {
@@ -110,7 +130,7 @@ test('connected preview expires authoritatively, then explicit consent starts pa
   const connectedAt = callData(callId).connectedAtMs;
   expect(callData(callId)).toMatchObject({ billingMode: 'preview', previewConsumed: true,
     previewEndsAtMs: connectedAt + 30000, paymentDecisionDeadlineMs: connectedAt + 30000 + D.PAID_DECISION_SECONDS * 1000 });
-  jest.setSystemTime(connectedAt + 29999);
+  await advanceTo(connectedAt + 29999);
   await invoke('syncVideoCallPaymentState', 'host', { callId });
   expect(callData(callId).billingMode).toBe('preview');
   await expirePreview(callId);
@@ -122,7 +142,7 @@ test('connected preview expires authoritatively, then explicit consent starts pa
 
 test('confirmation itself commits overdue preview expiry before authorizing paid mode', async () => {
   const callId = await connect();
-  jest.setSystemTime(callData(callId).previewEndsAtMs);
+  await advanceTo(callData(callId).connectedAtMs + callData(callId).freeVideoAllowanceSeconds*1000);
   await invoke('confirmPaidContinuation', 'consumer', { callId });
   expect(callData(callId).billingMode).toBe('paid');
 });
@@ -158,7 +178,7 @@ test('continuation and settlement ignore new host/client prices and all client f
   mockDocs.get('users/host').hostProfile.videoRateCredits = 6000;
   const response = await invoke('confirmPaidContinuation', 'consumer', { callId, ratePerMinute: 1, paidStartedAtMs: 1, hostEarnings: 999 });
   expect(response.incrementCredits).toBe(5);
-  jest.setSystemTime(Date.now() + 10000);
+  await advanceTo(Date.now() + 10000);
   await invoke('settleVideoCallIncrement', 'consumer', { callId, credits: 0, duration: 9999 });
   expect(balance()).toBe(95);
   expect(callData(callId)).toMatchObject({ ratePerMinute: 25, billedCredits: 5, settledIncrements: 1 });
@@ -168,9 +188,9 @@ test('continuation and settlement ignore new host/client prices and all client f
 test('concurrent expiry requests are idempotent and do not extend the deadline', async () => {
   const callId = await connect();
   const deadline = callData(callId).paymentDecisionDeadlineMs;
-  jest.setSystemTime(callData(callId).previewEndsAtMs);
+  await advanceTo(callData(callId).connectedAtMs + callData(callId).freeVideoAllowanceSeconds*1000);
   await Promise.all(['consumer', 'host', 'consumer'].map((uid) => invoke('syncVideoCallPaymentState', uid, { callId })));
-  jest.setSystemTime(Date.now() + 5000);
+  await advanceTo(Date.now() + 5000);
   await invoke('syncVideoCallPaymentState', 'host', { callId });
   expect(callData(callId)).toMatchObject({ billingMode: 'awaiting_paid_confirmation', paymentDecisionDeadlineMs: deadline });
 });
@@ -178,7 +198,7 @@ test('concurrent expiry requests are idempotent and do not extend the deadline',
 test('repeated consent and synchronization cannot reset paid start or revert paid mode', async () => {
   const callId = await connect(); await expirePreview(callId);
   const first = await invoke('confirmPaidContinuation', 'consumer', { callId });
-  jest.setSystemTime(Date.now() + 15000);
+  await advanceTo(Date.now() + 15000);
   const retry = await invoke('confirmPaidContinuation', 'consumer', { callId });
   await invoke('syncVideoCallPaymentState', 'host', { callId });
   expect(retry).toMatchObject({ idempotent: true, paidStartedAtMs: first.paidStartedAtMs });
@@ -187,7 +207,7 @@ test('repeated consent and synchronization cannot reset paid start or revert pai
 
 test('expired decision cannot become paid; cleanup commits even though consent fails', async () => {
   const callId = await connect(); await expirePreview(callId);
-  jest.setSystemTime(callData(callId).paymentDecisionDeadlineMs);
+  await advanceTo(callData(callId).paymentDecisionDeadlineMs);
   await expect(invoke('confirmPaidContinuation', 'consumer', { callId })).rejects.toMatchObject({ code: 'failed-precondition' });
   expect(callData(callId)).toMatchObject({ status: 'ended', endReason: 'payment_decision_timeout', billedCredits: 0 });
   expect(mockDocs.has('activeCallLocks/consumer')).toBe(false);
@@ -197,29 +217,25 @@ test('expired decision cannot become paid; cleanup commits even though consent f
   expect(balance()).toBe(100);
 });
 
-test('scheduled reconciliation expires an abandoned preview without client requests', async () => {
-  const callId = await connect();
-  jest.setSystemTime(callData(callId).previewEndsAtMs);
+test('scheduled reconciliation retires an abandoned preview on its connection lease without client requests', async () => {
+  const callId=await connect();
+  jest.setSystemTime(callData(callId).connection.leaseUntilMs+1);
   await api.reconcileExpiredVideoCalls();
-  expect(callData(callId).billingMode).toBe('awaiting_paid_confirmation');
-  jest.setSystemTime(callData(callId).paymentDecisionDeadlineMs + 10000);
-  await api.reconcileExpiredVideoCalls();
-  expect(callData(callId).status).toBe('ended');
+  expect(callData(callId)).toMatchObject({status:'failed',endReason:'connection_lease_expired',durationSeconds:0});
   expect(balance()).toBe(100);
+  expect(mockDocs.has('activeCallLocks/consumer')).toBe(false);
 });
-
-test('delayed reconciliation ends an untouched preview at its original deadline', async () => {
-  const callId = await connect();
-  const deadline = callData(callId).paymentDecisionDeadlineMs;
-  jest.setSystemTime(deadline + 300000);
+test('delayed reconciliation does not count its scheduling delay as connected usage', async () => {
+  const callId=await connect(), expiry=callData(callId).connection.leaseUntilMs;
+  jest.setSystemTime(expiry+300000);
   await api.reconcileExpiredVideoCalls();
-  expect(callData(callId)).toMatchObject({ status: 'ended', endedAtMs: deadline });
+  expect(callData(callId)).toMatchObject({status:'failed',endedAtMs:expiry,durationSeconds:0});
 });
 
 test('timeout never deletes another call lock or resets its host busy state', async () => {
   const callId = await connect();
   mockDocs.set('activeCallLocks/host', { callId: 'another-call' });
-  jest.setSystemTime(callData(callId).paymentDecisionDeadlineMs);
+  await advanceTo(callData(callId).paymentDecisionDeadlineMs);
   await invoke('syncVideoCallPaymentState', 'consumer', { callId });
   expect(mockDocs.get('activeCallLocks/host')).toEqual({ callId: 'another-call' });
   expect(mockDocs.get('users/host').hostStatus.availability).toBe('busy');
@@ -228,7 +244,7 @@ test('timeout never deletes another call lock or resets its host busy state', as
 test('scheduled reconciliation cannot end a paid call after the old decision deadline', async () => {
   const callId = await connect(); const deadline = callData(callId).paymentDecisionDeadlineMs;
   await expirePreview(callId); await invoke('confirmPaidContinuation', 'consumer', { callId });
-  jest.setSystemTime(deadline + 1);
+  await advanceTo(deadline + 1);
   await api.reconcileExpiredVideoCalls();
   expect(callData(callId).billingMode).toBe('paid');
   expect(mockDocs.get('activeCallLocks/host').callId).toBe(callId);
@@ -245,7 +261,7 @@ test('acceptance and a single RTC acknowledgement do not consume preview', async
 test.each(['rejected', 'missed', 'rtc_failure', 'cancelled'])('%s pre-connect call does not consume preview', async (outcome) => {
   const { callId } = await start();
   if (outcome === 'rejected') await invoke('respondToVideoCall', 'host', { callId, action: 'decline' });
-  else if (outcome === 'missed') { jest.setSystemTime(Date.now() + 31000); await api.reconcileExpiredVideoCalls(); }
+  else if (outcome === 'missed') { await advanceTo(Date.now() + 31000); await api.reconcileExpiredVideoCalls(); }
   else {
     if (outcome === 'rtc_failure') await invoke('respondToVideoCall', 'host', { callId, action: 'accept' });
     await invoke('endVideoCall', 'consumer', { callId, reason: outcome });
@@ -265,7 +281,7 @@ test('preview belongs to consumer UTC day, not host; next UTC day restores eligi
   expect(callData(second.callId)).toMatchObject({ previewConsumed: false, billingMode: 'awaiting_paid_confirmation',
     paymentDecisionDeadlineMs: Date.now() + D.PAID_DECISION_SECONDS * 1000 });
   await invoke('endVideoCall', 'consumer', { callId: second.callId });
-  jest.setSystemTime(new Date('2026-09-09T00:00:00Z'));
+  await advanceTo(new Date('2026-09-09T00:00:00Z'));
   const third = await connect();
   expect(callData(third).previewConsumed).toBe(true);
   expect(mockDocs.get('users/consumer/entitlements/dailyPreview').dateKey).toBe('2026-09-09');
@@ -291,10 +307,10 @@ test('continuation rejects a mismatched host participant even for the authentica
 test('insufficient-credit pause has a deadline and resumption preserves unique increment IDs', async () => {
   const callId = await connect(); await expirePreview(callId);
   await invoke('confirmPaidContinuation', 'consumer', { callId });
-  jest.setSystemTime(Date.now() + 10000);
+  await advanceTo(Date.now() + 10000);
   await invoke('settleVideoCallIncrement', 'consumer', { callId });
   mockDocs.get('users/consumer').wallet.creditBalance = 0;
-  jest.setSystemTime(Date.now() + 10000);
+  await advanceTo(Date.now() + 10000);
   expect(await invoke('settleVideoCallIncrement', 'consumer', { callId })).toMatchObject({ insufficientCredits: true });
   expect(callData(callId)).toMatchObject({ billingMode: 'awaiting_paid_confirmation',
     paymentDecisionDeadlineMs: Date.now() + D.PAID_DECISION_SECONDS * 1000 });
@@ -302,9 +318,9 @@ test('insufficient-credit pause has a deadline and resumption preserves unique i
   mockDocs.get('users/consumer').wallet.creditBalance = 20;
   await invoke('confirmPaidContinuation', 'consumer', { callId });
   expect(callData(callId).paidSessionStartIncrement).toBe(1);
-  jest.setSystemTime(Date.now() + 9999);
+  await advanceTo(Date.now() + 9999);
   expect(await invoke('settleVideoCallIncrement', 'consumer', { callId })).toMatchObject({ settled: false });
-  jest.setSystemTime(Date.now() + 1);
+  await advanceTo(Date.now() + 1);
   await invoke('settleVideoCallIncrement', 'consumer', { callId });
   expect(ledger()).toEqual([`creditTransactions/${callId}_1`, `creditTransactions/${callId}_2`]);
   expect(balance()).toBe(15);
@@ -336,7 +352,7 @@ test.each(['host', null])('%s cannot claim or read a consumer rewards dashboard'
 
 test('check-in sequence advances on actual claimed UTC days without missed-day resets', async () => {
   for (let index = 0; index < 8; index++) {
-    jest.setSystemTime(new Date(Date.UTC(2026, 8, 8 + index * 2)));
+    await advanceTo(new Date(Date.UTC(2026, 8, 8 + index * 2)));
     const result = await invoke('claimDailyCheckIn', 'consumer', {});
     expect(result.checkIn.lastRewardDay).toBe(index % 7 + 1);
   }
@@ -356,7 +372,7 @@ test('settlement uses trusted split config, atomically allocates once, and never
   mockDocs.set('economyConfig/current', { platformCommissionBasisPoints: 4000, version: 'trusted-test' });
   const callId = await connect(); await expirePreview(callId);
   await invoke('confirmPaidContinuation', 'consumer', { callId });
-  jest.setSystemTime(Date.now() + 10000);
+  await advanceTo(Date.now() + 10000);
   await Promise.all(['consumer', 'host', 'consumer'].map((uid) => invoke('settleVideoCallIncrement', uid, {
     callId, platformFeeCredits: 0, hostShareCreditsEquivalent: 999, platformCommissionBasisPoints: 0,
   })));
@@ -379,11 +395,11 @@ test('earned video adapter debits only authoritative connected elapsed seconds, 
   const callId = await connect();
   expect(callData(callId)).toMatchObject({ freeVideoSource: 'consumer_rewards', freeVideoAllowanceSeconds: 15, billingMode: 'preview' });
   expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(15);
-  jest.setSystemTime(Date.now() + 5000);
+  await advanceTo(Date.now() + 5000);
   await Promise.all(['consumer', 'host'].map((uid) => invoke('syncVideoCallPaymentState', uid, { callId, consumedSeconds: 999 })));
   expect(mockDocs.get('consumerRewards/consumer')).toMatchObject({ freeVideoSeconds: 10, freeMessages: 3 });
   expect(callData(callId).freeVideoConsumedSeconds).toBe(5);
-  jest.setSystemTime(Date.now() + 2000);
+  await advanceTo(Date.now() + 2000);
   await invoke('endVideoCall', 'consumer', { callId });
   await invoke('endVideoCall', 'consumer', { callId });
   expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(8);
@@ -394,7 +410,7 @@ test.each(['rejected', 'missed', 'failed'])('earned video adapter consumes nothi
   enableEarnedVideo(15);
   const { callId } = await start();
   if (outcome === 'rejected') await invoke('respondToVideoCall', 'host', { callId, action: 'decline' });
-  else if (outcome === 'missed') { jest.setSystemTime(Date.now() + 31000); await api.reconcileExpiredVideoCalls(); }
+  else if (outcome === 'missed') { await advanceTo(Date.now() + 31000); await api.reconcileExpiredVideoCalls(); }
   else { await invoke('respondToVideoCall', 'host', { callId, action: 'accept' }); await invoke('endVideoCall', 'consumer', { callId, reason: 'rtc_failure' }); }
   expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(15);
 });
@@ -425,4 +441,170 @@ test('check-in earned during a call does not extend its captured allowance', asy
   await expirePreview(callId);
   expect(callData(callId).freeVideoAllowanceSeconds).toBe(10);
   expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(10);
+});
+
+
+test('new call with exhausted preview and four Credits is rejected before call or lock creation', async () => {
+  mockDocs.set('users/consumer/entitlements/dailyPreview', { dateKey: D.utcDateKey(), consumed: true });
+  mockDocs.get('users/consumer').wallet.creditBalance = 4;
+  await expect(start()).rejects.toMatchObject({ details: { reason: 'insufficient_call_credits', minimumCredits: 5 } });
+  expect([...mockDocs.keys()].some((path) => path.startsWith('calls/') || path.startsWith('activeCallLocks/'))).toBe(false);
+});
+test('new call can start with one increment but keeps paid consent explicit', async () => {
+  mockDocs.set('users/consumer/entitlements/dailyPreview', { dateKey: D.utcDateKey(), consumed: true });
+  mockDocs.get('users/consumer').wallet.creditBalance = 5;
+  const result = await start();
+  expect(result.billingMode).toBe('awaiting_paid_confirmation');
+  expect(balance()).toBe(5); expect(ledger()).toHaveLength(0);
+});
+
+const connectionEvent = (callId, uid, state = 'connected', overrides = {}) => {
+  const call=callData(callId);
+  return invoke('reportVideoCallConnection',uid,{callId,state,epoch:call.connection.epoch,
+    sequence:(call.connection.participants[uid]?.sequence||0)+1,...overrides});
+};
+const recoverConnection = async (callId) => {
+  await connectionEvent(callId,'consumer'); await connectionEvent(callId,'host');
+};
+test('shared grace is ten seconds on both backend and client',()=>{
+  expect(D.RECONNECT_GRACE_SECONDS).toBe(10);
+  expect(require('../../../shared/callRecoveryConfig').RECONNECT_GRACE_SECONDS).toBe(10);
+});
+test('disconnect freezes earned consumption; both fresh acknowledgements resume the same allowance and call',async()=>{
+  enableEarnedVideo(40); const callId=await connect();
+  await advanceTo(Date.now()+5000);
+  await connectionEvent(callId,'consumer','disconnected');
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(35);
+  const saved=clone(callData(callId).connection);
+  jest.setSystemTime(Date.now()+8000);
+  await invoke('syncVideoCallPaymentState','host',{callId});
+  expect(callData(callId).connection.freeMs).toBe(saved.freeMs);
+  await connectionEvent(callId,'consumer');
+  expect(callData(callId).status).toBe('reconnecting');
+  await connectionEvent(callId,'host');
+  expect(callData(callId)).toMatchObject({id:callId,status:'connected',freeVideoAllowanceSeconds:40,freeVideoConsumedSeconds:5});
+  await advanceTo(Date.now()+3000);
+  await invoke('endVideoCall','host',{callId});
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(32);
+  expect(callData(callId).durationSeconds).toBe(8);
+});
+test('failed reconnect settles earned seconds once and does not count the grace or scheduler delay',async()=>{
+  enableEarnedVideo(40); const callId=await connect(); await advanceTo(Date.now()+4000);
+  await connectionEvent(callId,'host','disconnected');
+  jest.setSystemTime(Date.now()+70000);
+  await api.reconcileExpiredVideoCalls();
+  await invoke('endVideoCall','consumer',{callId});
+  expect(callData(callId)).toMatchObject({status:'ended',durationSeconds:4,endReason:'reconnect_timeout'});
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(36);
+  expect([...mockDocs.keys()].filter(key=>key.startsWith('callHistory/'))).toHaveLength(1);
+});
+test('out of order and duplicate disconnect events neither reopen segments nor extend grace',async()=>{
+  const callId=await connect(); await advanceTo(Date.now()+5000);
+  const event={state:'disconnected',epoch:0,sequence:3};
+  await connectionEvent(callId,'consumer','disconnected',event);
+  const deadline=callData(callId).connection.reconnectDeadlineMs;
+  jest.setSystemTime(Date.now()+1000);
+  await connectionEvent(callId,'consumer','disconnected',event);
+  await connectionEvent(callId,'consumer','connected',{epoch:0,sequence:99});
+  expect(callData(callId).connection.reconnectDeadlineMs).toBe(deadline);
+  expect(callData(callId).status).toBe('reconnecting');
+  await recoverConnection(callId);
+  expect(callData(callId).connection.freeMs).toBe(5000);
+});
+const paidConnection = async()=>{
+  const callId=await connect(); await expirePreview(callId);
+  await invoke('confirmPaidContinuation','consumer',{callId});return callId;
+};
+test('paid partial seconds continue across reconnect without billing the disconnected interval',async()=>{
+  const callId=await paidConnection();await advanceTo(Date.now()+7000);
+  await connectionEvent(callId,'consumer','disconnected');
+  jest.setSystemTime(Date.now()+8000);
+  await invoke('settleVideoCallIncrement','host',{callId});
+  expect(balance()).toBe(100);expect(callData(callId).connection.paidMs).toBe(7000);
+  await recoverConnection(callId);await advanceTo(Date.now()+3000);
+  await Promise.all(['consumer','host','consumer'].map(uid=>invoke('settleVideoCallIncrement',uid,{callId})));
+  expect(balance()).toBe(95);expect(ledger()).toHaveLength(1);
+  await connectionEvent(callId,'host','disconnected');jest.setSystemTime(Date.now()+5000);
+  await Promise.all(['consumer','host'].map(uid=>invoke('endVideoCall',uid,{callId})));
+  expect(balance()).toBe(95);expect(callData(callId).paidDurationSeconds).toBe(10);
+});
+test('end settles outstanding full connected increments once even when clients skipped settlement',async()=>{
+  const callId=await paidConnection();await advanceTo(Date.now()+22000);
+  await Promise.all(['consumer','host','consumer'].map(uid=>invoke('endVideoCall',uid,{callId})));
+  await api.reconcileExpiredVideoCalls();
+  expect(balance()).toBe(90);expect(ledger()).toHaveLength(2);
+  expect(callData(callId).paidDurationSeconds).toBe(22);
+});
+test('reconcile/end race preserves legitimate paid usage and one history entry',async()=>{
+  const callId=await paidConnection();await advanceTo(Date.now()+12000);
+  await connectionEvent(callId,'host','disconnected');jest.setSystemTime(Date.now()+10001);
+  await Promise.all([api.reconcileExpiredVideoCalls(),invoke('endVideoCall','consumer',{callId})]);
+  expect(balance()).toBe(95);expect(ledger()).toHaveLength(1);
+  expect(callData(callId).paidDurationSeconds).toBe(12);
+  await expect(connectionEvent(callId,'host')).resolves.toMatchObject({idempotent:true,status:'ended'});
+});
+test.each(['consumer','host'])('%s crash stops an abandoned paid call without undoing settled increments',async(uid)=>{
+  const callId=await paidConnection();await advanceTo(Date.now()+10000);
+  await invoke('settleVideoCallIncrement','consumer',{callId});
+  // Only the surviving participant sends further evidence.
+  for(let i=0;i<3;i++){jest.setSystemTime(Date.now()+3000);await connectionEvent(callId,uid==='consumer'?'host':'consumer');}
+  jest.setSystemTime(Date.now()+10000);await api.reconcileExpiredVideoCalls();
+  expect(callData(callId).status).toBe('ended');expect(balance()).toBe(95);
+  expect(mockDocs.has('activeCallLocks/consumer')).toBe(false);
+  expect(mockDocs.get('users/host').hostStatus.availability).toBe('online');
+  await expect(start()).resolves.toHaveProperty('callId');
+});
+test('connecting abandonment releases both locks and busy state without consuming earned time',async()=>{
+  enableEarnedVideo(40);const {callId}=await start();await invoke('respondToVideoCall','host',{callId,action:'accept'});
+  await invoke('acknowledgeVideoConnected','consumer',{callId});
+  jest.setSystemTime(callData(callId).connectingDeadlineMs+1);await api.reconcileExpiredVideoCalls();
+  expect(callData(callId)).toMatchObject({status:'failed',durationSeconds:0,endReason:'connecting_timeout'});
+  expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(40);
+  expect(mockDocs.get('users/host').hostStatus.availability).toBe('online');
+  await expect(start()).resolves.toHaveProperty('callId');
+});
+test('lock expiry alone cannot evict a healthy active call',async()=>{
+  const callId=await connect();mockDocs.get('activeCallLocks/host').expiresAtMs=0;
+  // Busy availability rejects entry before the lock-conflict check.
+  await expect(start()).rejects.toMatchObject({code:'failed-precondition'});
+  expect(mockDocs.get('activeCallLocks/host').callId).toBe(callId);
+});
+test('start safely retires stale calls and recovers orphan locks without waiting for scheduler',async()=>{
+  const callId=await connect();jest.setSystemTime(callData(callId).connection.leaseUntilMs+1);
+  const next=await start();expect(next.callId).not.toBe(callId);
+  expect(callData(callId).status).toBe('failed');
+  expect(mockDocs.get('activeCallLocks/host').callId).toBe(next.callId);
+});
+test('orphan lock without expiry and orphan busy host recover safely',async()=>{
+  mockDocs.set('activeCallLocks/host',{callId:'missing'});
+  mockDocs.get('users/host').hostStatus.availability='busy';
+  await api.reconcileExpiredVideoCalls();
+  expect(mockDocs.has('activeCallLocks/host')).toBe(false);
+  expect(mockDocs.get('users/host').hostStatus.availability).toBe('online');
+  await expect(start()).resolves.toHaveProperty('callId');
+});
+test('reconciliation preserves a replacement lock and its busy state',async()=>{
+  const callId=await connect();await advanceTo(Date.now()+5000);await connectionEvent(callId,'host','disconnected');
+  const other=clone(callData(callId));other.id='replacement';other.status='connected';other.connection.state='connected';other.connection.leaseUntilMs=Date.now()+600000;
+  mockDocs.set('calls/replacement',other);mockDocs.set('activeCallLocks/host',{callId:'replacement'});
+  jest.setSystemTime(Date.now()+11000);await api.reconcileExpiredVideoCalls();
+  expect(mockDocs.get('activeCallLocks/host').callId).toBe('replacement');
+  expect(mockDocs.get('users/host').hostStatus.availability).toBe('busy');
+});
+test.each([null,'stranger'])('%s cannot report connection lifecycle',async(uid)=>{
+  const callId=await connect();await expect(connectionEvent(callId,uid)).rejects.toMatchObject({code:uid?'permission-denied':'unauthenticated'});
+});
+test('participant cannot submit timing, usage, or arbitrary connection epoch',async()=>{
+  const callId=await connect(),before=clone(callData(callId));
+  for(const data of [{durationSeconds:999},{connectedMs:999},{epoch:999},{sequence:-1}])
+    await expect(connectionEvent(callId,'consumer','connected',data)).rejects.toMatchObject({code:'invalid-argument'});
+  expect(callData(callId)).toEqual(before);
+});
+
+
+test('new calls snapshot a trusted changed host rate',async()=>{
+  mockDocs.get('users/host').hostProfile.videoRateCredits=50;
+  const callId=await connect();expect(callData(callId).ratePerMinute).toBe(50);
+  mockDocs.get('users/host').hostProfile.videoRateCredits=100;
+  expect(callData(callId).ratePerMinute).toBe(50);
 });

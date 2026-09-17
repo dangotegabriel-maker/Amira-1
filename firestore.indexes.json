@@ -17,9 +17,18 @@
       { "fieldPath": "status", "order": "ASCENDING" },
       { "fieldPath": "expiresAtMs", "order": "ASCENDING" }
     ]}
+    ,{ "collectionGroup": "users", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "role", "order": "ASCENDING" },
+      { "fieldPath": "hostStatus.availability", "order": "ASCENDING" }
+    ]}
   ],
   "fieldOverrides": [
     { "collectionGroup": "following", "fieldPath": "hostId", "indexes": [
+      { "order": "ASCENDING", "queryScope": "COLLECTION" },
+      { "order": "DESCENDING", "queryScope": "COLLECTION" },
+      { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+    ]},
+    { "collectionGroup": "blocked", "fieldPath": "blockedUid", "indexes": [
       { "order": "ASCENDING", "queryScope": "COLLECTION" },
       { "order": "DESCENDING", "queryScope": "COLLECTION" },
       { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }

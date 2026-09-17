@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Compass, HeartHandshake, Activity, MessageCircle, User } from 'lucide-react-native';
+import { useMessageActivity } from '../context/MessageActivityContext';
+import { unreadBadge } from '../utils/messageActivity';
 import { socketService } from '../services/socketService';
 import { useNavigation } from '@react-navigation/native';
 
@@ -16,6 +18,7 @@ import { isApprovedHost } from '../models/userModel';
 const Tab = createBottomTabNavigator();
 
 const MainTabNavigator = () => {
+  const { unread } = useMessageActivity();
   const navigation = useNavigation();
   const { user } = useUser();
   const approvedHost = isApprovedHost(user);
@@ -36,6 +39,7 @@ const MainTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
+        tabBarBadge: route.name === 'Messages' ? unreadBadge(unread) : undefined,
         tabBarIcon: ({ color, size }) => {
           if (route.name === 'Home') {
             return <Compass color={color} size={size} />;

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { BadgeCheck, ChevronLeft, Flag, MessageCircle, ShieldAlert, UserMinus, UserPlus, Video } from 'lucide-react-native';
+import { callReviewService } from '../../services/callReviewService';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
 import { dbService } from '../../services/firebaseService';
@@ -25,6 +26,11 @@ const UserProfileScreen = ({ route, navigation }) => {
   const focused = useIsFocused();
   const [relationshipLabel, setRelationshipLabel] = useState('Follow');
   const userId = route.params?.userId;
+  const [reputation, setReputation] = useState(null);
+  useEffect(() => {
+    if (!userId || route.params?.demoHost) return undefined;
+    return callReviewService.subscribeReputation(userId, setReputation, () => setReputation(null));
+  }, [userId, route.params?.demoHost]);
   const [host, setHost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [following, setFollowing] = useState(false);
@@ -86,6 +92,7 @@ const UserProfileScreen = ({ route, navigation }) => {
         <View style={styles.heroInfo}><View style={styles.nameRow}><Text style={styles.name}>{host.username}</Text>{approvedHost && <BadgeCheck color="#60A5FA" size={23} />}</View><Text style={styles.meta}>{host.age} · {country?.flag || ''} {host.countryName || country?.name}</Text>{approvedHost && <Text style={styles.availability}>{host.hostStatus?.availability || 'offline'}</Text>}</View>
       </View>
 
+      {approvedHost && <Text style={{ padding: 14, color: COLORS.textSecondary }}>{reputation?.reviewCount > 0 ? `${reputation.averageRating.toFixed(1)} / 5 - ${reputation.reviewCount} call reviews` : 'No call reviews yet'}</Text>}
       <View style={styles.actions}>
         {canFollowProfile(user, host) && !blockState.blocked && <TouchableOpacity style={[styles.action, following && styles.following]} onPress={toggleFollow} disabled={followBusy}>{following ? <UserMinus color={COLORS.primary} /> : <UserPlus color="white" />}<Text style={[styles.actionText, following && { color: COLORS.primary }]}>{host.isDemo ? (following ? 'Following' : 'Follow') : relationshipLabel}</Text></TouchableOpacity>}
         <TouchableOpacity style={styles.smallAction} onPress={() => host.isDemo ? Alert.alert('Development profile', 'Messaging this demo profile is unavailable.') : navigation.navigate('ChatDetail', { userId, name: host.username })}><MessageCircle color={COLORS.primary} /><Text style={styles.smallText}>Message</Text></TouchableOpacity>

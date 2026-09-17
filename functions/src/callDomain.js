@@ -1,5 +1,5 @@
 'use strict';
-const RING_TIMEOUT_SECONDS=30, PREVIEW_SECONDS=30, BILLING_INCREMENT_SECONDS=10, RTC_TOKEN_SECONDS=900, RECONNECT_GRACE_SECONDS=20;
+const RING_TIMEOUT_SECONDS=30, PREVIEW_SECONDS=30, BILLING_INCREMENT_SECONDS=10, RTC_TOKEN_SECONDS=900, RECONNECT_GRACE_SECONDS=require('./callRecoveryConfig').RECONNECT_GRACE_SECONDS;
 const PAID_DECISION_SECONDS = 60;
 const ACTIVE_STATUSES=new Set(['requesting','ringing','accepted','connecting','connected']);
 const TERMINAL_STATUSES=new Set(['ended','rejected','missed','cancelled','failed']);

@@ -37,3 +37,12 @@ test('insufficient-credit error details survive the callable adapter', async () 
     expect(mockWalletWrite).not.toHaveBeenCalled();
   } finally { warn.mockRestore(); }
 });
+
+
+test('connection adapter forwards only ordered lifecycle evidence',async()=>{
+ mockInvoke.mockResolvedValue({data:{status:'reconnecting'}});
+ await callService.reportConnection('call-1',{state:'disconnected',sequence:2,epoch:0,durationSeconds:999,ratePerMinute:1});
+ expect(httpsCallable).toHaveBeenCalledWith(undefined,'reportVideoCallConnection');
+ expect(mockInvoke).toHaveBeenCalledWith({callId:'call-1',state:'disconnected',sequence:2,epoch:0});
+ expect(mockWalletWrite).not.toHaveBeenCalled();
+});

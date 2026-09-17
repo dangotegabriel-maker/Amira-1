@@ -6,7 +6,7 @@ import { rewardsService } from '../../services/rewardsService';
 import { COLORS } from '../../theme/COLORS';
 
 const rewardDescription = (reward) => [
-  reward.freeMessages > 0 && `${reward.freeMessages} free messages`,
+  reward.freeMessages > 0 && `${reward.freeMessages} Chat Passes`,
   reward.freeVideoSeconds > 0 && `${reward.freeVideoSeconds}s free video`,
   reward.quickMatchCount > 0 && `${reward.quickMatchCount} Quick Match`,
   reward.promotionalGifts?.generic > 0 && `${reward.promotionalGifts.generic} promotional gift`,
@@ -66,11 +66,11 @@ const RewardsScreen = () => {
     {error ? <View style={styles.card}><Text style={styles.body}>{error}</Text><TouchableOpacity onPress={() => setRefresh((value) => value + 1)}><Text style={styles.link}>Try again</Text></TouchableOpacity></View> : null}
     {!dashboard ? !error && <ActivityIndicator color={COLORS.primary} accessibilityLabel="Loading rewards" /> : <>
       <View style={styles.balances}>
-        {[['Free Messages', balance.freeMessages], ['Free Video Time', videoTime(balance.freeVideoSeconds)],
+        {[['Chat Passes', balance.freeMessages], ['Free Video Time', videoTime(balance.freeVideoSeconds)],
           ['Quick Matches', balance.quickMatchCount], ['Promotional Gifts', balance.promotionalGifts?.generic || 0]].map(([label, value]) =>
           <View style={styles.balance} key={label}><Text style={styles.value}>{value}</Text><Text style={styles.label}>{label}</Text></View>)}
       </View>
-      <Text style={styles.note}>Free Messages are active now: each outgoing text uses one. Earn more from Daily Check-In and friendships. Quick Matches and promotional gifts are saved for future features.</Text>
+      <Text style={styles.note}>1 Chat Pass unlocks a conversation for 24 hours. Friends message freely. Earn Chat Passes from Daily Check-In and friendships. Quick Matches and promotional gifts are saved for future features.</Text>
       {!dashboard.earnedVideoEnabled && <Text style={styles.note}>Earned Free Video Time is saved for later activation. The current daily call preview remains available under its existing rules.</Text>}
       <View style={styles.card}>
         <Text style={styles.heading}>Daily Check-In</Text>

@@ -1,6 +1,8 @@
 // src/components/FreeNowBanner.js
 import React, { useState, useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View, Dimensions } from "react-native";
+import { Alert, Animated, StyleSheet, Text, TouchableOpacity, View, Dimensions } from "react-native";
+import { startVideoCall } from '../services/callNavigationService';
+import { dbService } from '../services/firebaseService';
 import { COLORS } from '../theme/COLORS';
 import { socketService } from '../services/socketService';
 import { useNavigation } from '@react-navigation/native';
@@ -46,9 +48,13 @@ const FreeNowBanner = () => {
     <Animated.View style={[styles.container, { transform: [{ translateY: slideAnim }] }]}>
       <TouchableOpacity
         style={styles.banner}
-        onPress={() => {
+        onPress={async () => {
           hide();
-          navigation.navigate('VideoCall', { userId: user.id, name: user.name });
+          try {
+            const creator = await dbService.getUserProfile(user.id);
+            if (!creator) throw new Error('Profile unavailable.');
+            await startVideoCall({ navigation, creator });
+          } catch (error) { Alert.alert('Video call unavailable', error.message); }
         }}
       >
         <Text style={styles.text}>✨ {user.name} is now free! Tap to call now!</Text>

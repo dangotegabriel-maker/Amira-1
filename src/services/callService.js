@@ -47,6 +47,7 @@ export const callService = Object.freeze({
   syncPaymentState: async (callId) => invoke('syncVideoCallPaymentState',{callId}),
   confirmPaid: async (callId) => invoke('confirmPaidContinuation',{callId}),
   settleIncrement: async (callId) => invoke('settleVideoCallIncrement',{callId}),
+  reportConnection: async (callId, event) => invoke('reportVideoCallConnection', { callId, state: event.state, sequence: event.sequence, epoch: event.epoch }),
   end: async (callId,reason) => invoke('endVideoCall',{callId,reason}),
   subscribe: (callId,listener) => onSnapshot(doc(db,'calls',callId),(snapshot)=>{if(snapshot.exists())listener({id:snapshot.id,callId:snapshot.id,...snapshot.data()});}),
   subscribeIncoming: (uid, listener) =>

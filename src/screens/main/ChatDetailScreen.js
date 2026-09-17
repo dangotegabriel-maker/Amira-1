@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -11,9 +12,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { MoreVertical, Send } from 'lucide-react-native';
+import { MoreVertical, Send, Video, Gift } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useIsFocused } from '@react-navigation/native';
+import { useAndroidKeyboardOverlap } from '../../hooks/useAndroidKeyboardOverlap';
+import { useMessageActivity } from '../../context/MessageActivityContext';
+import { chatPassService, chatAccessLabel, CHAT_PASS_COPY } from '../../services/chatPassService';
+import { followService } from '../../services/followService';
+import { dbService } from '../../services/firebaseService';
+import { isApprovedHost } from '../../models/userModel';
+import { startVideoCall } from '../../services/callNavigationService';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
 import { messagingService } from '../../services/messagingService';
@@ -41,6 +50,14 @@ const toMillis = (value) => {
 
 const ChatDetailScreen = ({ route, navigation }) => {
   const { user } = useUser();
+  const focused = useIsFocused();
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  useEffect(() => { const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active')); return () => sub.remove(); }, []);
+  const activity = useMessageActivity();
+  const keyboard = useAndroidKeyboardOverlap();
+  const [recipient, setRecipient] = useState(null);
+  const [access, setAccess] = useState(null);
+  const [accessVersion, setAccessVersion] = useState(0);
   const insets = useSafeAreaInsets();
 
   const receiverId = route.params?.userId;
@@ -69,6 +86,26 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const pendingSend = useRef(null);
 
   useEffect(() => {
+    if (!focused || !receiverId) return undefined;
+    let alive = true;
+    dbService.getUserProfile(receiverId).then((profile) => { if (alive) setRecipient(profile); }).catch(() => {});
+    activity.setActiveConversation(conversationId);
+    const stop = followService.subscribeRelationship(receiverId, (value) => { setBlocked(value); setAccessVersion((n) => n + 1); }, () => {});
+    return () => { alive = false; activity.setActiveConversation(null); stop(); };
+  }, [focused, receiverId, conversationId]);
+  useEffect(() => {
+    if (!focused || user?.role !== 'consumer' || !receiverId || blocked.blocked) return undefined;
+    let alive = true, timer;
+    chatPassService.getAccess(receiverId).then((value) => {
+      if (!alive) return;
+      setAccess(value);
+      if (value.expiresAtMs > value.serverNowMs) timer = setTimeout(() => setAccessVersion((n) => n + 1), Math.min(2147483647, value.expiresAtMs - value.serverNowMs + 100));
+    }).catch(() => { if (alive) setAccess(null); });
+    return () => { alive = false; clearTimeout(timer); };
+  }, [focused, receiverId, user?.role, accessVersion, blocked.blocked]);
+  const hostActions = user?.role === 'consumer' && recipient?.uid === receiverId && isApprovedHost(recipient) && !blocked.blocked;
+
+  useEffect(() => {
     navigation.setOptions({
       headerTitle: () => (
         <TouchableOpacity
@@ -91,6 +128,11 @@ const ChatDetailScreen = ({ route, navigation }) => {
       ),
 
       headerRight: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        {hostActions && <>
+          <TouchableOpacity accessibilityLabel="Video call" onPress={() => startVideoCall({ navigation, creator: recipient })}><Video color={COLORS.primary} /></TouchableOpacity>
+          <TouchableOpacity accessibilityLabel="Gifts" onPress={() => Alert.alert('Gifts are coming soon', 'Gifting is not available yet. No Credits will be spent.')}><Gift color={COLORS.primary} /></TouchableOpacity>
+        </>}
         <TouchableOpacity
           onPress={() =>
             Alert.alert(name, 'Choose an action.', [
@@ -111,10 +153,10 @@ const ChatDetailScreen = ({ route, navigation }) => {
           }
         >
           <MoreVertical color={COLORS.text} />
-        </TouchableOpacity>
+        </TouchableOpacity></View>
       ),
     });
-  }, [navigation, name, receiverId, blocked]);
+  }, [navigation, name, receiverId, blocked, hostActions, recipient]);
 
   useEffect(() => {
     if (!conversationId) return undefined;
@@ -151,7 +193,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   }, [conversationId, receiverId]);
 
   useEffect(() => {
-    if (!conversationId || !conversationExists) {
+    if (!conversationId || !conversationExists || !focused || !appActive) {
       return undefined;
     }
 
@@ -167,7 +209,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
       },
       () => setLoading(false)
     );
-  }, [conversationId, conversationExists]);
+  }, [conversationId, conversationExists, focused, appActive]);
 
   useEffect(() => {
     if (!conversationId || !conversationExists) {
@@ -199,16 +241,16 @@ const ChatDetailScreen = ({ route, navigation }) => {
         pendingSend.current.id
       );
 
+      setAccessVersion((n) => n + 1);
       setConversationExists(true);
       pendingSend.current = null;
       setText('');
     } catch (error) {
-      if (error.details?.reason === 'insufficient_messages') {
-        Alert.alert('You’re out of free messages',
-          'Earn more from Daily Check-In in Rewards or by becoming Friends. Membership and recharge message bonuses are not active yet.', [
-            { text: 'View Rewards', onPress: () => navigation.navigate('Rewards') },
-            { text: 'Cancel', style: 'cancel' },
-          ]);
+      if (['insufficient_messages', 'insufficient_chat_passes'].includes(error.details?.reason)) {
+        Alert.alert('You need a Chat Pass to continue this conversation.', CHAT_PASS_COPY, [
+          { text: 'View Rewards', onPress: () => navigation.navigate('Rewards') },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
         return;
       }
       Alert.alert(
@@ -273,8 +315,9 @@ const ChatDetailScreen = ({ route, navigation }) => {
   );
 
   return (
+    <View ref={keyboard.viewport} onLayout={keyboard.measure} style={styles.container}>
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { paddingBottom: keyboard.overlap }]}
       behavior={
         Platform.OS === 'ios'
           ? 'padding'
@@ -347,6 +390,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         />
       )}
 
+      {user?.role === 'consumer' && !blocked.blocked && <Text style={{ color: COLORS.textSecondary, fontSize: 12, paddingHorizontal: 14, paddingVertical: 6 }}>{chatAccessLabel(access)}</Text>}
       <View
         style={[
           styles.composer,
@@ -422,7 +466,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
           );
         }}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingView></View>
   );
 };
 

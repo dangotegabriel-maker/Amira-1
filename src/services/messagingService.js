@@ -71,7 +71,7 @@ export const messagingService = {
     }
   },
 
-  subscribeInbox: (onValue, onError) => {
+  subscribeInbox: (onValue, onError, { all = false } = {}) => {
     const uid = auth.currentUser?.uid;
 
     if (!uid) return () => {};
@@ -81,14 +81,16 @@ export const messagingService = {
         collection(db, 'conversations'),
         where('participantIds', 'array-contains', uid),
         orderBy('lastMessageAt', 'desc'),
-        limit(100)
+        ...(all ? [] : [limit(100)])
       ),
+      { includeMetadataChanges: true },
       (snapshot) =>
         onValue(
           snapshot.docs.map((entry) => ({
             id: entry.id,
             ...entry.data(),
-          }))
+          })),
+          { fromCache: snapshot.metadata.fromCache }
         ),
       onError
     );

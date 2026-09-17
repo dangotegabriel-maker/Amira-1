@@ -4,13 +4,15 @@ export const paidContinuationChoice=({balance,incrementCredits})=>balance>=incre
 
 // Countdown is a projection of server deadlines, never a billing transition.
 export const getCallPaymentPresentation = (call, nowMs) => {
-  const previewRemaining = Number.isFinite(call?.previewEndsAtMs)
+  const segmentRemaining = call?.accountingVersion === 2 && call.billingMode === 'preview'
+    ? Math.max(0, Math.ceil(((call.freeVideoAllowanceSeconds || 0) * 1000 - (call.connection?.freeMs || 0) - (call.connection?.state === 'connected' ? Math.max(0, Math.min(nowMs,call.connection.leaseUntilMs) - call.connection.segmentStartedAtMs) : 0)) / 1000)) : null;
+  const previewRemaining = segmentRemaining !== null ? segmentRemaining : Number.isFinite(call?.previewEndsAtMs)
     ? Math.max(0, Math.ceil((call.previewEndsAtMs - nowMs) / 1000)) : null;
   const decisionExpired = Number.isFinite(call?.paymentDecisionDeadlineMs)
     && nowMs >= call.paymentDecisionDeadlineMs;
   const awaiting = call?.billingMode === 'awaiting_paid_confirmation';
   const previewExpired = call?.billingMode === 'preview' && previewRemaining === 0;
   return { previewRemaining, decisionExpired, awaiting,
-    mediaPaused: call?.billingMode === 'ended' || awaiting || previewExpired,
+    mediaPaused: call?.connection?.state === 'reconnecting' || call?.billingMode === 'ended' || awaiting || previewExpired,
   };
 };

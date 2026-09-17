@@ -1,4 +1,6 @@
 import React from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { MessageActivityProvider } from '../context/MessageActivityContext';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useUser } from '../context/UserContext';
 
@@ -52,7 +54,7 @@ const RootNavigator = () => {
   const isProfileComplete = isProfileActuallyComplete(user);
 
   return (
-    <Stack.Navigator
+    <SafeAreaProvider><MessageActivityProvider><Stack.Navigator
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
@@ -107,7 +109,7 @@ const RootNavigator = () => {
           <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ headerShown: true, title: 'Blocked Users' }} />
         </>
       )}
-    </Stack.Navigator>
+    </Stack.Navigator></MessageActivityProvider></SafeAreaProvider>
   );
 };
 

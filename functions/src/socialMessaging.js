@@ -32,7 +32,7 @@ const createSocialMessaging = ({ db, FieldValue, HttpsError }) => {
   };
   const conversationPatch = (base, participants, profiles, message, now, sender) => {
     const unreadCounts = { ...(base?.unreadCounts || {}) };
-    for (const uid of participants) unreadCounts[uid] = uid === sender ? 0 : (unreadCounts[uid] || 0) + 1;
+    for (const uid of participants) unreadCounts[uid] = message.type !== 'text' ? (unreadCounts[uid] || 0) : uid === sender ? 0 : (unreadCounts[uid] || 0) + 1;
     return { id: participants.join('__'), participantIds: participants,
       participants: base?.participants || Object.fromEntries(participants.map((uid, i) => [uid, summary(uid, profiles[i])])),
       lastMessage: message, lastMessageAt: now, unreadCounts,
@@ -52,28 +52,49 @@ const createSocialMessaging = ({ db, FieldValue, HttpsError }) => {
       if (receiver.role !== 'consumer' && !M.approvedHost(receiver)) throw new HttpsError('permission-denied', 'Recipient is unavailable.');
       const conversationRef = db.doc(`conversations/${conversationId}`), messageRef = db.doc(`conversations/${conversationId}/messages/${messageId}`);
       const rewardRef = db.doc(`consumerRewards/${uid}`);
-      const [conversation, existing, rewards, config] = await Promise.all([
+      const windowRef = db.doc(`consumerRewards/${uid}/chatWindows/${conversationId}`);
+      const [conversation, existing, rewards, config, window, outgoing, incoming] = await Promise.all([
         tx.get(conversationRef), tx.get(messageRef), tx.get(rewardRef), tx.get(db.doc('economyConfig/current')),
+        tx.get(windowRef), tx.get(db.doc(`users/${uid}/following/${receiverId}`)), tx.get(db.doc(`users/${receiverId}/following/${uid}`)),
       ]);
       validateConversation(conversation.data(), participants);
       if (existing.exists) {
         if (existing.data().text !== text || existing.data().senderId !== uid) throw new HttpsError('already-exists', 'This send identifier was already used.');
         return { conversationId, messageId, idempotent: true };
       }
-      const policy = M.messagePolicy(config.data()), decision = M.resolveMessagingEntitlement(sender, rewards.data(), policy);
+      const serverNowMs = Date.now();
+      const friends = validFollow(sender, receiver, outgoing.data(), uid, receiverId)
+        && validFollow(receiver, sender, incoming.data(), receiverId, uid);
+      const policy = M.messagePolicy(config.data()), decision = M.resolveMessagingEntitlement(sender, rewards.data(), policy, { friends, window: window.data(), nowMs: serverNowMs });
       if (!decision.allowed) throw new HttpsError(decision.source === 'ineligible_role' ? 'permission-denied' : 'resource-exhausted',
-        'You’re out of free messages.', { reason: decision.source === 'ineligible_role' ? 'ineligible_role' : 'insufficient_messages' });
+        'You need a Chat Pass to continue this conversation.', { reason: decision.source === 'ineligible_role' ? 'ineligible_role' : 'insufficient_chat_passes' });
       const now = FieldValue.serverTimestamp();
       if (decision.consume) {
         const balance = nonnegativeInteger(rewards.data().freeMessages - 1);
         tx.set(rewardRef, { freeMessages: balance, updatedAt: now }, { merge: true });
-        tx.create(db.doc(`consumerRewards/${uid}/messageTransactions/${M.eventId('message_send', conversationId, messageId)}`),
-          M.transactionData({ uid, delta: -1, balance, source: 'message_send', sourceId: messageId, conversationId, messageId, policyVersion: policy.version, createdAt: now }));
+        const windowId = M.eventId('chat_window', conversationId, messageId);
+        tx.set(windowRef, { consumerUid: uid, conversationId, otherUid: receiverId, openedAt: new Date(serverNowMs), expiresAt: new Date(serverNowMs + M.CHAT_WINDOW_MS), source: 'chat_pass', sourceTransactionId: windowId, windowId, updatedAt: now });
+        tx.create(db.doc(`consumerRewards/${uid}/messageTransactions/${windowId}`),
+          M.transactionData({ uid, delta: -1, balance, source: 'chat_window', sourceId: messageId, conversationId, messageId, otherUid: receiverId, windowId, policyVersion: policy.version, createdAt: now }));
       }
       const message = { text, senderId: uid, type: 'text', createdAt: now };
       tx.create(messageRef, { ...message, id: messageId, conversationId, receiverId, status: 'sent' });
       tx.set(conversationRef, conversationPatch(conversation.data(), participants, profiles, message, now, uid));
-      return { conversationId, messageId, idempotent: false };
+      return { conversationId, messageId, idempotent: false, windowOpened: decision.consume === 1 };
+    });
+  };
+  const getChatAccess = async (uid, otherUid) => {
+    const participants = pair(uid, otherUid), conversationId = participants.join('__');
+    return db.runTransaction(async (tx) => {
+      const [sender, receiver] = await readPair(tx, uid, otherUid);
+      const [rewards, window, outgoing, incoming, config] = await Promise.all([
+        tx.get(db.doc(`consumerRewards/${uid}`)), tx.get(db.doc(`consumerRewards/${uid}/chatWindows/${conversationId}`)),
+        tx.get(db.doc(`users/${uid}/following/${otherUid}`)), tx.get(db.doc(`users/${otherUid}/following/${uid}`)), tx.get(db.doc('economyConfig/current')),
+      ]);
+      const friends = validFollow(sender, receiver, outgoing.data(), uid, otherUid) && validFollow(receiver, sender, incoming.data(), otherUid, uid);
+      const serverNowMs = Date.now();
+      const decision = M.resolveMessagingEntitlement(sender, rewards.data(), M.messagePolicy(config.data()), { friends, window: window.data(), nowMs: serverNowMs });
+      return { ...decision, friends, balance: M.chatPassBalance(rewards.data()), expiresAtMs: M.millis(window.data()?.expiresAt), serverNowMs };
     });
   };
   const syncFriendship = async (a, b) => {
@@ -129,6 +150,6 @@ const createSocialMessaging = ({ db, FieldValue, HttpsError }) => {
     }))).filter(Boolean);
     return { count: views.length, reveal, views: reveal ? views : [] };
   };
-  return { sendText, syncFriendship, trackProfileView, listProfileViews };
+  return { getChatAccess, sendText, syncFriendship, trackProfileView, listProfileViews };
 };
 module.exports = { createSocialMessaging, validFollow };

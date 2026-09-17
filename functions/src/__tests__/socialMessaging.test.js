@@ -103,11 +103,11 @@ test.each([3,1])('consumer balance %i is consumed atomically and receipt schema 
  docs.get('consumerRewards/c').freeMessages=n; const result=await send(); expect(balance()).toBe(n-1);
  expect(docs.get(`conversations/c__h/messages/${result.messageId}`)).toMatchObject({senderId:'c',receiverId:'h',type:'text',status:'sent'});
  expect(docs.get('conversations/c__h')).toMatchObject({unreadCounts:{c:0,h:1},lastReadAt:{c:Date.now(),h:null}});
- expect(docs.get(matching('/messageTransactions/')[0])).toMatchObject({delta:-1,source:'message_send',resultingBalance:n-1});
+ expect(docs.get(matching('/messageTransactions/')[0])).toMatchObject({delta:-1,source:'chat_window',resultingBalance:n-1});
 });
 test('zero entitlement has typed failure and no conversation artifacts',async()=>{
  docs.get('consumerRewards/c').freeMessages=0;
- await expect(send()).rejects.toMatchObject({details:{reason:'insufficient_messages'}});
+ await expect(send()).rejects.toMatchObject({details:{reason:'insufficient_chat_passes'}});
  expect(matching('conversations/')).toHaveLength(0); expect(balance()).toBe(0);
 });
 test('duplicate retry at zero costs once; changed payload with same ID rejected',async()=>{
@@ -117,7 +117,7 @@ test('duplicate retry at zero costs once; changed payload with same ID rejected'
 });
 test('distinct sends preserve conversation and recipient read marker',async()=>{
  await send(); docs.get('conversations/c__h').lastReadAt.h=123;
- await send('c','two'); expect(balance()).toBe(1);
+ await send('c','two'); expect(balance()).toBe(2);
  expect(docs.get('conversations/c__h')).toMatchObject({unreadCounts:{h:2},lastReadAt:{h:123}});
 });
 test.each(['users/c/blocked/h','users/h/blocked/c'])('blocked send consumes nothing: %s',async(path)=>{
@@ -151,4 +151,62 @@ test('generic grant supports both consumers, all future sources, and idempotency
  await db.runTransaction(async(tx)=>(await M.prepareMessageGrant({tx,db,FieldValue,uid:'c',amount:5,source:'signup',sourceId:'c',policyVersion:'test'}))());
  expect(balance()).toBe(8); expect(balance('c2')).toBe(5); expect(M.messagePolicy().enableSignupMessages).toBe(false);
  expect([...M.GRANT_SOURCES]).toEqual(expect.arrayContaining(['task_reward','credit_purchase_bonus','vip','promotion','admin_adjustment']));
+});
+
+
+test('Chat Pass opens 24 hours; concurrent and later texts share one pass, another person costs one', async () => {
+  await Promise.all([send('c','first'), send('c','second')]);
+  expect(balance()).toBe(2);
+  const window = docs.get('consumerRewards/c/chatWindows/c__h');
+  expect(M.millis(window.expiresAt) - M.millis(window.openedAt)).toBe(M.CHAT_WINDOW_MS);
+  await send('c','third'); expect(balance()).toBe(2);
+  await api.sendText('c',{receiverId:'c2',messageId:'other',text:'Hi'}); expect(balance()).toBe(1);
+  jest.advanceTimersByTime(M.CHAT_WINDOW_MS);
+  await send('c','expired'); expect(balance()).toBe(0);
+  jest.advanceTimersByTime(M.CHAT_WINDOW_MS);
+  await expect(send('c','expired-zero')).rejects.toMatchObject({details:{reason:'insufficient_chat_passes'}});
+});
+test('live mutual follows make texts free; ending friendship restores pass rules without clawback', async () => {
+  mutual(); await api.syncFriendship('c','h'); expect(balance()).toBe(8);
+  await send(); await send('c','two'); expect(balance()).toBe(8);
+  expect(matching('/chatWindows/')).toHaveLength(0);
+  docs.delete('users/h/following/c'); await send('c','three'); expect(balance()).toBe(7);
+  mutual(); await api.syncFriendship('c','h'); expect(balance()).toBe(7);
+});
+test('existing window is not extended by texts, and blocks still reject', async () => {
+  await send(); const expiry = M.millis(docs.get('consumerRewards/c/chatWindows/c__h').expiresAt);
+  jest.advanceTimersByTime(10000); await send('c','two');
+  expect(M.millis(docs.get('consumerRewards/c/chatWindows/c__h').expiresAt)).toBe(expiry);
+  docs.set('users/h/blocked/c',{}); await expect(send('c','blocked')).rejects.toMatchObject({code:'permission-denied'});
+  expect(balance()).toBe(2);
+});
+test('access query never consumes a pass and uses server time', async () => {
+  const access = await api.getChatAccess('c','h'); expect(access.balance).toBe(3);
+  expect(access.serverNowMs).toBe(Date.now()); expect(balance()).toBe(3);
+  expect(matching('/chatWindows/')).toHaveLength(0);
+});
+test('friendship system message preserves unread counts', async () => {
+  mutual(); await api.syncFriendship('c','h');
+  expect(docs.get('conversations/c__h').unreadCounts).toEqual({c:0,h:0});
+});
+
+const reviews = require('../callReviews').createCallReviews({db,FieldValue,HttpsError});
+const completedCall = (id) => docs.set(`calls/${id}`,{callerId:'c',receiverId:'h',participantIds:['c','h'],status:'ended',connectedAtMs:1000,durationSeconds:30});
+test('review retries contribute once, average/count update and edits are rejected',async()=>{
+ completedCall('call1'); completedCall('call2');
+ await Promise.all([reviews.submit('c',{callId:'call1',rating:5}),reviews.submit('c',{callId:'call1',rating:5})]);
+ await reviews.submit('c',{callId:'call2',rating:3,tags:['Friendly']});
+ expect(docs.get('hostReputation/h')).toMatchObject({reviewCount:2,ratingSum:8,averageRating:4,tagCounts:{Friendly:1}});
+ await expect(reviews.submit('c',{callId:'call1',rating:1})).rejects.toMatchObject({code:'already-exists'});
+});
+test.each(['missed','rejected','failed','ringing'])('ineligible call %s cannot affect reputation',async(status)=>{
+ completedCall('call1');docs.get('calls/call1').status=status;
+ await expect(reviews.submit('c',{callId:'call1',rating:5})).rejects.toMatchObject({code:'permission-denied'});
+ expect(docs.has('hostReputation/h')).toBe(false);
+});
+test('unconnected, unrelated reviewer and blocked review are denied',async()=>{
+ completedCall('call1');docs.get('calls/call1').connectedAtMs=null;
+ await expect(reviews.submit('c',{callId:'call1',rating:5})).rejects.toMatchObject({code:'permission-denied'});
+ completedCall('call1'); await expect(reviews.submit('c2',{callId:'call1',rating:5})).rejects.toMatchObject({code:'permission-denied'});
+ docs.set('users/h/blocked/c',{});await expect(reviews.submit('c',{callId:'call1',rating:5})).rejects.toMatchObject({code:'permission-denied'});
 });

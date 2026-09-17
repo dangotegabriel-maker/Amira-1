@@ -11,6 +11,7 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(firstUid)/blocked/$(secondUid))
         || exists(/databases/$(database)/documents/users/$(secondUid)/blocked/$(firstUid));
     }
+    function rateUnchanged() { return request.resource.data.get('hostProfile', {}).get('videoRateCredits', 25) == resource.data.get('hostProfile', {}).get('videoRateCredits', 25) && request.resource.data.get('hostProfile', {}).get('rateTier', 'ENTRY') == resource.data.get('hostProfile', {}).get('rateTier', 'ENTRY'); }
     function financialFieldsUnchanged() { return request.resource.data.wallet == resource.data.wallet && request.resource.data.earnings == resource.data.earnings; }
     function approvalUnchanged() { return request.resource.data.hostStatus.isApproved == resource.data.hostStatus.isApproved; }
     function vipUnchanged() { return request.resource.data.vip == resource.data.vip; }
@@ -26,8 +27,8 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if signedIn();
-      allow create: if owns(uid) && request.resource.data.uid == uid && request.resource.data.hostStatus.isApproved == false && request.resource.data.wallet.creditBalance == 0 && request.resource.data.earnings.pending == 0 && request.resource.data.earnings.available == 0 && request.resource.data.vip.tier == 'FREE' && request.resource.data.vip.status == 'inactive' && request.resource.data.profileViewStats.recentCount == 0 && request.resource.data.referralStats.qualifiedCount == 0 && request.resource.data.referralStats.pendingCount == 0;
-      allow update: if admin() || (owns(uid) && financialFieldsUnchanged() && approvalUnchanged() && vipUnchanged() && visitorStatsUnchanged() && referralRewardsUnchanged() && (request.resource.data.role == resource.data.role || validHostApplicationTransition()) && (request.resource.data.hostStatus == resource.data.hostStatus || validHostApplicationTransition() || validAvailabilityChange()));
+      allow create: if owns(uid) && request.resource.data.uid == uid && request.resource.data.hostStatus.isApproved == false && request.resource.data.get('hostProfile', {}).get('videoRateCredits',25) == 25 && request.resource.data.get('hostProfile', {}).get('rateTier','ENTRY') == 'ENTRY' && request.resource.data.wallet.creditBalance == 0 && request.resource.data.earnings.pending == 0 && request.resource.data.earnings.available == 0 && request.resource.data.vip.tier == 'FREE' && request.resource.data.vip.status == 'inactive' && request.resource.data.profileViewStats.recentCount == 0 && request.resource.data.referralStats.qualifiedCount == 0 && request.resource.data.referralStats.pendingCount == 0;
+      allow update: if admin() || (owns(uid) && financialFieldsUnchanged() && rateUnchanged() && approvalUnchanged() && vipUnchanged() && visitorStatsUnchanged() && referralRewardsUnchanged() && (request.resource.data.role == resource.data.role || validHostApplicationTransition()) && (request.resource.data.hostStatus == resource.data.hostStatus || validHostApplicationTransition() || validAvailabilityChange()));
       allow delete: if false;
 
       match /following/{targetUid} {
@@ -80,6 +81,9 @@ service cloud.firestore {
         && approvedHost(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
     }
 
+    match /{path=**}/blocked/{blockedUid} {
+      allow read: if signedIn() && resource.data.blockedUid == request.auth.uid;
+    }
     match /presence/{uid} {
       allow read: if signedIn();
       allow create: if owns(uid) && request.resource.data.uid == uid && request.resource.data.state in ['online', 'offline'];
@@ -128,6 +132,10 @@ service cloud.firestore {
     match /consumerRewards/{uid} {
       allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
       allow write: if false;
+      match /chatWindows/{conversationId} {
+        allow read: if owns(uid);
+        allow write: if false;
+      }
       match /messageTransactions/{transactionId} {
         allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
         allow write: if false;
@@ -136,6 +144,14 @@ service cloud.firestore {
         allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
         allow write: if false;
       }
+    }
+    match /hostReputation/{hostUid} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /callReviews/{reviewId} {
+      allow read: if signedIn() && request.auth.uid == resource.data.reviewerUid;
+      allow write: if false;
     }
     match /friendships/{pairId} {
       allow read: if participant(resource.data);

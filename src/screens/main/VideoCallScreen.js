@@ -12,6 +12,7 @@ import { reportService } from '../../services/reportService';
 import { useUser } from '../../context/UserContext';
 import { LocalRtcVideoView, RemoteRtcVideoView } from '../../components/RtcVideoView';
 
+const { HEARTBEAT_INTERVAL_MS } = require('../../../shared/callRecoveryConfig');
 const formatTime = (seconds) => Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
 const friendlyEnd = { rejected: 'Call declined', missed: 'Call not answered', failed: 'Unable to connect', cancelled: 'Call cancelled' };
 
@@ -28,6 +29,18 @@ const VideoCallScreen = ({ route, navigation }) => {
   const [clockReady, setClockReady] = useState(initialCall?.simulated === true);
   const [nowMs, setNowMs] = useState(Date.now());
   const clockOffset = useRef(0), syncPending = useRef(false), lastSync = useRef(0);
+  const rtcEvidence = useRef(false), eventSequence = useRef(0), eventQueue = useRef(Promise.resolve());
+  const reportConnection = (state) => {
+    eventQueue.current = eventQueue.current.catch(() => {}).then(async () => {
+      const current = callRef.current;
+      if (endedRef.current || current?.accountingVersion !== 2 || !['connected','reconnecting'].includes(current.status)) return;
+      if (state === 'connected' && !rtcEvidence.current) return;
+      const sequence = ++eventSequence.current;
+      const value = await callService.reportConnection(current.callId || current.id, { state, sequence, epoch: current.connection.epoch });
+      if (!endedRef.current && (value.lifecycleRevision || 0) >= (callRef.current?.lifecycleRevision || 0)) { callRef.current = value; setCall(value); setPhase(value.status); }
+    }).catch(() => {});
+    return eventQueue.current;
+  };
   const reconnectRef = useRef(), joinedRef = useRef(false), endedRef = useRef(false);
   const callRef = useRef(call), finishRef = useRef(), syncRef = useRef();
   callRef.current = call;
@@ -36,8 +49,8 @@ const VideoCallScreen = ({ route, navigation }) => {
   // Production calls always display and bill their server-captured snapshot.
   const rate = call?.ratePerMinute;
   const payment = getCallPaymentPresentation(call, nowMs);
-  const paymentPaused = payment.mediaPaused || (mode !== 'paid' && !clockReady);
-  const duration = call?.connectedAtMs ? Math.max(0, Math.floor((nowMs - call.connectedAtMs) / 1000)) : 0;
+  const paymentPaused = phase === 'reconnecting' || payment.mediaPaused || (mode !== 'paid' && !clockReady);
+  const duration = call?.accountingVersion === 2 ? Math.floor(((call.connection?.connectedMs || 0) + (call.connection?.state === 'connected' ? Math.max(0, Math.min(nowMs, call.connection.leaseUntilMs) - call.connection.segmentStartedAtMs) : 0)) / 1000) : call?.connectedAtMs ? Math.max(0, Math.floor((nowMs - call.connectedAtMs) / 1000)) : 0;
   const previewRemaining = payment.previewRemaining ?? DAILY_FREE_PREVIEW_SECONDS;
 
   const finish = async (reason = 'participant_ended') => {
@@ -49,8 +62,9 @@ const VideoCallScreen = ({ route, navigation }) => {
     let result = { durationSeconds: current?.durationSeconds ?? duration, billedCredits: current?.billedCredits || 0 };
     if (!current?.simulated) result = await callService.end(current.callId || current.id, reason).catch(() => result);
     navigation.replace('CallSummary', {
+      callId: current?.simulated ? undefined : current?.callId || current?.id,
       duration: result.durationSeconds ?? duration, coinsSpent: result.billedCredits ?? 0,
-      isConsumer, targetUserId: remoteProfile?.uid, targetUserName: remoteProfile?.username,
+      isConsumer, targetUserId: remoteProfile?.uid || (isConsumer ? current?.receiverId : current?.callerId), targetUserName: remoteProfile?.username,
       targetUserPhoto: remoteProfile?.profilePic,
     });
   };
@@ -77,19 +91,28 @@ const VideoCallScreen = ({ route, navigation }) => {
   };
 
   useEffect(() => {
+    if (!initialCall?.callId && !initialCall?.id) {
+      Alert.alert('Video call unavailable', 'Please start the call again.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      return undefined;
+    }
     let unsubscribe = () => {}, simTimer, active = true;
     const beginGrace = (reason) => {
+      rtcEvidence.current = false;
+      reportConnection('disconnected');
       setPhase('reconnecting');
+      if (reconnectRef.current) return;
       clearTimeout(reconnectRef.current);
       reconnectRef.current = setTimeout(() => finishRef.current(reason), RTC_RECONNECT_GRACE_SECONDS * 1000);
     };
     const off = rtcService.subscribe(async (event) => {
       if (!active || endedRef.current) return;
       if (event.type === 'remoteJoined') {
-        clearTimeout(reconnectRef.current);
+        clearTimeout(reconnectRef.current); reconnectRef.current = null;
+        rtcEvidence.current = true;
         setRemoteUid(event.uid);
         if (!callRef.current?.simulated) {
-          await callService.acknowledgeConnected(callRef.current.callId || callRef.current.id).catch(() => {});
+          if (callRef.current?.connection) await reportConnection('connected');
+          else await callService.acknowledgeConnected(callRef.current.callId || callRef.current.id).catch(() => {});
           if (callRef.current?.status === 'connected') setPhase('connected');
         } else {
           const connectedAtMs = Date.now();
@@ -98,9 +121,9 @@ const VideoCallScreen = ({ route, navigation }) => {
           setPhase('connected');
         }
       }
-      if (event.type === 'remoteLeft') beginGrace('remote_left');
+      if (event.type === 'remoteLeft') { setRemoteUid(null); beginGrace('remote_left'); }
       if (event.type === 'connectionLost') beginGrace('connection_lost');
-      if (event.type === 'reconnected') { clearTimeout(reconnectRef.current); setPhase('connected'); }
+      if (event.type === 'reconnected' && rtcService.getRemoteUid()) { rtcEvidence.current = true; clearTimeout(reconnectRef.current); reconnectRef.current = null; reportConnection('connected'); }
       if (event.type === 'error') finishRef.current('rtc_failure');
     });
     if (initialCall?.simulated) {
@@ -118,10 +141,12 @@ const VideoCallScreen = ({ route, navigation }) => {
     } else {
       unsubscribe = callService.subscribe(initialCall.callId || initialCall.id, (next) => {
         if (!active || endedRef.current) return;
+        if (next.accountingVersion === 2 && (next.lifecycleRevision || 0) < (callRef.current?.lifecycleRevision || 0)) return;
         callRef.current = next;
+        eventSequence.current = Math.max(eventSequence.current, next.connection?.participants?.[user?.uid]?.sequence || 0);
         setCall(next);
         setPhase(next.status);
-        if (['connecting', 'connected'].includes(next.status) && !joinedRef.current) {
+        if (['connecting', 'connected', 'reconnecting'].includes(next.status) && !joinedRef.current) {
           joinedRef.current = true;
           (async () => {
             try {
@@ -154,6 +179,12 @@ const VideoCallScreen = ({ route, navigation }) => {
       rtcService.leaveSession().catch(() => {});
     };
   }, []);
+
+  useEffect(() => {
+    if (call?.accountingVersion !== 2 || !['connecting','connected','reconnecting'].includes(call?.status)) return undefined;
+    const timer = setInterval(() => { if (rtcEvidence.current && !endedRef.current) { if (callRef.current.status === 'connecting') callService.acknowledgeConnected(callRef.current.callId || callRef.current.id).catch(() => {}); else reportConnection('connected'); } }, HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [call?.accountingVersion, call?.status]);
 
   useEffect(() => {
     if (call?.status !== 'connected') return undefined;

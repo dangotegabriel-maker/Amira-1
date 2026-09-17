@@ -5,6 +5,10 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 // React Native's first component render can require slow cold transforms on Windows.
 jest.setTimeout(30000);
 
+let mockRelationship = { valid: true, following: false, label: 'Follow' };
+jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
+jest.mock('../../../services/followService', () => ({ followService: { subscribeRelationship: (_id, cb) => { cb(mockRelationship); return () => {}; }, follow: jest.fn(async () => true) } }));
+jest.mock('../../../services/callReviewService', () => ({ callReviewService: { status: async () => ({ eligible: false }) } }));
 let mockListener;
 let mockUser;
 const mockRtc = {
@@ -155,4 +159,10 @@ test.each([true, false])('summary shows Credits used only for consumer=%s, with 
   expect(Boolean(screen.queryByText('Credits used'))).toBe(isConsumer);
   expect(screen.queryByText('Diamonds Earned')).toBeNull();
   screen.unmount();
+});
+
+test.each(['Follow','Following','Friends'])('summary resolves real %s relationship without accidental unfollow', async(label) => {
+  mockRelationship = { valid: true, following: label !== 'Follow', label };
+  const screen = render(<CallSummaryScreen navigation={navigation} route={{params:{duration:30,targetUserId:'host',targetUserName:'Host'}}}/>);
+  await flush(); expect(screen.getByText(label)).toBeTruthy(); screen.unmount();
 });

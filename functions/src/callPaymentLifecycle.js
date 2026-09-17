@@ -15,7 +15,7 @@ const awaitingPaymentFields = (nowMs) => ({
   expiresAtMs: nowMs + D.PAID_DECISION_SECONDS * 1000,
 });
 
-const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError }) => {
+const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError, recovery }) => {
   const result = (callId, call, nowMs) => ({
     callId, status: call.status, billingMode: call.billingMode,
     previewEndsAtMs: call.previewEndsAtMs ?? null,
@@ -26,7 +26,9 @@ const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError }) => {
 
   // Shared by the participant callable and the scheduled reconciler. Re-read
   // inside the transaction so a stale query cannot end a newly paid call.
-  const synchronize = (callId, uid) => db.runTransaction(async (tx) => {
+  const synchronize = async (callId, uid) => {
+    if(recovery && (await db.doc(`calls/${callId}`).get()).data()?.accountingVersion===2)return recovery.run(callId,uid);
+    return db.runTransaction(async (tx) => {
     const ref = db.doc(`calls/${callId}`), snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Call not found.');
     const call = snap.data(), nowMs = Date.now();
@@ -83,7 +85,15 @@ const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError }) => {
     return result(callId, { ...call, ...patch }, nowMs);
   });
 
+  };
+
   const confirm = async (callId, uid) => {
+    if(recovery && (await db.doc(`calls/${callId}`).get()).data()?.accountingVersion===2){
+      await recovery.run(callId,uid);
+      const value=await recovery.run(callId,uid,'confirm');
+      if(value.billingMode==='ended')throw new HttpsError('failed-precondition','This call can no longer continue.');
+      return {...value,incrementSeconds:D.BILLING_INCREMENT_SECONDS,incrementCredits:D.incrementCredits(value.ratePerMinute)};
+    }
     // Commit expiry independently: throwing from the following transaction
     // must not roll back cleanup when consent arrived after the deadline.
     await synchronize(callId, uid);

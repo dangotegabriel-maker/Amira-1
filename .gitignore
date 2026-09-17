@@ -21,3 +21,5 @@ expo-start.err.log
 
 # Firebase local configuration
 google-services.json
+
+firestore-debug.log

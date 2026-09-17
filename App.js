@@ -10,6 +10,7 @@ import FreeNowBanner from './src/components/FreeNowBanner';
 import SplashScreen from './src/screens/onboarding/SplashScreen';
 
 const AppContent = () => {
+  console.log('BOOT: AppContent rendered');
   const { user, loading } = useUser();
   const [splashReady, setSplashReady] = React.useState(false);
   useEffect(() => {
@@ -28,6 +29,7 @@ const AppContent = () => {
 };
 
 export default function App() {
+  console.log('BOOT: App rendered');
   return (
     <UserProvider>
       <GiftingProvider>

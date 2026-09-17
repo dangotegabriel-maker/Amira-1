@@ -30,7 +30,7 @@ afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
 test('consumer screen renders real balances and the server-provided seven-day schedule', async () => {
   const screen = render(<RewardsScreen />); await flush();
   expect(screen.getByText('0m 10s')).toBeTruthy();
-  expect(screen.getByText('7 free messages')).toBeTruthy();
+  expect(screen.getByText('7 Chat Passes')).toBeTruthy();
   expect(screen.getByText('Day 7')).toBeTruthy();
   expect(screen.getByText('Claim daily reward')).toBeTruthy();
   await act(async () => mockRewardsListener({ ...balances, freeVideoSeconds: 25 }));
