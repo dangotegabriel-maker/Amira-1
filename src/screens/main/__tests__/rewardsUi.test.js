@@ -15,7 +15,7 @@ jest.mock('../../../services/hostApplicationService', () => ({ hostApplicationSe
 jest.mock('lucide-react-native', () => Object.fromEntries(['ChevronRight', 'Coins', 'Crown', 'Eye', 'Gift', 'Headphones', 'LogOut', 'Settings', 'ShieldCheck', 'Sparkles', 'Users'].map((key) => [key, () => null])));
 const RewardsScreen = require('../RewardsScreen').default;
 const MyProfileScreen = require('../MyProfileScreen').default;
-const balances = { freeMessages: 0, freeVideoSeconds: 10, quickMatchCount: 0, promotionalGifts: { generic: 0 } };
+const balances = { freeMessages: 0, freeVideoSeconds: 10, quickMatchCount: 0 };
 const dashboard = () => ({ balances, dateKey: '2026-09-08', serverNowMs: Date.parse('2026-09-08T12:00:00Z'),
   nextDay: 1, checkIn: { totalClaims: 0, lastClaimDate: null }, alreadyClaimed: false, earnedVideoEnabled: false,
   schedule: Array.from({ length: 7 }, (_, index) => ({ freeMessages: index + 7 })), developmentDefaults: true });
@@ -92,3 +92,10 @@ test('old pending Host role can still access Consumer rewards',async()=>{
  mockUser={uid:'p',role:'host',hostStatus:{isApproved:false,verificationStatus:'submitted'}};
  const screen=render(<RewardsScreen/>);await flush();expect(screen.getByText('Claim daily reward')).toBeTruthy();expect(mockRewards.getDashboard).toHaveBeenCalled();screen.unmount();
 });
+
+
+test.each([false,true])('My Level profile entry remains Consumer-only, approved=%s',async(approved)=>{
+ mockUser={uid:'p',role:'host',hostStatus:{isApproved:approved,verificationStatus:'pending'}};const navigation={navigate:jest.fn()},screen=render(<MyProfileScreen navigation={navigation}/>);await flush();
+ expect(Boolean(screen.queryByText('My Level'))).toBe(!approved);if(!approved){fireEvent.press(screen.getByText('My Level'));expect(navigation.navigate).toHaveBeenCalledWith('MyLevel');expect(screen.getByText('Rewards & Tasks')).toBeTruthy();}screen.unmount();
+});
+test('Rewards shows no obsolete Gift tile or claim copy and explains UTC resets',async()=>{const next=dashboard();next.schedule[3]={};mockRewards.getDashboard.mockResolvedValue(next);const screen=render(<RewardsScreen/>);await flush();expect(screen.queryByText(/promotional gift/i)).toBeNull();expect(screen.getByText(/Missing a UTC day resets/)).toBeTruthy();expect(screen.getByText('Check-in only')).toBeTruthy();screen.unmount();});

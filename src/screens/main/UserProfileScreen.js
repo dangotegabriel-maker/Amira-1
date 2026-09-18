@@ -1,3 +1,5 @@
+import { AmiraLevelBadge } from '../../components/AmiraLevelBadge';
+import { levelService } from '../../services/levelService';
 import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -12,7 +14,7 @@ import { blockService } from '../../services/blockService';
 import { reportService } from '../../services/reportService';
 import { profileViewService } from '../../services/profileViewService';
 import { getCountryByCode } from '../../data/countries';
-import { isApprovedHost } from '../../models/userModel';
+import { isApprovedHost, isConsumer } from '../../models/userModel';
 import ReportUserModal from '../../components/ReportUserModal';
 import { startVideoCall } from '../../services/callNavigationService';
 
@@ -32,6 +34,14 @@ const UserProfileScreen = ({ route, navigation }) => {
     return callReviewService.subscribeReputation(userId, setReputation, () => setReputation(null));
   }, [userId, route.params?.demoHost]);
   const [host, setHost] = useState(null);
+  const [consumerLevel, setConsumerLevel] = useState(null);
+  useEffect(() => {
+    setConsumerLevel(null);
+    if (!focused || !isApprovedHost(user) || !isConsumer(host) || host?.isDemo) return undefined;
+    let active = true;
+    levelService.getConsumer(userId).then(value => { if (active) setConsumerLevel(value.level); }).catch(() => {});
+    return () => { active = false; };
+  }, [focused, user?.uid, user?.hostStatus?.isApproved, host?.uid, host?.hostStatus?.isApproved, userId]);
   const [loading, setLoading] = useState(true);
   const [following, setFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
@@ -92,6 +102,7 @@ const UserProfileScreen = ({ route, navigation }) => {
         <View style={styles.heroInfo}><View style={styles.nameRow}><Text style={styles.name}>{host.username}</Text>{approvedHost && <BadgeCheck color="#60A5FA" size={23} />}</View><Text style={styles.meta}>{host.age} · {country?.flag || ''} {host.countryName || country?.name}</Text>{approvedHost && <Text style={styles.availability}>{host.hostStatus?.availability || 'offline'}</Text>}</View>
       </View>
 
+      {consumerLevel !== null && isApprovedHost(user) && isConsumer(host) && <View style={{padding:14}}><AmiraLevelBadge level={consumerLevel}/></View>}
       {approvedHost && <Text style={{ padding: 14, color: COLORS.textSecondary }}>{reputation?.reviewCount > 0 ? `${reputation.averageRating.toFixed(1)} / 5 - ${reputation.reviewCount} call reviews` : 'No call reviews yet'}</Text>}
       <View style={styles.actions}>
         {canFollowProfile(user, host) && !blockState.blocked && <TouchableOpacity style={[styles.action, following && styles.following]} onPress={toggleFollow} disabled={followBusy}>{following ? <UserMinus color={COLORS.primary} /> : <UserPlus color="white" />}<Text style={[styles.actionText, following && { color: COLORS.primary }]}>{host.isDemo ? (following ? 'Following' : 'Follow') : relationshipLabel}</Text></TouchableOpacity>}

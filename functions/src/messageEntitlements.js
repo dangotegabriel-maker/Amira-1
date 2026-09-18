@@ -4,7 +4,7 @@ const { nonnegativeInteger } = require('./economyDomain');
 
 // Development policy only. Overrides must come from economyConfig/current.
 const MESSAGE_DEFAULTS = Object.freeze({ version: 'chat-passes-development-v2', friendshipMessages: 5, signupMessages: 5, enableSignupMessages: false });
-const GRANT_SOURCES = new Set(['signup', 'daily_check_in', 'task_reward', 'friendship', 'credit_purchase_bonus', 'vip', 'promotion', 'admin_adjustment']);
+const GRANT_SOURCES = new Set(['signup', 'daily_check_in', 'task_reward', 'friendship', 'credit_purchase_bonus', 'vip', 'promotion', 'admin_adjustment', 'level_milestone']);
 const eventId = (...parts) => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 const {isApprovedHost: approvedHost, isConsumer}=require('./accountRole');
 const messagePolicy = (config = {}) => ({ ...MESSAGE_DEFAULTS,

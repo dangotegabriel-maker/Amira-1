@@ -1,3 +1,4 @@
+jest.mock('../../screens/main/MyLevelScreen',()=>()=>null);
 import React from 'react';
 import {render} from '@testing-library/react-native';
 let mockUser;
@@ -61,9 +62,9 @@ test('trusted approval replaces Consumer navigation with permanent Host destinat
 test('approved Host stack excludes Consumer purchase/rewards/visitors and legacy withdrawals',()=>{
  mockUser.hostStatus.isApproved=true;const screen=render(<Root/>);
  for(const text of ['HostEarnings','FollowingList','HostVisitors'])expect(screen.getByText(text)).toBeTruthy();
- for(const text of ['Wallet','RechargeHub','VIPStore','Rewards','WhoViewedMe','VipInfo','Withdrawal','GiftLedger','HostApplication','RoleSelection'])expect(screen.queryByText(text)).toBeNull();screen.unmount();
+ for(const text of ['MyLevel','Wallet','RechargeHub','VIPStore','Rewards','WhoViewedMe','VipInfo','Withdrawal','GiftLedger','HostApplication','RoleSelection'])expect(screen.queryByText(text)).toBeNull();screen.unmount();
 });
 test('pending applicant retains Consumer routes but cannot open earnings/Host visitors',()=>{
  mockUser.role='host';mockUser.hostStatus.verificationStatus='pending';const screen=render(<Root/>);
- for(const text of ['Rewards','WhoViewedMe','VipInfo','HostApplication','FollowingList'])expect(screen.getByText(text)).toBeTruthy();for(const text of ['HostEarnings','HostVisitors','RoleSelection'])expect(screen.queryByText(text)).toBeNull();screen.unmount();
+ for(const text of ['MyLevel','Rewards','WhoViewedMe','VipInfo','HostApplication','FollowingList'])expect(screen.getByText(text)).toBeTruthy();for(const text of ['HostEarnings','HostVisitors','RoleSelection'])expect(screen.queryByText(text)).toBeNull();screen.unmount();
 });

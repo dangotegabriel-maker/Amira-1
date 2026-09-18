@@ -1,0 +1,30 @@
+﻿ M firestore.rules
+ M functions/src/__tests__/callPaymentLifecycle.test.js
+ M functions/src/__tests__/callRecovery.emulator.cjs
+ M functions/src/__tests__/economyDomain.test.js
+ M functions/src/consumerRewards.js
+ M functions/src/economyDomain.js
+ M functions/src/index.js
+ M functions/src/messageEntitlements.js
+ M src/navigation/RootNavigator.js
+ M src/navigation/__tests__/accountNavigation.test.js
+ M src/screens/main/MyProfileScreen.js
+ M src/screens/main/RewardsScreen.js
+ M src/screens/main/UserProfileScreen.js
+ M src/screens/main/__tests__/messageEntitlementUi.test.js
+ M src/screens/main/__tests__/rewardsUi.test.js
+ M src/services/__tests__/rewardsRules.emulator.cjs
+?? docs/consumer-rewards-level-report.md
+?? functions/src/__tests__/consumerLevels.test.js
+?? functions/src/__tests__/levelDomain.test.js
+?? functions/src/checkInDomain.js
+?? functions/src/consumerLevels.js
+?? functions/src/levelDomain.js
+?? src/components/AmiraLevelBadge.js
+?? src/screens/main/MyLevelScreen.js
+?? src/screens/main/__tests__/consumerLevelVisibility.test.js
+?? src/screens/main/__tests__/myLevelUi.test.js
+?? src/services/__tests__/levelRewards.emulator.cjs
+?? src/services/__tests__/levelService.test.js
+?? src/services/levelService.js
+?? docs/consumer-rewards-level-git-status.txt

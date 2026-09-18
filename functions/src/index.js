@@ -110,3 +110,9 @@ exports.getChatAccess=onCall(callable,(request)=>socialMessaging.getChatAccess(r
 const callReviews=require('./callReviews').createCallReviews({db,FieldValue,HttpsError});
 exports.getCallReviewStatus=onCall(callable,(request)=>callReviews.status(requireAuth(request),request.data?.callId));
 exports.submitCallReview=onCall(callable,(request)=>callReviews.submit(requireAuth(request),request.data));
+
+
+const consumerLevels=require('./consumerLevels').createConsumerLevels({db,FieldValue,HttpsError});
+exports.getMyAmiraLevel=onCall(callable,async(request)=>consumerLevels.snapshot(requireAuth(request)));
+exports.claimAmiraLevelMilestone=onCall(callable,async(request)=>consumerLevels.claim(requireAuth(request),request.data));
+exports.getConsumerAmiraLevel=onCall(callable,async(request)=>consumerLevels.publicLevel(requireAuth(request),request.data?.consumerUid));

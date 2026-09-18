@@ -10,8 +10,7 @@ const rewardDescription = (reward) => [
   reward.freeMessages > 0 && `${reward.freeMessages} Chat Passes`,
   reward.freeVideoSeconds > 0 && `${reward.freeVideoSeconds}s free video`,
   reward.quickMatchCount > 0 && `${reward.quickMatchCount} Quick Match`,
-  reward.promotionalGifts?.generic > 0 && `${reward.promotionalGifts.generic} promotional gift`,
-].filter(Boolean).join(' + ');
+].filter(Boolean).join(' + ') || 'Check-in only';
 const videoTime = (seconds) => `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 
 const RewardsScreen = () => {
@@ -48,7 +47,7 @@ const RewardsScreen = () => {
   const balance = rewards || dashboard?.balances;
   const checkIn = rewards?.checkIn || dashboard?.checkIn;
   const claimed = dashboard && (checkIn?.lastClaimDate === dashboard.dateKey || dashboard.alreadyClaimed || dashboard.claimed);
-  const nextDay = checkIn ? checkIn.totalClaims % 7 + 1 : dashboard?.nextDay;
+  const nextDay = dashboard?.nextDay;
   const claim = async () => {
     if (claiming || claimed || !dashboard || error) return;
     setClaiming(true);
@@ -56,26 +55,26 @@ const RewardsScreen = () => {
       const result = await rewardsService.claimDailyCheckIn();
       setDashboard(result);
       setRewards({ ...result.balances, checkIn: result.checkIn });
-      Alert.alert(result.alreadyClaimed ? 'Already claimed today' : 'Reward claimed', rewardDescription(result.reward || {}));
+      Alert.alert(result.alreadyClaimed ? 'Already claimed today' : [result.reward?.freeMessages,result.reward?.freeVideoSeconds,result.reward?.quickMatchCount].some(value=>value>0) ? 'Reward claimed' : 'Check-in complete', rewardDescription(result.reward || {}));
     } catch (failure) { Alert.alert('Unable to claim reward', failure.message || 'Please try again.'); }
     finally { setClaiming(false); }
   };
 
   return <ScrollView style={styles.container} contentContainerStyle={styles.content}>
     <Text style={styles.title}>Rewards &amp; Tasks</Text>
-    <Text style={styles.subtitle}>Your promotional rewards are separate from Credits and cannot be withdrawn.</Text>
+    <Text style={styles.subtitle}>Your reward entitlements are separate from purchased Credits and cannot be withdrawn.</Text>
     {error ? <View style={styles.card}><Text style={styles.body}>{error}</Text><TouchableOpacity onPress={() => setRefresh((value) => value + 1)}><Text style={styles.link}>Try again</Text></TouchableOpacity></View> : null}
     {!dashboard ? !error && <ActivityIndicator color={COLORS.primary} accessibilityLabel="Loading rewards" /> : <>
       <View style={styles.balances}>
         {[['Chat Passes', balance.freeMessages], ['Free Video Time', videoTime(balance.freeVideoSeconds)],
-          ['Quick Matches', balance.quickMatchCount], ['Promotional Gifts', balance.promotionalGifts?.generic || 0]].map(([label, value]) =>
+          ['Quick Matches', balance.quickMatchCount]].map(([label, value]) =>
           <View style={styles.balance} key={label}><Text style={styles.value}>{value}</Text><Text style={styles.label}>{label}</Text></View>)}
       </View>
-      <Text style={styles.note}>1 Chat Pass unlocks a conversation for 24 hours. Friends message freely. Earn Chat Passes from Daily Check-In and friendships. Quick Matches and promotional gifts are saved for future features.</Text>
+      <Text style={styles.note}>1 Chat Pass unlocks a conversation for 24 hours. Friends message freely. Earn Chat Passes from Daily Check-In and friendships. Quick Matches are saved for future features.</Text>
       {!dashboard.earnedVideoEnabled && <Text style={styles.note}>Earned Free Video Time is saved for later activation. The current daily call preview remains available under its existing rules.</Text>}
       <View style={styles.card}>
         <Text style={styles.heading}>Daily Check-In</Text>
-        <Text style={styles.body}>Claim once per UTC day. Each claim advances one day in the seven-day sequence; missed days do not reset it.</Text>
+        <Text style={styles.body}>Claim once per UTC day. Consecutive claims advance through seven days. Missing a UTC day resets your next claim to Day 1.</Text>
         {dashboard.developmentDefaults && <Text style={styles.note}>Development reward schedule. Values are configurable.</Text>}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.strip}>
           {dashboard.schedule.map((reward, index) => <View key={index} style={[styles.day, !claimed && nextDay === index + 1 && styles.selectedDay]}>

@@ -13,6 +13,7 @@ service cloud.firestore {
         || exists(/databases/$(database)/documents/users/$(secondUid)/blocked/$(firstUid));
     }
     function rateUnchanged() { return request.resource.data.get('hostProfile', {}).get('videoRateCredits', 25) == resource.data.get('hostProfile', {}).get('videoRateCredits', 25) && request.resource.data.get('hostProfile', {}).get('rateTier', 'ENTRY') == resource.data.get('hostProfile', {}).get('rateTier', 'ENTRY'); }
+    function levelFieldsAbsentOrUnchanged() { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['level','amiraLevel','lifetimeQualifyingPurchasedCredits']); }
     function financialFieldsUnchanged() { return request.resource.data.wallet == resource.data.wallet && request.resource.data.earnings == resource.data.earnings; }
     function approvalUnchanged() { return request.resource.data.get('hostStatus', {}).get('isApproved', false) == resource.data.get('hostStatus', {}).get('isApproved', false); }
     function vipUnchanged() { return request.resource.data.vip == resource.data.vip; }
@@ -36,8 +37,8 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if signedIn();
-      allow create: if owns(uid) && request.resource.data.uid == uid && request.resource.data.role == 'consumer' && request.resource.data.hostStatus.isApproved == false && request.resource.data.get('hostProfile', {}).get('videoRateCredits',25) == 25 && request.resource.data.get('hostProfile', {}).get('rateTier','ENTRY') == 'ENTRY' && request.resource.data.wallet.creditBalance == 0 && request.resource.data.earnings.pending == 0 && request.resource.data.earnings.available == 0 && request.resource.data.vip.tier == 'FREE' && request.resource.data.vip.status == 'inactive' && request.resource.data.profileViewStats.recentCount == 0 && request.resource.data.referralStats.qualifiedCount == 0 && request.resource.data.referralStats.pendingCount == 0;
-      allow update: if admin() || (owns(uid) && financialFieldsUnchanged() && rateUnchanged() && approvalUnchanged() && vipUnchanged() && visitorStatsUnchanged() && referralRewardsUnchanged() && safeRoleUpdate() && (request.resource.data.hostStatus == resource.data.hostStatus || validApplicantUpdate() || validAvailabilityChange()));
+      allow create: if owns(uid) && request.resource.data.uid == uid && request.resource.data.role == 'consumer' && !request.resource.data.keys().hasAny(['level','amiraLevel','lifetimeQualifyingPurchasedCredits']) && request.resource.data.hostStatus.isApproved == false && request.resource.data.get('hostProfile', {}).get('videoRateCredits',25) == 25 && request.resource.data.get('hostProfile', {}).get('rateTier','ENTRY') == 'ENTRY' && request.resource.data.wallet.creditBalance == 0 && request.resource.data.earnings.pending == 0 && request.resource.data.earnings.available == 0 && request.resource.data.vip.tier == 'FREE' && request.resource.data.vip.status == 'inactive' && request.resource.data.profileViewStats.recentCount == 0 && request.resource.data.referralStats.qualifiedCount == 0 && request.resource.data.referralStats.pendingCount == 0;
+      allow update: if admin() || (owns(uid) && financialFieldsUnchanged() && levelFieldsAbsentOrUnchanged() && rateUnchanged() && approvalUnchanged() && vipUnchanged() && visitorStatsUnchanged() && referralRewardsUnchanged() && safeRoleUpdate() && (request.resource.data.hostStatus == resource.data.hostStatus || validApplicantUpdate() || validAvailabilityChange()));
       allow delete: if false;
 
       match /following/{targetUid} {
@@ -166,6 +167,19 @@ service cloud.firestore {
       allow read: if participant(resource.data);
       allow write: if false;
     }
+    match /consumerLevels/{uid} {
+      allow read: if owns(uid) && consumer(get(/databases/$(database)/documents/users/$(uid)).data);
+      allow write: if false;
+      match /milestoneClaims/{level} {
+        allow read: if owns(uid) && consumer(get(/databases/$(database)/documents/users/$(uid)).data);
+        allow write: if false;
+      }
+      match /qualifyingPurchases/{purchaseId} {
+        allow read: if owns(uid) && consumer(get(/databases/$(database)/documents/users/$(uid)).data);
+        allow write: if false;
+      }
+    }
+    match /levelConfig/{documentId} { allow read, write: if false; }
     match /hostEarnings/{uid} {
       allow read: if admin() || (owns(uid) && approvedHost(get(/databases/$(database)/documents/users/$(uid)).data));
       allow write: if false;

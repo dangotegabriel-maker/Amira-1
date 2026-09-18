@@ -49,7 +49,7 @@ const MyProfileScreen = ({ navigation }) => {
 
     {approvedHost && <Section title="CREATOR"><Row icon={Coins} label="Earnings" detail="View pending earnings" onPress={() => navigation.navigate('HostEarnings')} /></Section>}
 
-    {isConsumer(user) && <Section title="REWARDS"><Row icon={Gift} label="Rewards & Tasks" detail="Your rewards and Daily Check-In" onPress={() => navigation.navigate('Rewards')} /></Section>}
+    {isConsumer(user) && <Section title="REWARDS"><Row icon={Sparkles} label="My Level" detail="Your Amira Level" onPress={() => navigation.navigate('MyLevel')} /><Row icon={Gift} label="Rewards & Tasks" detail="Your rewards and Daily Check-In" onPress={() => navigation.navigate('Rewards')} /></Section>}
 
     <Section title="SOCIAL"><Row icon={Users} label="Following" detail={approvedHost ? "Manage consumers you follow" : "Manage creators you follow"} onPress={() => navigation.navigate('FollowingList')} />{!approvedHost && <><Row icon={Eye} label="Who Viewed Me" detail={`${profileViewCount} recent profile views`} onPress={() => navigation.navigate('WhoViewedMe')} /><Row icon={Crown} label="Amira VIP" detail="Explore VIP access and benefits" onPress={() => navigation.navigate('VipInfo')} /></>}</Section>
 

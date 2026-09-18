@@ -350,14 +350,14 @@ test.each(['host', null])('%s cannot claim or read a consumer rewards dashboard'
   expect(mockDocs.has('consumerRewards/consumer')).toBe(false);
 });
 
-test('check-in sequence advances on actual claimed UTC days without missed-day resets', async () => {
+test('check-in sequence advances through consecutive UTC days and wraps after Day 7', async () => {
   for (let index = 0; index < 8; index++) {
-    await advanceTo(new Date(Date.UTC(2026, 8, 8 + index * 2)));
+    await advanceTo(new Date(Date.UTC(2026, 8, 8 + index)));
     const result = await invoke('claimDailyCheckIn', 'consumer', {});
     expect(result.checkIn.lastRewardDay).toBe(index % 7 + 1);
   }
   expect(mockDocs.get('consumerRewards/consumer')).toMatchObject({ freeMessages: 14, freeVideoSeconds: 35,
-    quickMatchCount: 1, promotionalGifts: { generic: 2 }, checkIn: { totalClaims: 8 } });
+    quickMatchCount: 1, checkIn: { totalClaims: 8 } });
 });
 
 test('dashboard does not create balances and claim cannot redirect reward to another user', async () => {
@@ -388,7 +388,7 @@ test('settlement uses trusted split config, atomically allocates once, and never
 
 const enableEarnedVideo = (seconds) => {
   mockDocs.set('economyConfig/current', { enableEarnedVideoSeconds: true, enableLegacyDailyPreview: false });
-  mockDocs.set('consumerRewards/consumer', { freeVideoSeconds: seconds, freeMessages: 3, promotionalGifts: { generic: 1 } });
+  mockDocs.set('consumerRewards/consumer', { freeVideoSeconds: seconds, freeMessages: 3 });
 };
 test('earned video adapter debits only authoritative connected elapsed seconds, idempotently', async () => {
   enableEarnedVideo(15);
@@ -614,4 +614,13 @@ test('old submitted applicant can call as Consumer without changing connected ac
  mockDocs.get('users/consumer').role='host';mockDocs.get('users/consumer').hostStatus={isApproved:false,hasApplied:true,verificationStatus:'submitted',availability:'offline'};
  const callId=await connect();expect(callData(callId).accountingVersion).toBe(2);expect(callData(callId).connection.state).toBe('connected');
  await expirePreview(callId);await expect(invoke('confirmPaidContinuation','consumer',{callId})).resolves.toMatchObject({billingMode:'paid'});
+});
+
+
+test('Level callables require authentication and cannot use wallet progress or caller-selected recipient',async()=>{
+ await expect(invoke('getMyAmiraLevel',null,{})).rejects.toMatchObject({code:'unauthenticated'});
+ await expect(invoke('getMyAmiraLevel','host',{})).rejects.toMatchObject({code:'permission-denied'});
+ mockDocs.get('users/consumer').wallet.creditBalance=99999;
+ await expect(invoke('getMyAmiraLevel','consumer',{level:10})).resolves.toMatchObject({level:0,milestones:[]});
+ await expect(invoke('claimAmiraLevelMilestone','consumer',{level:1,uid:'host'})).rejects.toMatchObject({code:'invalid-argument'});
 });

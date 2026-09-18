@@ -33,7 +33,7 @@ const profile = (uid, role) => ({ uid, role, username: uid,
 
 async function main() {
   await seed('users/c', profile('c', 'consumer')); await seed('users/c2', profile('c2', 'consumer')); await seed('users/h', profile('h', 'host'));
-  await seed('consumerRewards/c', { freeMessages: 3, freeVideoSeconds: 10, quickMatchCount: 1, promotionalGifts: { generic: 1 } });
+  await seed('consumerRewards/c', { freeMessages: 3, freeVideoSeconds: 10, quickMatchCount: 1 });
   await seed('consumerRewards/h', { freeMessages: 3, freeVideoSeconds: 10 });
   await seed('consumerRewards/c/claims/2026-09-08', { consumerUid: 'c', rewardDay: 1 });
   await seed('hostEarnings/h', { pendingCreditsEquivalent: 4 });

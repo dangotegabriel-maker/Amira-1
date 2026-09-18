@@ -54,6 +54,7 @@ test.each([['consumer','host',true],['host','consumer',false],['consumer','consu
  mockRole=role;mockTargetRole=target;
  const screen=await open();
  const header=render(navigation.setOptions.mock.calls.at(-1)[0].headerRight());
+ expect(header.queryByLabelText(/Amira Level/)).toBeNull();
  expect(Boolean(header.queryByLabelText('Video call'))).toBe(shown);
  expect(Boolean(header.queryByLabelText('Gifts'))).toBe(shown);
  if(shown){fireEvent.press(header.getByLabelText('Gifts'));expect(Alert.alert).toHaveBeenCalledWith('Gifts are coming soon',expect.any(String));expect(mockMessaging.sendText).not.toHaveBeenCalled();}
