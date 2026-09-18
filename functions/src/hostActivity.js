@@ -6,7 +6,8 @@ const createHostActivity=({db,HttpsError})=>{
  const approved=async uid=>{id(uid);const owner=await db.doc(`users/${uid}`).get();if(!owner.exists||!isApprovedHost(owner.data())||owner.data().isDemo)throw new HttpsError('permission-denied','Activity is available to approved Hosts only.');};
  const consumerProfile=async(uid,target)=>{
   await approved(uid);id(target);if(uid===target)throw new HttpsError('permission-denied','Profile unavailable.');
-  return db.runTransaction(async tx=>{const [person,left,right]=await Promise.all([tx.get(db.doc(`users/${target}`)),tx.get(db.doc(`users/${uid}/blocked/${target}`)),tx.get(db.doc(`users/${target}/blocked/${uid}`))]);if(!person.exists||!isConsumer(person.data())||person.data().isDemo||left.exists||right.exists)throw new HttpsError('permission-denied','Profile unavailable.');return D.publicConsumerProfile(target,person.data(),Date.now());});
+  const profile=await db.runTransaction(async tx=>{const [person,left,right]=await Promise.all([tx.get(db.doc(`users/${target}`)),tx.get(db.doc(`users/${uid}/blocked/${target}`)),tx.get(db.doc(`users/${target}/blocked/${uid}`))]);if(!person.exists||!isConsumer(person.data())||person.data().isDemo||left.exists||right.exists)throw new HttpsError('permission-denied','Profile unavailable.');return D.publicConsumerProfile(target,person.data(),Date.now());});
+  return {...profile,amiraId:await require('./amiraIdentity').createAmiraIdentity({db,HttpsError}).publicId(target,(await db.doc(`users/${target}`).get()).data()||{})};
  };
  const list=async(uid,input={})=>{
   if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>key!=='tab')||(input.tab!==undefined&&!D.ACTIVITY_TABS.includes(input.tab)))throw new HttpsError('invalid-argument','Invalid activity request.');

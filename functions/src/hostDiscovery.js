@@ -31,7 +31,7 @@ const createHostDiscovery=({db,FieldValue,HttpsError})=>{
   const [application,like,following,followers,followingCount,likes]=await Promise.all([
    db.doc(`hostApplications/${target}`).get(),db.doc(`users/${target}/likes/${uid}`).get(),db.doc(`users/${uid}/following/${target}`).get(),
    count(db.collectionGroup('following').where('hostId','==',target)),count(db.collection(`users/${target}/following`)),count(db.collection(`users/${target}/likes`))]);
-  return {...projectHost(target,snaps[1].data(),application.data()),social:{liked:like.exists,following:following.exists,followers,followingCount,likes}};
+  return {...projectHost(target,snaps[1].data(),application.data()),amiraId:await require('./amiraIdentity').createAmiraIdentity({db,HttpsError}).publicId(target,snaps[1].data()),social:{liked:like.exists,following:following.exists,followers,followingCount,likes}};
  };
  const setLike=async(uid,input)=>{
   if(!input||Object.keys(input).some(key=>!['hostId','liked'].includes(key))||typeof input.liked!=='boolean')throw new HttpsError('invalid-argument','Invalid Like request.');

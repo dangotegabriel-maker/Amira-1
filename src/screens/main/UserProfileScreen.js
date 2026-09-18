@@ -1,3 +1,4 @@
+import {AmiraIdentity} from '../../components/AmiraIdentity';
 import { AmiraLevelBadge } from '../../components/AmiraLevelBadge';
 import { levelService } from '../../services/levelService';
 import { useIsFocused } from '@react-navigation/native';
@@ -119,6 +120,7 @@ const UserProfileScreen = ({ route, navigation }) => {
         <View style={styles.heroInfo}><View style={styles.nameRow}><Text style={styles.name}>{host.username}</Text></View><Text style={styles.meta}>{host.age} · {country?.flag || ''} {host.countryName || country?.name}</Text>{approvedHost && <Text style={styles.availability}>{host.hostStatus?.availability || 'offline'}</Text>}</View>
       </View>
 
+      <AmiraIdentity uid={host.uid} amiraId={host.amiraId}/>
       {consumerLevel !== null && isApprovedHost(user) && isConsumer(host) && <View style={{padding:14}}><AmiraLevelBadge level={consumerLevel}/></View>}
       {approvedHost && <Text style={{ padding: 14, color: COLORS.textSecondary }}>{reputation?reputation.reviewCount>0?`${reputation.averageRating.toFixed(1)} / 5 - ${reputation.reviewCount} call reviews`:'No call reviews yet':'Call reviews unavailable'}</Text>}
       <View style={styles.actions}>

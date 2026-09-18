@@ -3,10 +3,12 @@ import { Alert } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 jest.setTimeout(30000);
 let mockUser, mockRewardsListener;
+const mockIdentityEnsure=jest.fn();
 const mockRewards = { getDashboard: jest.fn(), claimDailyCheckIn: jest.fn(),
   subscribe: jest.fn((listener) => { mockRewardsListener = listener; return () => {}; }) };
 jest.mock('../../../context/UserContext', () => ({ useUser: () => ({ user: mockUser }) }));
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
+jest.mock('../../../services/amiraIdentityService',()=>({amiraIdentityService:{ensure:mockIdentityEnsure}}));
 jest.mock('../../../services/rewardsService', () => ({ rewardsService: mockRewards }));
 jest.mock('../../../services/firebaseService', () => ({ authService: { signOut: jest.fn() } }));
 jest.mock('../../../services/socketService', () => ({ socketService: {} }));
@@ -21,6 +23,7 @@ const dashboard = () => ({ balances, dateKey: '2026-09-08', serverNowMs: Date.pa
   schedule: Array.from({ length: 7 }, (_, index) => ({ freeMessages: index + 7 })), developmentDefaults: true });
 const flush = async () => { await act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); }); };
 beforeEach(() => {
+  mockIdentityEnsure.mockResolvedValue({amiraId:null});
   jest.clearAllMocks(); jest.useFakeTimers(); mockUser = { uid: 'c', role: 'consumer' };
   mockRewards.getDashboard.mockResolvedValue(dashboard());
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -99,3 +102,5 @@ test.each([false,true])('My Level profile entry remains Consumer-only, approved=
  expect(Boolean(screen.queryByText('My Level'))).toBe(!approved);if(!approved){fireEvent.press(screen.getByText('My Level'));expect(navigation.navigate).toHaveBeenCalledWith('MyLevel');expect(screen.getByText('Rewards & Tasks')).toBeTruthy();}screen.unmount();
 });
 test('Rewards shows no obsolete Gift tile or claim copy and explains UTC resets',async()=>{const next=dashboard();next.schedule[3]={};mockRewards.getDashboard.mockResolvedValue(next);const screen=render(<RewardsScreen/>);await flush();expect(screen.queryByText(/promotional gift/i)).toBeNull();expect(screen.getByText(/Missing a UTC day resets/)).toBeTruthy();expect(screen.getByText('Check-in only')).toBeTruthy();screen.unmount();});
+
+test.each([false,true])('own Consumer/Host full account profile displays ensured public identity, never UID: %p',async approved=>{mockUser={uid:'internal-private-uid',username:'Actual account',hostStatus:{isApproved:approved}};mockIdentityEnsure.mockResolvedValue({amiraId:'AMR-583921'});const screen=render(<MyProfileScreen navigation={{}}/>);await flush();expect(screen.getByText('AMR-583921')).toBeTruthy();expect(screen.getByLabelText('Copy Amira ID')).toBeTruthy();expect(screen.queryByText('internal-private-uid')).toBeNull();screen.unmount();});

@@ -1,3 +1,4 @@
+import {amiraIdentityService} from '../services/amiraIdentityService';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   auth,
@@ -45,6 +46,7 @@ export const UserProvider = ({ children }) => {
       if (authUser) {
         try {
           const profile = await dbService.ensureUserProfile(authUser);
+          if(auth.currentUser?.uid===authUser.uid) amiraIdentityService.ensure().catch(()=>console.warn('Account identity unavailable.'));
           setUser(profile);
           setCoins(getWalletBalance(profile));
           unsubscribeProfile = dbService.subscribeToUserProfile(

@@ -1,0 +1,42 @@
+// Localhost-only authoritative identity races, projections and Firestore rules.
+const assert=require('node:assert/strict'),Module=require('node:module');
+process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8289';
+const backendRequire=Module.createRequire(require.resolve('../../../functions/package.json'));
+const admin=backendRequire('firebase-admin/app'),{getFirestore:adminFirestore,FieldValue,Timestamp}=backendRequire('firebase-admin/firestore'),{HttpsError}=backendRequire('firebase-functions/v2/https');
+const {initializeApp,deleteApp}=require('firebase/app'),{getFirestore,connectFirestoreEmulator,doc,setDoc,updateDoc,deleteDoc,getDoc,getDocs,collection,deleteField,setLogLevel}=require('firebase/firestore');
+const {createAmiraIdentity,MAX_ATTEMPTS}=require('../../../functions/src/amiraIdentity'),{createHostActivity}=require('../../../functions/src/hostActivity'),{createHostDiscovery}=require('../../../functions/src/hostDiscovery');
+setLogLevel('silent');const projectId=`demo-amira-identity-${Date.now()}`,serverApp=admin.initializeApp({projectId},projectId),db=adminFirestore(serverApp),apps=[];let checks=0;
+const check=(actual,expected)=>{assert.deepEqual(actual,expected);checks++;};const denied=async promise=>{await assert.rejects(promise,error=>error.code==='permission-denied');checks++;};const conflict=async promise=>{await assert.rejects(promise,error=>error.code==='failed-precondition');checks++;};
+const allocator=candidate=>createAmiraIdentity({db,FieldValue,HttpsError,candidate});
+const client=uid=>{const app=initializeApp({projectId,apiKey:'emulator-only'},uid);apps.push(app);const store=getFirestore(app);connectFirestoreEmulator(store,'127.0.0.1',8289,{mockUserToken:{sub:uid,user_id:uid}});return store;};
+const profile=(uid,approved=false)=>({uid,username:`Actual ${uid}`,role:approved?'host':'consumer',isProfileComplete:true,countryCode:'GH',dob:'2000-01-01',wallet:{creditBalance:0},earnings:{pending:0,available:0},hostStatus:{isApproved:approved,hasApplied:approved,verificationStatus:approved?'approved':'not_started',availability:'offline'},hostProfile:{bio:'Public',videoRateCredits:25,rateTier:'ENTRY'},vip:{tier:'FREE',status:'inactive'},profileViewStats:{recentCount:0},referralStats:{qualifiedCount:0,pendingCount:0}});
+const reserve=(id,uid)=>db.doc(`amiraIds/${id}`).set({uid,version:1,createdAt:FieldValue.serverTimestamp()});
+async function main(){
+ for(const uid of ['same','a','b','partial','malformed','wrong','missing','multiple','bounded','h','consumer','demo'])await db.doc(`users/${uid}`).set(profile(uid,uid==='h'));
+ const same=allocator(()=> 'AMR-000000'),result=await Promise.all([same.ensure('same'),same.ensure('same'),same.ensure('same')]);check(result.map(r=>r.amiraId),['AMR-000000','AMR-000000','AMR-000000']);check((await db.collection('amiraIds').where('uid','==','same').get()).size,1);check((await db.doc('amiraIds/AMR-000000').get()).data().createdAt instanceof Timestamp,true);
+ const seq=(first,second)=>{let n=0;return()=>n++===0?first:second;};
+ const cross=await Promise.all([allocator(seq('AMR-111111','AMR-222222')).ensure('a'),allocator(seq('AMR-111111','AMR-333333')).ensure('b')]);check(new Set(cross.map(r=>r.amiraId)).size,2);check(cross.filter(r=>r.amiraId==='AMR-111111').length,1);for(let index=0;index<2;index++)check((await db.doc(`amiraIds/${cross[index].amiraId}`).get()).data().uid,['a','b'][index]);
+ const before=(await db.doc('amiraIds/AMR-000000').get()).data().createdAt.toMillis();check((await allocator(()=> 'AMR-999999').ensure('same')).amiraId,'AMR-000000');check((await db.doc('amiraIds/AMR-000000').get()).data().createdAt.toMillis(),before);
+ await reserve('AMR-444444','partial');check((await allocator(()=> 'AMR-999999').ensure('partial')).amiraId,'AMR-444444');check((await db.collection('amiraIds').where('uid','==','partial').get()).size,1);
+ await db.doc('users/malformed').update({amiraId:'amr-123456'});await conflict(same.ensure('malformed'));check((await db.doc('users/malformed').get()).data().amiraId,'amr-123456');
+ await db.doc('users/wrong').update({amiraId:'AMR-000000'});await conflict(same.ensure('wrong'));check((await db.doc('amiraIds/AMR-000000').get()).data().uid,'same');
+ await db.doc('users/missing').update({amiraId:'AMR-555555'});await conflict(same.ensure('missing'));check((await db.doc('amiraIds/AMR-555555').get()).exists,false);
+ await reserve('AMR-666666','multiple');await reserve('AMR-777777','multiple');await conflict(same.ensure('multiple'));check((await db.doc('users/multiple').get()).data().amiraId,undefined);
+ let tries=0;await assert.rejects(allocator(()=>{tries++;return 'AMR-000000';}).ensure('bounded'),error=>error.code==='resource-exhausted');checks++;check(tries,MAX_ATTEMPTS);check((await db.doc('users/bounded').get()).data().amiraId,undefined);
+ await conflict(same.ensure('nonexistent'));await db.doc('users/demo').update({isDemo:true});await conflict(same.ensure('demo'));
+ const consumer=allocator(()=> 'AMR-888888');check((await consumer.ensure('consumer')).amiraId,'AMR-888888');await db.doc('users/consumer').update({'hostStatus.hasApplied':true,'hostStatus.verificationStatus':'pending',role:'consumer'});check((await consumer.ensure('consumer')).amiraId,'AMR-888888');await db.doc('users/consumer').update({'hostStatus.verificationStatus':'rejected'});check((await consumer.ensure('consumer')).amiraId,'AMR-888888');
+ const hostId=(await allocator(()=> 'AMR-999999').ensure('h')).amiraId;
+ const activity=createHostActivity({db,HttpsError}),discovery=createHostDiscovery({db,FieldValue,HttpsError});check((await activity.consumerProfile('h','consumer')).amiraId,'AMR-888888');check((await discovery.profile('consumer','h')).amiraId,hostId);
+ await db.doc('users/consumer').update({role:'host','hostStatus.isApproved':true,'hostStatus.verificationStatus':'approved'});check((await consumer.ensure('consumer')).amiraId,'AMR-888888');check((await db.doc('amiraIds/AMR-888888').get()).data().uid,'consumer');check(await consumer.publicId('consumer',(await db.doc('users/consumer').get()).data()),'AMR-888888');check((await discovery.profile('a','consumer')).amiraId,'AMR-888888');
+ check(await consumer.publicId('wrong',(await db.doc('users/wrong').get()).data()),null);check(await consumer.publicId('malformed',(await db.doc('users/malformed').get()).data()),null);check(await consumer.publicId('missing',(await db.doc('users/missing').get()).data()),null);
+ const c=client('same'),other=client('a'),fresh=client('new');
+ await denied(setDoc(doc(fresh,'users/new'),{...profile('new'),amiraId:'AMR-123456'}));await setDoc(doc(fresh,'users/new'),profile('new'));checks++;
+ await denied(updateDoc(doc(fresh,'users/new'),{amiraId:'AMR-123456'}));await denied(updateDoc(doc(fresh,'users/new'),{amiraId:null}));await denied(updateDoc(doc(c,'users/same'),{amiraId:'AMR-123456'}));await denied(updateDoc(doc(c,'users/same'),{amiraId:deleteField()}));await denied(updateDoc(doc(other,'users/same'),{amiraId:'AMR-123456'}));
+ await denied(setDoc(doc(c,'amiraIds/AMR-123456'),{uid:'same',version:1,createdAt:new Date()}));await denied(updateDoc(doc(c,'amiraIds/AMR-000000'),{uid:'a'}));await denied(setDoc(doc(c,'amiraIds/AMR-000000'),{uid:'a',version:1,createdAt:new Date()}));await denied(deleteDoc(doc(c,'amiraIds/AMR-000000')));await denied(getDoc(doc(c,'amiraIds/AMR-000000')));await denied(getDocs(collection(c,'amiraIds')));
+ await updateDoc(doc(c,'users/same'),{username:'Normal edit'});checks++;check((await db.doc('users/same').get()).data().amiraId,'AMR-000000');await denied(deleteDoc(doc(c,'users/same')));
+ await denied(updateDoc(doc(c,'users/same'),{'hostStatus.isApproved':true}));await denied(updateDoc(doc(c,'users/same'),{'hostProfile.videoRateCredits':99}));await denied(setDoc(doc(c,'consumerLevels/same'),{lifetimeQualifyingPurchasedCredits:9999}));await denied(setDoc(doc(c,'hostEarnings/same'),{pendingCreditsEquivalent:999}));
+ // Deleting an account through trusted local fixture operations does not release its ID.
+ await db.doc('users/same').delete();await assert.rejects(allocator(()=> 'AMR-000000').ensure('bounded'),error=>error.code==='resource-exhausted');checks++;check((await db.doc('amiraIds/AMR-000000').get()).data().uid,'same');
+ console.log(`Amira ID transaction/race/security: ${checks} checks passed (${projectId}, localhost only).`);
+}
+main().finally(()=>Promise.all([...apps.map(deleteApp),admin.deleteApp(serverApp)])).catch(error=>{console.error(error);process.exitCode=1;});

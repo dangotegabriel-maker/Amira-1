@@ -1,3 +1,4 @@
+import {AmiraIdentity} from '../../components/AmiraIdentity';
 import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -42,7 +43,7 @@ const MyProfileScreen = ({ navigation }) => {
       {user?.profilePic ? <Image source={{ uri: user.profilePic }} style={styles.avatar} /> : <View style={[styles.avatar, styles.avatarPlaceholder]}><Text style={styles.avatarLetter}>{user?.username?.slice(0, 1)?.toUpperCase() || 'A'}</Text></View>}
       <Text style={styles.name}>{user?.username || 'Amira User'}</Text>
       <Text style={styles.country}>{country?.flag || ''} {user?.countryName || country?.name || 'Country not set'}</Text>
-      <TouchableOpacity style={styles.edit} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.editText}>Edit Profile</Text></TouchableOpacity>
+      <AmiraIdentity own uid={user?.uid}/><TouchableOpacity style={styles.edit} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.editText}>Edit Profile</Text></TouchableOpacity>
     </View>
 
     {!approvedHost && <View style={styles.creditsCard}><Text style={styles.creditsLabel}>AMIRA CREDITS</Text><View style={styles.balanceRow}><Coins color="#FACC15" size={30} /><Text style={styles.balance}>{(user?.wallet?.creditBalance || 0).toLocaleString()}</Text></View><TouchableOpacity style={styles.recharge} onPress={() => navigation.navigate('RechargeHub')}><Text style={styles.rechargeText}>Recharge</Text></TouchableOpacity></View>}

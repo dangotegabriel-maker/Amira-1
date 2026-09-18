@@ -1,0 +1,20 @@
+﻿ M firestore.rules
+ M functions/src/__tests__/callPaymentLifecycle.test.js
+ M functions/src/hostActivity.js
+ M functions/src/hostDiscovery.js
+ M functions/src/index.js
+ M src/context/UserContext.js
+ M src/screens/main/MyProfileScreen.js
+ M src/screens/main/UserProfileScreen.js
+ M src/screens/main/__tests__/profileViewTrackingUi.test.js
+ M src/screens/main/__tests__/rewardsUi.test.js
+?? docs/amira-id-account-identity-git-status.txt
+?? docs/amira-id-account-identity-report.md
+?? functions/src/__tests__/amiraIdDomain.test.js
+?? functions/src/amiraIdDomain.js
+?? functions/src/amiraIdentity.js
+?? src/components/AmiraIdentity.js
+?? src/components/__tests__/amiraIdentity.test.js
+?? src/services/__tests__/amiraIdentity.emulator.cjs
+?? src/services/__tests__/amiraIdentityService.test.js
+?? src/services/amiraIdentityService.js

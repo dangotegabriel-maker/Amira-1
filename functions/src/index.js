@@ -137,3 +137,6 @@ exports.getHostAvailability=onCall(callable,async request=>hostConnect.availabil
 exports.setHostAvailability=onCall(callable,async request=>hostConnect.setAvailability(requireAuth(request),request.data));
 exports.getHostConnectConsumers=onCall(callable,async request=>hostConnect.discover(requireAuth(request),request.data));
 exports.getHostConnectToday=onCall(callable,async request=>hostConnect.today(requireAuth(request),request.data));
+
+const amiraIdentity=require('./amiraIdentity').createAmiraIdentity({db,FieldValue,HttpsError});
+exports.ensureAmiraId=onCall(callable,async request=>{const uid=requireAuth(request);if(request.data!==undefined&&(!request.data||typeof request.data!=='object'||Array.isArray(request.data)||Object.keys(request.data).length))throw new HttpsError('invalid-argument','Invalid identity request.');return amiraIdentity.ensure(uid);});
