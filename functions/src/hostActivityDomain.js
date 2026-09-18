@@ -1,0 +1,21 @@
+'use strict';
+const {isConsumer,isApprovedHost}=require('./accountRole');
+const {ageFromDob,controlledInterests,publicPhotos}=require('./hostDiscoveryDomain');
+const ACTIVITY_TABS=Object.freeze(['All','Visitors','Likes','Followers','Gifts','Calls']);
+const SOURCE_LIMIT=50,VIEW_LIMIT=100,VIEW_DEDUP_MS=30*60*1000;
+const validId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(value);
+const timestampMs=value=>{const ms=value?.toMillis?.()??(value instanceof Date?value.getTime():NaN);return Number.isFinite(ms)&&ms>0?ms:null;};
+const validTime=(value,now)=>{const ms=timestampMs(value);return ms!==null&&ms<=now?ms:null;};
+const viewDirection=(viewer,owner)=>isConsumer(viewer)&&isApprovedHost(owner)?'consumer_to_host':isApprovedHost(viewer)&&isConsumer(owner)?'host_to_consumer':null;
+const verifiedView=(record,direction,viewerUid,now)=>Boolean(record&&record.profileViewVersion===1&&record.direction===direction&&record.viewerUid===viewerUid&&validTime(record.lastViewedAt,now)!==null);
+const publicIdentity=(uid,profile)=>({uid,username:typeof (profile.username||profile.name)==='string'?(profile.username||profile.name):'',profilePic:publicPhotos(profile)[0]||'',countryCode:typeof (profile.countryCode||profile.country_code)==='string'?(profile.countryCode||profile.country_code):''});
+const publicConsumerProfile=(uid,profile,now)=>({...publicIdentity(uid,profile),role:'consumer',hostStatus:{isApproved:false},age:ageFromDob(profile.dob,now),gender:['female','male','other'].includes(profile.gender)?profile.gender:'',hostProfile:{bio:typeof profile.hostProfile?.bio==='string'?profile.hostProfile.bio:typeof profile.bio==='string'?profile.bio:'',interests:controlledInterests(profile.hostProfile?.interests||profile.interests),gallery:publicPhotos(profile)}});
+const sortEvents=events=>[...events].sort((a,b)=>b.timestampMs-a.timestampMs||a.id.localeCompare(b.id));
+const completedCall=(history,call,callId,hostUid,now)=>{
+ const time=validTime(history?.endedAt,now),seconds=history?.durationSeconds;
+ if(!history||!call||history.callId!==callId||history.receiverId!==hostUid||!validId(history.callerId)||history.status!=='ended'||time===null||(validTime(history.connectedAt,now)===null||validTime(history.connectedAt,now)>time)||!Number.isSafeInteger(seconds)||seconds<=0)return null;
+ if(history.participantIds?.length!==2||!history.participantIds.includes(hostUid)||!history.participantIds.includes(history.callerId)||history.callerId===hostUid)return null;
+ if(call.accountingVersion!==2||call.status!=='ended'||call.receiverId!==hostUid||call.callerId!==history.callerId||call.participantIds?.length!==2||!call.participantIds.includes(hostUid)||!call.participantIds.includes(history.callerId)||call.connection?.state!=='ended'||!Number.isSafeInteger(call.connection.connectedMs)||call.connection.connectedMs<0||Math.floor(call.connection.connectedMs/1000)!==seconds||call.durationSeconds!==seconds)return null;
+ return {actorUid:history.callerId,timestampMs:time,durationSeconds:seconds};
+};
+module.exports={ACTIVITY_TABS,SOURCE_LIMIT,VIEW_LIMIT,VIEW_DEDUP_MS,validId,timestampMs,validTime,viewDirection,verifiedView,publicIdentity,publicConsumerProfile,sortEvents,completedCall};

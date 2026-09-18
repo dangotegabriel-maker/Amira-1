@@ -124,33 +124,8 @@ const createSocialMessaging = ({ db, FieldValue, HttpsError }) => {
       return { friends: true, created: true };
     });
   };
-  const trackProfileView = async (viewerUid, ownerUid) => {
-    id(ownerUid);
-    if (viewerUid === ownerUid) return { counted: false };
-    return db.runTransaction(async (tx) => {
-      const profiles = await readPair(tx, viewerUid, ownerUid);
-      if (profiles.some((p) => p.isProfileComplete === false || p.isDemo)) return { counted: false };
-      const ref = db.doc(`users/${ownerUid}/profileViews/${viewerUid}`), view = await tx.get(ref);
-      if (view.exists && Date.now() - M.millis(view.data().lastViewedAt) < 30 * 60 * 1000) return { counted: false };
-      const now = FieldValue.serverTimestamp();
-      tx.set(ref, { viewerUid, firstViewedAt: view.data()?.firstViewedAt || now, lastViewedAt: now,
-        viewCount: (view.data()?.viewCount || 0) + 1 });
-      if (!view.exists) tx.update(db.doc(`users/${ownerUid}`), { 'profileViewStats.recentCount': (profiles[1].profileViewStats?.recentCount || 0) + 1 });
-      return { counted: true };
-    });
-  };
-  const listProfileViews = async (uid) => {
-    const profile = (await db.doc(`users/${uid}`).get()).data();
-    const reveal = M.approvedHost(profile) || (M.activeVip(profile) && ['VIP_1', 'VIP_2', 'VIP_3'].includes(profile.vip.tier));
-    const snapshot = await db.collection(`users/${uid}/profileViews`).orderBy('lastViewedAt', 'desc').limit(100).get();
-    const views = (await Promise.all(snapshot.docs.map(async (entry) => {
-      const view = entry.data();
-      const [blocked, reverse] = await Promise.all([db.doc(`users/${uid}/blocked/${view.viewerUid}`).get(), db.doc(`users/${view.viewerUid}/blocked/${uid}`).get()]);
-      return blocked.exists || reverse.exists ? null : { viewerUid: view.viewerUid, viewCount: view.viewCount,
-        firstViewedAtMs: M.millis(view.firstViewedAt), lastViewedAtMs: M.millis(view.lastViewedAt) };
-    }))).filter(Boolean);
-    return { count: views.length, reveal, views: reveal ? views : [] };
-  };
+  const profileViews=require('./profileViews').createProfileViews({db,FieldValue,HttpsError});
+  const trackProfileView=profileViews.track,listProfileViews=profileViews.list;
   return { getChatAccess, sendText, syncFriendship, trackProfileView, listProfileViews };
 };
 module.exports = { createSocialMessaging, validFollow };

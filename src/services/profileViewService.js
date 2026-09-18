@@ -8,7 +8,7 @@ const ownViews = async (ownerUid) => {
 export const profileViewService = {
   track: async (ownerUid) => {
     if (!shouldCountProfileView({ ownerUid, viewerUid: auth.currentUser?.uid })) return false;
-    return (await invoke('trackProfileView', { ownerUid })).counted;
+    return (await invoke('trackProfileView', { ownerUid, context:'full_profile' })).counted;
   },
   list: async (ownerUid, max = 100) => (await ownViews(ownerUid)).views.slice(0, max).map((view) => ({
     ...view, id: view.viewerUid,

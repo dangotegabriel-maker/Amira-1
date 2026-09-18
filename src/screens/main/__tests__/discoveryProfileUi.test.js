@@ -9,6 +9,7 @@ const mockProfile={get:jest.fn(),setLiked:jest.fn(),hide:jest.fn()},mockCall=jes
 jest.mock('../../../context/UserContext',()=>({useUser:()=>({user:mockUser})}));
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true,useFocusEffect:callback=>require('react').useEffect(callback,[callback])}));
 jest.mock('../../../services/discoveryService',()=>({discoveryService:mockDiscovery}));
+jest.mock('../../../services/hostActivityService',()=>({hostActivityService:{}}));
 jest.mock('../../../services/hostProfileService',()=>({hostProfileService:mockProfile}));
 jest.mock('../../../services/callNavigationService',()=>({startVideoCall:mockCall}));
 jest.mock('../../../services/firebaseService',()=>({dbService:{}}));

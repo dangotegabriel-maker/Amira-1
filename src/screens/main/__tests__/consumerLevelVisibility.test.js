@@ -6,6 +6,7 @@ let mockUser,mockTarget;
 const mockLevel={getConsumer:jest.fn()};
 jest.mock('../../../context/UserContext',()=>({useUser:()=>({user:mockUser})}));
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true}));
+jest.mock('../../../services/hostActivityService',()=>({hostActivityService:{getConsumer:async()=>mockTarget}}));
 jest.mock('../../../services/hostProfileService',()=>({hostProfileService:{get:jest.fn()}}));
 jest.mock('../../../services/levelService',()=>({levelService:mockLevel}));
 jest.mock('../../../services/firebaseService',()=>({dbService:{getUserProfile:async()=>mockTarget}}));

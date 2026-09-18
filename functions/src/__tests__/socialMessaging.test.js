@@ -2,7 +2,8 @@ const { createSocialMessaging } = require('../socialMessaging');
 const M = require('../messageEntitlements');
 const { createConsumerRewards } = require('../consumerRewards');
 const docs = new Map();
-const clone = (v) => v === undefined ? undefined : structuredClone(v);
+// Preserve timestamp Dates in Jest's realm, including while its clock is mocked.
+const clone = (v) => Object.prototype.toString.call(v) === '[object Date]' ? new Date(v.getTime()) : Array.isArray(v) ? v.map(clone) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([key,value]) => [key,clone(value)])) : v;
 const snap = (path) => ({ exists: docs.has(path), data: () => clone(docs.get(path)), id: path.split('/').at(-1) });
 const ref = (path) => ({ path, get: async () => snap(path) });
 let queue;
@@ -30,7 +31,7 @@ const db = { doc: ref, collection: (path) => {
     return result;
   }); queue = work.catch(() => {}); return work;
 }};
-const FieldValue = { serverTimestamp: () => Date.now() };
+const FieldValue = { serverTimestamp: () => new Date(Date.now()) };
 class HttpsError extends Error { constructor(code,message,details) { super(message); this.code=code; this.details=details; } }
 const api = createSocialMessaging({ db, FieldValue, HttpsError });
 const rewards = createConsumerRewards({ db, FieldValue, HttpsError });
@@ -47,17 +48,18 @@ beforeEach(() => {
  docs.set('consumerRewards/c',{freeMessages:3,freeVideoSeconds:10});
 });
 afterEach(() => jest.useRealTimers());
-test.each([['c','h'],['h','c'],['c','c2']])('profile view %s to %s uses existing records',async(a,b)=>{
+test.each([['c','h'],['h','c']])('profile view %s to %s uses existing records',async(a,b)=>{
  expect(await api.trackProfileView(a,b)).toEqual({counted:true});
  expect(docs.get(`users/${b}/profileViews/${a}`).viewCount).toBe(1);
  expect((await api.listProfileViews(b)).count).toBe(1);
 });
-test('host identities are standard; consumer identities require unexpired VIP',async()=>{
+test('Host identities are visible only to their owner; Consumer view identities remain deferred even with VIP flags',async()=>{
  await api.trackProfileView('c','h'); await api.trackProfileView('h','c');
  expect((await api.listProfileViews('h')).views[0].viewerUid).toBe('c');
  expect((await api.listProfileViews('c')).views).toEqual([]);
  docs.get('users/c').vip={status:'active',tier:'VIP_1',expiresAt:Date.now()+1000};
- expect((await api.listProfileViews('c')).views[0].viewerUid).toBe('h');
+ expect((await api.listProfileViews('c')).views).toEqual([]);
+ expect((await api.listProfileViews('c')).reveal).toBe(false);
  jest.advanceTimersByTime(1001); expect((await api.listProfileViews('c')).views).toEqual([]);
 });
 test('self view ignored and incomplete target not recorded',async()=>{
@@ -102,7 +104,7 @@ test('friendship preserves existing canonical conversation and read markers',asy
 test.each([3,1])('consumer balance %i is consumed atomically and receipt schema preserved',async(n)=>{
  docs.get('consumerRewards/c').freeMessages=n; const result=await send(); expect(balance()).toBe(n-1);
  expect(docs.get(`conversations/c__h/messages/${result.messageId}`)).toMatchObject({senderId:'c',receiverId:'h',type:'text',status:'sent'});
- expect(docs.get('conversations/c__h')).toMatchObject({unreadCounts:{c:0,h:1},lastReadAt:{c:Date.now(),h:null}});
+  expect(docs.get('conversations/c__h')).toMatchObject({unreadCounts:{c:0,h:1},lastReadAt:{c:new Date(Date.now()),h:null}});
  expect(docs.get(matching('/messageTransactions/')[0])).toMatchObject({delta:-1,source:'chat_window',resultingBalance:n-1});
 });
 test('zero entitlement has typed failure and no conversation artifacts',async()=>{
@@ -223,3 +225,5 @@ test('approved host with historical consumer role cannot claim consumer rewards'
  expect(M.resolveMessagingEntitlement(docs.get('users/h'),{freeMessages:0})).toMatchObject({allowed:true,consume:0,source:'host'});
  await expect(rewards.claim('h')).rejects.toMatchObject({code:'permission-denied'});
 });
+
+test('unsupported Consumer-to-Consumer and Host-to-Host profile view directions are rejected',async()=>{await expect(api.trackProfileView('c','c2')).rejects.toMatchObject({code:'permission-denied'});docs.set('users/h2',clone(host));await expect(api.trackProfileView('h','h2')).rejects.toMatchObject({code:'permission-denied'});expect(matching('/profileViews/')).toHaveLength(0);});

@@ -1,47 +1,32 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ChevronRight, Eye, Phone } from 'lucide-react-native';
-import { useUser } from '../../context/UserContext';
-import { isApprovedHost } from '../../models/userModel';
-import { COLORS } from '../../theme/COLORS';
-
-const HostActivityScreen = ({ navigation }) => {
-  const { user } = useUser();
-  if (!isApprovedHost(user)) return null;
-
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Activity</Text>
-      <Text style={styles.subtitle}>Catch up on calls and people who viewed your profile.</Text>
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Messages', { view: 'Calls' })}>
-        <Phone color={COLORS.primary} size={25} />
-        <View style={styles.body}>
-          <Text style={styles.label}>Recent calls</Text>
-          <Text style={styles.detail}>View call history and statuses in Messages.</Text>
-        </View>
-        <ChevronRight color={COLORS.textSecondary} size={20} />
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('HostVisitors')}>
-        <Eye color={COLORS.primary} size={25} />
-        <View style={styles.body}>
-          <Text style={styles.label}>Profile Visitors</Text>
-          <Text style={styles.detail}>See who has visited your profile.</Text>
-        </View>
-        <ChevronRight color={COLORS.textSecondary} size={20} />
-      </TouchableOpacity>
-    </ScrollView>
-  );
+import React,{useCallback,useEffect,useRef,useState} from 'react';
+import {ActivityIndicator,FlatList,Image,ScrollView,StyleSheet,Text,TouchableOpacity,View} from 'react-native';
+import {useFocusEffect,useIsFocused} from '@react-navigation/native';
+import {useUser} from '../../context/UserContext';
+import {isApprovedHost} from '../../models/userModel';
+import {hostActivityService} from '../../services/hostActivityService';
+import {COLORS} from '../../theme/COLORS';
+const {ACTIVITY_TABS}=require('../../../functions/src/hostActivityDomain');
+const EMPTY={All:'No activity yet.',Visitors:'No profile visitors yet.',Likes:'No likes yet.',Followers:'No followers yet.',Gifts:'No gift activity yet.',Calls:'No calls yet.'};
+export const activityRelativeTime=(timestamp,now)=>{const minutes=Math.max(0,Math.floor((now-timestamp)/60000));return minutes===0?'Just now':minutes<60?`${minutes}m ago`:minutes<1440?`${Math.floor(minutes/60)}h ago`:`${Math.floor(minutes/1440)}d ago`;};
+const description=event=>event.type==='Visitors'?'Viewed your profile':event.type==='Likes'?'Liked your profile':event.type==='Followers'?'Followed you':`Video call \u00b7 ${Math.floor(event.durationSeconds/60)}:${String(event.durationSeconds%60).padStart(2,'0')}`;
+const ActivityRow=({event,now,navigation})=>{
+ const [failed,setFailed]=useState(false);
+ useEffect(()=>setFailed(false),[event.actor.uid,event.actor.profilePic]);
+ return <View style={styles.row} testID={`activity-${event.id}`}><TouchableOpacity accessibilityLabel={`Open ${event.actor.username} profile`} disabled={!event.canOpenProfile} style={styles.identity} onPress={()=>navigation.navigate('UserProfile',{userId:event.actor.uid})}>
+ {event.actor.profilePic&&!failed?<Image source={{uri:event.actor.profilePic}} style={styles.avatar} onError={()=>setFailed(true)}/>:<View style={[styles.avatar,styles.initial]}><Text style={styles.initialText}>{event.actor.username?.[0]}</Text></View>}
+ <View style={{flex:1}}><Text style={styles.name}>{event.actor.username}</Text><Text style={styles.detail}>{description(event)}</Text><Text style={styles.time}>{activityRelativeTime(event.timestampMs,now)}</Text></View></TouchableOpacity>
+ <View style={styles.actions}><TouchableOpacity disabled={!event.canInteract} accessibilityLabel={`Message ${event.actor.username}`} style={[styles.message,!event.canInteract&&styles.disabled]} onPress={()=>navigation.navigate('ChatDetail',{userId:event.actor.uid,name:event.actor.username})}><Text style={styles.messageText}>Message</Text></TouchableOpacity><TouchableOpacity disabled accessibilityState={{disabled:true}} accessibilityLabel={`Invite ${event.actor.username}, coming later`} style={styles.invite}><Text style={styles.inviteText}>Invite</Text></TouchableOpacity></View></View>;
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F7F9' },
-  content: { padding: 18, paddingTop: 56, paddingBottom: 32 },
-  title: { color: COLORS.text, fontSize: 28, fontWeight: '900' },
-  subtitle: { color: COLORS.textSecondary, lineHeight: 20, marginTop: 8, marginBottom: 22 },
-  card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  body: { flex: 1 },
-  label: { color: COLORS.text, fontSize: 17, fontWeight: '900' },
-  detail: { color: COLORS.textSecondary, lineHeight: 20, marginTop: 5 },
-});
-
+const HostActivityScreen=({navigation,initialTab='All'})=>{
+ const {user}=useUser(),approved=isApprovedHost(user),focused=useIsFocused();
+ const [tab,setTab]=useState(initialTab),[events,setEvents]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(false),[now,setNow]=useState(Date.now());
+ const version=useRef(0);
+ const load=useCallback(async()=>{if(!approved)return;const request=++version.current;setLoading(true);setError(false);try{const value=await hostActivityService.list(tab);if(request===version.current)setEvents(value.events);}catch(e){if(request===version.current){setEvents([]);setError(true);}}finally{if(request===version.current)setLoading(false);}},[user?.uid,approved,tab]);
+ useFocusEffect(useCallback(()=>{load();return()=>{version.current++;};},[load]));
+ useEffect(()=>{if(!focused||!approved)return undefined;setNow(Date.now());const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer);},[focused,approved]);
+ if(!approved)return null;
+ return <View style={styles.container}><Text style={styles.title}>Activity</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={{gap:7,paddingHorizontal:14}}>{ACTIVITY_TABS.map(value=><TouchableOpacity key={value} accessibilityRole="tab" accessibilityState={{selected:tab===value}} onPress={()=>setTab(value)} style={[styles.tab,tab===value&&styles.activeTab]}><Text style={[styles.tabText,tab===value&&styles.activeText]}>{value}</Text></TouchableOpacity>)}</ScrollView>
+ {loading?<View style={styles.center}><ActivityIndicator color={COLORS.primary}/><Text style={styles.detail}>Loading activity...</Text></View>:error?<View style={styles.center}><Text style={styles.detail}>Activity could not be loaded.</Text><TouchableOpacity onPress={load} style={styles.message}><Text style={styles.messageText}>Try Again</Text></TouchableOpacity></View>:<FlatList data={events} keyExtractor={event=>event.id} contentContainerStyle={styles.list} refreshing={loading} onRefresh={load} renderItem={({item})=><ActivityRow event={item} now={now} navigation={navigation}/>} ListEmptyComponent={<View style={styles.center}><Text style={styles.detail}>{EMPTY[tab]}</Text></View>} ListFooterComponent={events.length?<Text style={styles.footer}>Recent activity. Video invites are coming later.</Text>:null}/>}</View>;
+};
+const styles=StyleSheet.create({container:{flex:1,backgroundColor:'#F7F7F9'},title:{fontSize:28,fontWeight:'900',color:COLORS.text,paddingHorizontal:18,paddingTop:56,paddingBottom:16},tabs:{flexGrow:0,maxHeight:44,marginBottom:10},tab:{paddingHorizontal:15,paddingVertical:10,borderRadius:18,backgroundColor:'white'},activeTab:{backgroundColor:COLORS.primary},tabText:{fontWeight:'800',color:COLORS.textSecondary},activeText:{color:'white'},list:{padding:14,paddingBottom:30,flexGrow:1},center:{flex:1,alignItems:'center',justifyContent:'center',padding:28,gap:16},row:{backgroundColor:'white',borderRadius:18,padding:14,marginBottom:10},identity:{flexDirection:'row',alignItems:'center',gap:12},avatar:{width:48,height:48,borderRadius:24,backgroundColor:'#EEE'},initial:{alignItems:'center',justifyContent:'center'},initialText:{fontWeight:'900',fontSize:22,color:COLORS.primary},name:{fontWeight:'900',color:COLORS.text,fontSize:16},detail:{color:COLORS.textSecondary,marginTop:4},time:{color:COLORS.textSecondary,fontSize:11,marginTop:5},actions:{flexDirection:'row',gap:10,marginTop:12},message:{paddingVertical:9,paddingHorizontal:18,borderRadius:16,backgroundColor:COLORS.primary},messageText:{color:'white',fontWeight:'800'},disabled:{backgroundColor:'#9CA3AF'},invite:{paddingVertical:9,paddingHorizontal:18,borderRadius:16,backgroundColor:'#F3F4F6'},inviteText:{fontWeight:'800',color:'#9CA3AF'},footer:{textAlign:'center',fontSize:11,color:COLORS.textSecondary,marginTop:8}});
 export default HostActivityScreen;

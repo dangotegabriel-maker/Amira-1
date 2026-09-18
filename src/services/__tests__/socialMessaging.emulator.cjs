@@ -30,7 +30,7 @@ async function main(){
  await denied(getDoc(doc(h,'users/c/profileViews/h'))); await denied(getDocs(collection(c,'users/c/profileViews')));
  await denied(getDoc(doc(other,'users/h/profileViews/c'))); await denied(getDoc(doc(anon,'users/h/profileViews/c')));
  await db.doc('users/c').update({vip:{tier:'VIP_1',status:'active',expiresAt:Timestamp.fromMillis(Date.now()+60000)}});
- check((await getDocs(collection(c,'users/c/profileViews'))).size,1); check((await api.listProfileViews('c')).views[0].viewerUid,'h');
+ await denied(getDocs(collection(c,'users/c/profileViews'))); check((await api.listProfileViews('c')).views.length,0);
  await db.doc('users/c').update({'vip.expiresAt':Timestamp.fromMillis(Date.now()-1000)});
  await denied(getDocs(collection(c,'users/c/profileViews'))); check((await api.listProfileViews('c')).views.length,0);
  check((await api.trackProfileView('c','c')).counted,false); check((await api.trackProfileView('c','h')).counted,false);

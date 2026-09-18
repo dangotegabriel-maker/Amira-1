@@ -1,35 +1,18 @@
-import { useIsFocused } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Eye, Lock } from 'lucide-react-native';
-import { useUser } from '../../context/UserContext';
-import { profileViewService } from '../../services/profileViewService';
-import { dbService } from '../../services/firebaseService';
-import { canSeeProfileVisitors } from '../../services/vipService';
-import { isApprovedHost } from '../../models/userModel';
-import { COLORS } from '../../theme/COLORS';
-
-const WhoViewedMeScreen = ({ navigation }) => {
-  const focused = useIsFocused();
-  const [error, setError] = useState(false);
-  const { user } = useUser();
-  const [views, setViews] = useState([]);
-  const [count, setCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const reveal = isApprovedHost(user) || canSeeProfileVisitors(user);
-  useEffect(() => {
-    if (!focused) return;
-    setLoading(true); setError(false);
-    const work = reveal
-      ? profileViewService.list(user.uid).then(async (items) => { setViews(await Promise.all(items.map(async (item) => ({ ...item, profile: await dbService.getUserProfile(item.viewerUid).catch(() => null) })))); setCount(items.length); })
-      : profileViewService.getAggregateCount(user.uid).then(setCount);
-    work.catch(() => setError(true)).finally(() => setLoading(false));
-  }, [user.uid, reveal, focused]);
-  if (loading) return <ActivityIndicator style={{ marginTop: 100 }} color={COLORS.primary} />;
-  if (error) return <View style={styles.center}><Text style={styles.body}>Visitors could not be loaded. Reopen this screen to retry.</Text></View>;
-  if (!count) return <View style={styles.center}><Eye color={COLORS.primary} size={45} /><Text style={styles.title}>No one has viewed your profile yet.</Text></View>;
-  if (!reveal) return <View style={styles.center}><Lock color={COLORS.primary} size={48} /><Text style={styles.title}>{count} people viewed you</Text><Text style={styles.body}>You can see how many people viewed your profile. Upgrade to VIP to reveal who viewed you.</Text><TouchableOpacity style={styles.button} onPress={() => navigation.navigate('VipInfo')}><Text style={styles.buttonText}>Explore VIP</Text></TouchableOpacity></View>;
-  return <FlatList style={styles.container} contentContainerStyle={{ padding: 14 }} data={views} keyExtractor={(item) => item.viewerUid} renderItem={({ item }) => <View style={styles.row}>{item.profile?.profilePic ? <Image source={{ uri: item.profile.profilePic }} style={styles.avatar} /> : <View style={styles.avatar} />}<View><Text style={styles.name}>{item.profile?.username || 'Amira user'}</Text><Text style={styles.meta}>{item.viewCount || 1} views</Text></View></View>} />;
+import React,{useCallback,useRef,useState} from 'react';
+import {useFocusEffect} from '@react-navigation/native';
+import {ActivityIndicator,StyleSheet,Text,TouchableOpacity,View} from 'react-native';
+import {Eye,Lock} from 'lucide-react-native';
+import {useUser} from '../../context/UserContext';
+import {isConsumer} from '../../models/userModel';
+import {profileViewService} from '../../services/profileViewService';
+import {COLORS} from '../../theme/COLORS';
+const WhoViewedMeScreen=()=>{
+ const {user}=useUser(),consumer=isConsumer(user),version=useRef(0);
+ const [count,setCount]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState(false);
+ const load=useCallback(async()=>{if(!consumer||!user?.uid)return;const request=++version.current;setLoading(true);setError(false);try{const value=await profileViewService.getAggregateCount(user.uid);if(request===version.current)setCount(value);}catch(e){if(request===version.current){setCount(null);setError(true);}}finally{if(request===version.current)setLoading(false);}},[consumer,user?.uid]);
+ useFocusEffect(useCallback(()=>{load();return()=>{version.current++;};},[load]));
+ if(!consumer)return null;
+ return <View style={styles.center}>{loading?<ActivityIndicator color={COLORS.primary}/>:error?<><Text style={styles.body}>Profile views could not be loaded.</Text><TouchableOpacity onPress={load}><Text style={styles.retry}>Try Again</Text></TouchableOpacity></>:count===0?<><Eye color={COLORS.primary} size={44}/><Text style={styles.title}>No profile views yet.</Text></>:<><Lock color={COLORS.primary} size={44}/><Text style={styles.title}>{count} recent profile viewer{count===1?'':'s'}</Text><Text style={styles.body}>Viewer identities are coming later.</Text></>}</View>;
 };
-const styles=StyleSheet.create({container:{flex:1,backgroundColor:'#F7F7F9'},center:{flex:1,backgroundColor:'#F7F7F9',alignItems:'center',justifyContent:'center',padding:30},title:{fontSize:22,fontWeight:'900',color:COLORS.text,textAlign:'center',marginTop:16},body:{color:COLORS.textSecondary,textAlign:'center',lineHeight:21,marginTop:10},button:{backgroundColor:COLORS.primary,paddingHorizontal:24,paddingVertical:14,borderRadius:24,marginTop:20},buttonText:{color:'white',fontWeight:'900'},row:{backgroundColor:'white',borderRadius:17,padding:12,marginBottom:9,flexDirection:'row',alignItems:'center',gap:11},avatar:{width:52,height:52,borderRadius:26,backgroundColor:'#DDD'},name:{fontWeight:'900',fontSize:16,color:COLORS.text},meta:{color:COLORS.textSecondary,marginTop:3}});
+const styles=StyleSheet.create({center:{flex:1,backgroundColor:'#F7F7F9',alignItems:'center',justifyContent:'center',padding:28},title:{fontSize:22,fontWeight:'900',color:COLORS.text,textAlign:'center',marginTop:16},body:{color:COLORS.textSecondary,textAlign:'center',marginTop:12},retry:{color:COLORS.primary,fontWeight:'800',marginTop:18}});
 export default WhoViewedMeScreen;

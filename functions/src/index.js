@@ -95,8 +95,8 @@ exports.claimDailyCheckIn=onCall(callable,async(request)=>{
 exports._test={mapError};
 
 exports.sendTextMessage=onCall(callable,(request)=>socialMessaging.sendText(requireAuth(request),request.data));
-exports.trackProfileView=onCall(callable,(request)=>socialMessaging.trackProfileView(requireAuth(request),request.data?.ownerUid));
-exports.listProfileViews=onCall(callable,(request)=>socialMessaging.listProfileViews(requireAuth(request)));
+exports.trackProfileView=onCall(callable,async(request)=>{const uid=requireAuth(request),data=request.data;if(!data||data.context!=='full_profile'||Object.keys(data).some(key=>!['ownerUid','context'].includes(key)))throw new HttpsError('invalid-argument','Invalid profile view request.');return socialMessaging.trackProfileView(uid,data.ownerUid);});
+exports.listProfileViews=onCall(callable,async(request)=>{const uid=requireAuth(request);if(request.data&&Object.keys(request.data).length)throw new HttpsError('invalid-argument','Profile view information is private.');return socialMessaging.listProfileViews(uid);});
 exports.syncFriendship=onCall(callable,(request)=>socialMessaging.syncFriendship(requireAuth(request),request.data?.targetUid));
 // Trigger retries and out-of-order deliveries re-read both current follow records.
 const {onDocumentWritten}=require('firebase-functions/v2/firestore');
@@ -127,3 +127,7 @@ exports.blockAndRemoveSocial=onCall(callable,async(request)=>hostDiscovery.clean
 exports.onBlockRemoveSocial=onDocumentWritten({region,document:'users/{uid}/blocked/{blockedUid}',retry:true},async(event)=>{
   await hostDiscovery.cleanup(event.params.uid,event.params.blockedUid);
 });
+
+const hostActivity=require('./hostActivity').createHostActivity({db,HttpsError});
+exports.getHostActivity=onCall(callable,async(request)=>hostActivity.list(requireAuth(request),request.data));
+exports.getPublicConsumerProfile=onCall(callable,async(request)=>hostActivity.consumerProfile(requireAuth(request),request.data?.consumerUid));

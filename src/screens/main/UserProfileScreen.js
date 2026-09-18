@@ -11,7 +11,7 @@ const {controlledInterests}=require('../../../functions/src/hostDiscoveryDomain'
 import { callReviewService } from '../../services/callReviewService';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
-import { dbService } from '../../services/firebaseService';
+import {hostActivityService} from '../../services/hostActivityService';
 import { canFollowProfile, followService } from '../../services/followService';
 import { blockService } from '../../services/blockService';
 import { reportService } from '../../services/reportService';
@@ -58,7 +58,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     if(!userId){setLoading(false);return undefined;}
     if(!focused)return undefined;
     let active=true;setLoading(true);setHost(null);setSocial(null);setSocialError(false);setHeroFailed(false);
-    const read=isConsumer(user)?hostProfileService.get(userId):dbService.getUserProfile(userId);
+    const read=isConsumer(user)?hostProfileService.get(userId):hostActivityService.getConsumer(userId);
     Promise.resolve(read).then(async profile=>{if(!active)return;setHost(profile);if(profile.social){setSocial(profile.social);setLiked(profile.social.liked);setFollowing(profile.social.following);}else {const value=await followService.isFollowing(userId);if(active)setFollowing(value);}})
     .catch(()=>{if(active)setHost(null);}).finally(()=>{if(active)setLoading(false);});
     return()=>{active=false;};
@@ -68,7 +68,12 @@ const UserProfileScreen = ({ route, navigation }) => {
   const hideHost=async()=>{try{await hostProfileService.hide(userId);navigation.goBack();}catch(e){Alert.alert('Unable to update discovery',e.message);}};
   const more=()=>setShowMore(true);
 
-  useEffect(() => { if (focused && userId && !route.params?.demoHost) blockService.getRelationship(userId).then((relationship) => { setBlockState(relationship); if (!relationship.blocked) profileViewService.track(userId).catch(() => console.warn('Profile view could not be recorded.')); }).catch(() => {}); }, [userId, focused, route.params?.demoHost]);
+  useEffect(()=>{
+    if(!focused||loading||!host||host.uid!==userId||host.isDemo||blockState.blocked||user?.uid===userId)return undefined;
+    if(!((isConsumer(user)&&isApprovedHost(host))||(isApprovedHost(user)&&isConsumer(host))))return undefined;
+    profileViewService.track(userId).catch(()=>console.warn('Profile view could not be recorded.'));
+  },[focused,loading,host?.uid,userId,user?.uid,user?.hostStatus?.isApproved,host?.hostStatus?.isApproved,blockState.blocked]);
+
 
   useEffect(() => {
     if (!focused || route.params?.demoHost) return undefined;

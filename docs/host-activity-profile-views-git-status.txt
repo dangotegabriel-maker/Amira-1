@@ -1,0 +1,26 @@
+﻿ M firestore.rules
+ M functions/src/__tests__/callPaymentLifecycle.test.js
+ M functions/src/__tests__/socialMessaging.test.js
+ M functions/src/index.js
+ M functions/src/socialMessaging.js
+ M src/screens/host/HostActivityScreen.js
+ M src/screens/host/HostVisitorsScreen.js
+ M src/screens/main/MyProfileScreen.js
+ M src/screens/main/UserProfileScreen.js
+ M src/screens/main/WhoViewedMeScreen.js
+ M src/screens/main/__tests__/consumerLevelVisibility.test.js
+ M src/screens/main/__tests__/discoveryProfileUi.test.js
+ M src/services/__tests__/messageEntitlementClient.test.js
+ M src/services/__tests__/socialMessaging.emulator.cjs
+ M src/services/profileViewService.js
+?? docs/host-activity-profile-views-git-status.txt
+?? docs/host-activity-profile-views-report.md
+?? functions/src/__tests__/hostActivityDomain.test.js
+?? functions/src/hostActivity.js
+?? functions/src/hostActivityDomain.js
+?? functions/src/profileViews.js
+?? src/screens/host/__tests__/
+?? src/screens/main/__tests__/profileViewTrackingUi.test.js
+?? src/services/__tests__/hostActivity.emulator.cjs
+?? src/services/__tests__/hostActivityService.test.js
+?? src/services/hostActivityService.js

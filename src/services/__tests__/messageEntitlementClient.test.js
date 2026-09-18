@@ -21,7 +21,7 @@ test('markRead updates only receipt/unread fields and never invokes entitlement 
 });
 test('profile views use trusted tracking and cannot request another owner visitor list',async()=>{
  mockInvoke.mockResolvedValue({counted:true});expect(await profileViewService.track('h')).toBe(true);
- expect(mockInvoke).toHaveBeenCalledWith('trackProfileView',{ownerUid:'h'});
+ expect(mockInvoke).toHaveBeenCalledWith('trackProfileView',{ownerUid:'h',context:'full_profile'});
  expect(await profileViewService.track('c')).toBe(false);
  await expect(profileViewService.list('h')).rejects.toThrow('private');
 });

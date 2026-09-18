@@ -19,7 +19,7 @@ service cloud.firestore {
     function vipUnchanged() { return request.resource.data.vip == resource.data.vip; }
     function visitorStatsUnchanged() { return request.resource.data.profileViewStats == resource.data.profileViewStats; }
     function referralRewardsUnchanged() { return request.resource.data.referralStats == resource.data.referralStats; }
-    function canReadVisitorIdentities(uid) { let user = get(/databases/$(database)/documents/users/$(uid)).data; return approvedHost(user) || (user.vip.status == 'active' && user.vip.tier in ['VIP_1', 'VIP_2', 'VIP_3'] && (user.vip.get('expiresAt', null) == null || user.vip.expiresAt > request.time)); }
+    function canReadVisitorIdentities(uid) { return approvedHost(get(/databases/$(database)/documents/users/$(uid)).data); }
     function validApplicantUpdate() {
       return consumer(resource.data) && request.resource.data.role == 'consumer'
         && request.resource.data.hostStatus.diff(resource.data.get('hostStatus', {})).affectedKeys().hasOnly(['hasApplied', 'verificationStatus', 'availability'])
