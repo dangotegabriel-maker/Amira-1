@@ -4,7 +4,8 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function owns(uid) { return signedIn() && request.auth.uid == uid; }
     function admin() { return signedIn() && request.auth.token.admin == true; }
-    function approvedHost(data) { return data.role == 'host' && data.hostStatus.isApproved == true; }
+    function approvedHost(data) { return data.get('hostStatus', {}).get('isApproved', false) == true; }
+    function consumer(data) { return !approvedHost(data); }
     function participant(data) { return signedIn() && request.auth.uid in data.participantIds; }
     function otherUid(data) { return data.participantIds[0] == request.auth.uid ? data.participantIds[1] : data.participantIds[0]; }
     function blockedBetween(firstUid, secondUid) {
@@ -13,12 +14,20 @@ service cloud.firestore {
     }
     function rateUnchanged() { return request.resource.data.get('hostProfile', {}).get('videoRateCredits', 25) == resource.data.get('hostProfile', {}).get('videoRateCredits', 25) && request.resource.data.get('hostProfile', {}).get('rateTier', 'ENTRY') == resource.data.get('hostProfile', {}).get('rateTier', 'ENTRY'); }
     function financialFieldsUnchanged() { return request.resource.data.wallet == resource.data.wallet && request.resource.data.earnings == resource.data.earnings; }
-    function approvalUnchanged() { return request.resource.data.hostStatus.isApproved == resource.data.hostStatus.isApproved; }
+    function approvalUnchanged() { return request.resource.data.get('hostStatus', {}).get('isApproved', false) == resource.data.get('hostStatus', {}).get('isApproved', false); }
     function vipUnchanged() { return request.resource.data.vip == resource.data.vip; }
     function visitorStatsUnchanged() { return request.resource.data.profileViewStats == resource.data.profileViewStats; }
     function referralRewardsUnchanged() { return request.resource.data.referralStats == resource.data.referralStats; }
     function canReadVisitorIdentities(uid) { let user = get(/databases/$(database)/documents/users/$(uid)).data; return approvedHost(user) || (user.vip.status == 'active' && user.vip.tier in ['VIP_1', 'VIP_2', 'VIP_3'] && (user.vip.get('expiresAt', null) == null || user.vip.expiresAt > request.time)); }
-    function validHostApplicationTransition() { return resource.data.role != 'host' && request.resource.data.role == 'host' && request.resource.data.hostStatus.hasApplied == true && request.resource.data.hostStatus.isApproved == false && request.resource.data.hostStatus.verificationStatus == 'pending' && request.resource.data.hostStatus.availability == 'offline'; }
+    function validApplicantUpdate() {
+      return consumer(resource.data) && request.resource.data.role == 'consumer'
+        && request.resource.data.hostStatus.diff(resource.data.get('hostStatus', {})).affectedKeys().hasOnly(['hasApplied', 'verificationStatus', 'availability'])
+        && request.resource.data.hostStatus.hasApplied == true
+        && request.resource.data.hostStatus.verificationStatus == 'pending'
+        && request.resource.data.hostStatus.availability == 'offline'
+        && getAfter(/databases/$(database)/documents/hostApplications/$(request.auth.uid)).data.status == 'submitted';
+    }
+    function safeRoleUpdate() { return request.resource.data.role == resource.data.role || (consumer(resource.data) && request.resource.data.role == 'consumer'); }
     function validAvailabilityChange() { return approvedHost(resource.data) && request.resource.data.role == resource.data.role && request.resource.data.hostStatus.isApproved == resource.data.hostStatus.isApproved && request.resource.data.hostStatus.hasApplied == resource.data.hostStatus.hasApplied && request.resource.data.hostStatus.verificationStatus == resource.data.hostStatus.verificationStatus && request.resource.data.hostStatus.availability in ['offline', 'online', 'busy']; }
     function validReadUpdate() { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unreadCounts', 'lastReadAt', 'updatedAt']) && request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(resource.data)] == resource.data.unreadCounts[otherUid(resource.data)] && request.resource.data.lastReadAt.get(otherUid(resource.data), null) == resource.data.lastReadAt.get(otherUid(resource.data), null); }
     function validMessageCreate() { return request.resource.data.unreadCounts[request.auth.uid] == 0 && request.resource.data.unreadCounts[otherUid(request.resource.data)] == 1; }
@@ -27,8 +36,8 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if signedIn();
-      allow create: if owns(uid) && request.resource.data.uid == uid && request.resource.data.hostStatus.isApproved == false && request.resource.data.get('hostProfile', {}).get('videoRateCredits',25) == 25 && request.resource.data.get('hostProfile', {}).get('rateTier','ENTRY') == 'ENTRY' && request.resource.data.wallet.creditBalance == 0 && request.resource.data.earnings.pending == 0 && request.resource.data.earnings.available == 0 && request.resource.data.vip.tier == 'FREE' && request.resource.data.vip.status == 'inactive' && request.resource.data.profileViewStats.recentCount == 0 && request.resource.data.referralStats.qualifiedCount == 0 && request.resource.data.referralStats.pendingCount == 0;
-      allow update: if admin() || (owns(uid) && financialFieldsUnchanged() && rateUnchanged() && approvalUnchanged() && vipUnchanged() && visitorStatsUnchanged() && referralRewardsUnchanged() && (request.resource.data.role == resource.data.role || validHostApplicationTransition()) && (request.resource.data.hostStatus == resource.data.hostStatus || validHostApplicationTransition() || validAvailabilityChange()));
+      allow create: if owns(uid) && request.resource.data.uid == uid && request.resource.data.role == 'consumer' && request.resource.data.hostStatus.isApproved == false && request.resource.data.get('hostProfile', {}).get('videoRateCredits',25) == 25 && request.resource.data.get('hostProfile', {}).get('rateTier','ENTRY') == 'ENTRY' && request.resource.data.wallet.creditBalance == 0 && request.resource.data.earnings.pending == 0 && request.resource.data.earnings.available == 0 && request.resource.data.vip.tier == 'FREE' && request.resource.data.vip.status == 'inactive' && request.resource.data.profileViewStats.recentCount == 0 && request.resource.data.referralStats.qualifiedCount == 0 && request.resource.data.referralStats.pendingCount == 0;
+      allow update: if admin() || (owns(uid) && financialFieldsUnchanged() && rateUnchanged() && approvalUnchanged() && vipUnchanged() && visitorStatsUnchanged() && referralRewardsUnchanged() && safeRoleUpdate() && (request.resource.data.hostStatus == resource.data.hostStatus || validApplicantUpdate() || validAvailabilityChange()));
       allow delete: if false;
 
       match /following/{targetUid} {
@@ -36,10 +45,10 @@ service cloud.firestore {
           let source = get(/databases/$(database)/documents/users/$(uid)).data;
           let target = get(/databases/$(database)/documents/users/$(targetUid)).data;
           let data = request.resource.data;
-          return (source.role == 'consumer' && approvedHost(target)
+          return (consumer(source) && approvedHost(target)
               && data.keys().hasOnly(['consumerId', 'hostId', 'createdAt'])
               && data.consumerId == uid && data.hostId == targetUid)
-            || (approvedHost(source) && target.role == 'consumer'
+            || (approvedHost(source) && consumer(target)
               && data.keys().hasOnly(['sourceId', 'targetId', 'sourceRole', 'targetRole', 'createdAt'])
               && data.sourceId == uid && data.targetId == targetUid
               && data.sourceRole == 'host' && data.targetRole == 'consumer');
@@ -130,18 +139,18 @@ service cloud.firestore {
     // Private economy documents. Admin SDK transactions bypass client rules;
     // ordinary clients can never award rewards or author accounting splits.
     match /consumerRewards/{uid} {
-      allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
+      allow read: if owns(uid) && consumer(get(/databases/$(database)/documents/users/$(uid)).data);
       allow write: if false;
       match /chatWindows/{conversationId} {
         allow read: if owns(uid);
         allow write: if false;
       }
       match /messageTransactions/{transactionId} {
-        allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
+        allow read: if owns(uid) && consumer(get(/databases/$(database)/documents/users/$(uid)).data);
         allow write: if false;
       }
       match /claims/{dateKey} {
-        allow read: if owns(uid) && get(/databases/$(database)/documents/users/$(uid)).data.role == 'consumer';
+        allow read: if owns(uid) && consumer(get(/databases/$(database)/documents/users/$(uid)).data);
         allow write: if false;
       }
     }
@@ -171,7 +180,12 @@ service cloud.firestore {
     }
     match /hostApplications/{uid} {
       allow read: if owns(uid) || admin();
-      allow create, update: if owns(uid) && request.resource.data.ownerUid == uid && request.resource.data.status in ['in_progress', 'submitted'];
+      function applicant() { return owns(uid) && consumer(get(/databases/$(database)/documents/users/$(uid)).data); }
+      function applicationPayload() { return request.resource.data.ownerUid == uid && request.resource.data.status in ['in_progress', 'submitted']; }
+      allow create: if applicant() && applicationPayload() && request.resource.data.keys().hasOnly(['ownerUid','status','details','media','verification','payoutSetup','updatedAt','submittedAt']);
+      allow update: if applicant() && applicationPayload()
+        && resource.data.status in ['draft','in_progress','incomplete','rejected','needs_changes','action_required']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerUid','status','details','media','verification','payoutSetup','updatedAt','submittedAt']);
       allow update, delete: if admin();
     }
   }

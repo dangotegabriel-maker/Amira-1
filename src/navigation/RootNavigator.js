@@ -50,6 +50,7 @@ const RootNavigator = () => {
 
   if (loading) return null;
 
+  const approvedHost = isApprovedHost(user);
   const nextProfileScreen = getRequiredProfileStep(user);
   const isProfileComplete = isProfileActuallyComplete(user);
 
@@ -76,38 +77,38 @@ const RootNavigator = () => {
                   : nextProfileScreen === 'CountrySetup' ? CountrySetupScreen
                   : NameSetupScreen
           } />
-          <Stack.Screen name="HostApplication" component={HostApplicationScreen} />
+          {!approvedHost && <Stack.Screen name="HostApplication" component={HostApplicationScreen} />}
         </Stack.Group>
       ) : (
-        <>
+        <Stack.Group navigationKey={`${user.uid}:${approvedHost ? 'host' : 'consumer'}`}>
           <Stack.Screen name="MainTabs" component={MainTabNavigator} />
           <Stack.Screen name="ChatDetail" component={ChatDetailScreen} options={{ headerShown: true, title: 'Chat' }} />
           <Stack.Screen name="UserProfile" component={UserProfileScreen} />
           <Stack.Screen name="VideoCall" component={VideoCallScreen} />
-          <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: true, title: 'Wallet' }} />
-          {user?.role === 'consumer' && <Stack.Screen name="Rewards" component={RewardsScreen} options={{ headerShown: true, title: 'Rewards & Tasks' }} />}
-          <Stack.Screen name="VIPStore" component={VIPStoreScreen} options={{ headerShown: true, title: 'VIP Store' }} />
+          {!approvedHost && <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: true, title: 'Wallet' }} />}
+          {!approvedHost && <Stack.Screen name="Rewards" component={RewardsScreen} options={{ headerShown: true, title: 'Rewards & Tasks' }} />}
+          {!approvedHost && <Stack.Screen name="VIPStore" component={VIPStoreScreen} options={{ headerShown: true, title: 'VIP Store' }} />}
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, title: 'Settings' }} />
           <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: true, title: 'Edit Profile' }} />
-          <Stack.Screen name="RechargeHub" component={RechargeHubScreen} />
-          <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />
-          <Stack.Screen name="Payment" component={PaymentScreen} />
+          {!approvedHost && <Stack.Screen name="RechargeHub" component={RechargeHubScreen} />}
+          {!approvedHost && <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />}
+          {!approvedHost && <Stack.Screen name="Payment" component={PaymentScreen} />}
           <Stack.Screen name="StoryViewer" component={StoryViewerScreen} />
           <Stack.Screen name="Moments" component={MomentsScreen} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
-          <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />
+          {!approvedHost && <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />}
+          {!approvedHost && <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />}
           <Stack.Screen name="CallSummary" component={CallSummaryScreen} />
           <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ headerShown: true, title: 'Help & Support' }} />
-          <Stack.Screen name="HostApplication" component={HostApplicationScreen} />
+          {!approvedHost && <Stack.Screen name="HostApplication" component={HostApplicationScreen} />}
           <Stack.Screen name="FollowingList" component={FollowingScreen} options={{ headerShown: true, title: 'Following' }} />
           {isApprovedHost(user) && <Stack.Screen name="HostEarnings" component={HostEarningsScreen} options={{ headerShown: true, title: 'Earnings' }} />}
-          <Stack.Screen name="HostVisitors" component={HostVisitorsScreen} options={{ headerShown: true, title: 'Profile Visitors' }} />
-          <Stack.Screen name="WhoViewedMe" component={WhoViewedMeScreen} options={{ headerShown: true, title: 'Who Viewed Me' }} />
-          <Stack.Screen name="VipInfo" component={VipInfoScreen} options={{ headerShown: true, title: 'Amira VIP' }} />
+          {approvedHost && <Stack.Screen name="HostVisitors" component={HostVisitorsScreen} options={{ headerShown: true, title: 'Profile Visitors' }} />}
+          {!approvedHost && <Stack.Screen name="WhoViewedMe" component={WhoViewedMeScreen} options={{ headerShown: true, title: 'Who Viewed Me' }} />}
+          {!approvedHost && <Stack.Screen name="VipInfo" component={VipInfoScreen} options={{ headerShown: true, title: 'Amira VIP' }} />}
           <Stack.Screen name="InviteEarn" component={InviteEarnScreen} options={{ headerShown: true, title: 'Invite & Earn' }} />
           <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ headerShown: true, title: 'Blocked Users' }} />
-        </>
+        </Stack.Group>
       )}
     </Stack.Navigator></MessageActivityProvider></SafeAreaProvider>
   );

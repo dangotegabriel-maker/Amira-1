@@ -1,4 +1,5 @@
 'use strict';
+const {isConsumer,isApprovedHost}=require('./accountRole');
 const A = require('./connectionAccounting');
 const D = require('./callDomain');
 const E = require('./economyDomain');
@@ -86,7 +87,7 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
       tx.get(hostMoneyRef), tx.get(platformRef), ...locks.map((lock) => tx.get(lock)),
     ]);
     if (action === 'confirm' && !ending) {
-      if (uid !== call.callerId || consumer.data()?.role !== 'consumer' || host.data()?.role !== 'host'
+      if (uid !== call.callerId || !isConsumer(consumer.data()) || !isApprovedHost(host.data())
         || host.data()?.hostStatus?.isApproved !== true || call.participantIds.length !== 2 || !call.participantIds.includes(call.receiverId))
         throw new HttpsError('permission-denied', 'Only the consumer can confirm paid time.');
       if (call.billingMode === 'paid') return { ...result(callId, call, now), idempotent: true };

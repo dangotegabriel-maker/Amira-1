@@ -1,3 +1,4 @@
+import { isConsumer } from '../../models/userModel';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
@@ -21,7 +22,7 @@ const RewardsScreen = () => {
   const [error, setError] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [refresh, setRefresh] = useState(0);
-  const consumer = user?.role === 'consumer';
+  const consumer = isConsumer(user);
 
   useEffect(() => {
     if (!consumer || !focused) return undefined;

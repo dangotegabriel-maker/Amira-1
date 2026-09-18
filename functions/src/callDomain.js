@@ -1,4 +1,5 @@
 'use strict';
+const {isApprovedHost}=require('./accountRole');
 const RING_TIMEOUT_SECONDS=30, PREVIEW_SECONDS=30, BILLING_INCREMENT_SECONDS=10, RTC_TOKEN_SECONDS=900, RECONNECT_GRACE_SECONDS=require('./callRecoveryConfig').RECONNECT_GRACE_SECONDS;
 const PAID_DECISION_SECONDS = 60;
 const ACTIVE_STATUSES=new Set(['requesting','ringing','accepted','connecting','connected']);
@@ -6,9 +7,9 @@ const TERMINAL_STATUSES=new Set(['ended','rejected','missed','cancelled','failed
 const BILLING_MODES=Object.freeze({PREVIEW:'preview',AWAITING_PAID_CONFIRMATION:'awaiting_paid_confirmation',PAID:'paid',ENDED:'ended'});
 const utcDateKey=(date=new Date())=>date.toISOString().slice(0,10);
 const incrementCredits=(rate)=>{if(!Number.isInteger(rate)||rate<=0)throw new Error('invalid-rate');return Math.ceil(rate*BILLING_INCREMENT_SECONDS/60);};
-const validateStart=({authUid,creatorId,creator,blocked,callerLock,creatorLock})=>{if(!authUid)throw new Error('unauthenticated');if(!creatorId||authUid===creatorId)throw new Error('self-call');if(creator?.isDemo)throw new Error('demo-profile');if(creator?.role!=='host'||creator?.hostStatus?.isApproved!==true)throw new Error('unapproved-creator');if(creator?.hostStatus?.availability!=='online')throw new Error('creator-unavailable');if(blocked)throw new Error('blocked');if(callerLock||creatorLock)throw new Error('active-call-conflict');return true;};
+const validateStart=({authUid,creatorId,creator,blocked,callerLock,creatorLock})=>{if(!authUid)throw new Error('unauthenticated');if(!creatorId||authUid===creatorId)throw new Error('self-call');if(creator?.isDemo)throw new Error('demo-profile');if(!isApprovedHost(creator))throw new Error('unapproved-creator');if(creator?.hostStatus?.availability!=='online')throw new Error('creator-unavailable');if(blocked)throw new Error('blocked');if(callerLock||creatorLock)throw new Error('active-call-conflict');return true;};
 const isExpired=(call,nowMs=Date.now())=>Number(call?.expiresAtMs||0)<=nowMs;
-const validateAcceptance=({authUid,call,creator,nowMs=Date.now(),otherActiveCall=false})=>{if(!authUid||authUid!==call?.receiverId)throw new Error('not-receiver');if(!['requesting','ringing'].includes(call.status)||isExpired(call,nowMs))throw new Error('not-ringable');if(creator?.role!=='host'||creator?.hostStatus?.isApproved!==true||creator?.hostStatus?.availability!=='online')throw new Error('creator-unavailable');if(otherActiveCall)throw new Error('active-call-conflict');return true;};
+const validateAcceptance=({authUid,call,creator,nowMs=Date.now(),otherActiveCall=false})=>{if(!authUid||authUid!==call?.receiverId)throw new Error('not-receiver');if(!['requesting','ringing'].includes(call.status)||isExpired(call,nowMs))throw new Error('not-ringable');if(!isApprovedHost(creator)||creator?.hostStatus?.availability!=='online')throw new Error('creator-unavailable');if(otherActiveCall)throw new Error('active-call-conflict');return true;};
 const assertParticipant=(uid,call)=>{if(!uid||!call?.participantIds?.includes(uid))throw new Error('not-participant');return true;};
 const previewEligible=(entitlement,dateKey)=>!entitlement||entitlement.dateKey!==dateKey||entitlement.consumed!==true;
 const shouldConnect=(acks,participantIds)=>participantIds.every((uid)=>acks?.[uid]?.remotePresent===true);

@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
 } from '../services/firebaseService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { isApprovedHost } from '../models/userModel';
+import { isApprovedHost, isConsumer } from '../models/userModel';
 
 const UserContext = createContext();
 
@@ -105,7 +105,7 @@ export const UserProvider = ({ children }) => {
       setCoins,
       fetchUserCoins,
       loading,
-      isConsumer: user?.role === 'consumer',
+      isConsumer: isConsumer(user),
       isApprovedHost: isApprovedHost(user),
       refreshUser,
       forceLogout: handleForceLogout,

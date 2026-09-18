@@ -19,7 +19,7 @@ describe('canonical user model', () => {
     expect(user.wallet.creditBalance).toBe(0);
   });
 
-  it('maps legacy profile and balance fields without losing their values', () => {
+  it('preserves legacy profile values without treating editable verification flags as approval', () => {
     const user = normalizeUser('uid-1', {
       name: 'Legacy Name',
       photo: 'https://example.com/photo.jpg',
@@ -33,8 +33,8 @@ describe('canonical user model', () => {
     expect(user.profilePic).toBe('https://example.com/photo.jpg');
     expect(user.wallet.creditBalance).toBe(275);
     expect(user.countryCode).toBe('GH');
-    expect(isApprovedHost(user)).toBe(true);
-    expect(user.hostStatus.verificationStatus).toBe('approved');
+    expect(isApprovedHost(user)).toBe(false);
+    expect(user.hostStatus.verificationStatus).toBe('not_started');
     expect(user.hostStatus.availability).toBe('online');
   });
 
@@ -56,7 +56,7 @@ describe('canonical user model', () => {
     const pending = normalizeUser('pending-1', { ...completeUser, role: undefined, hostStatus: { hasApplied: true, isApproved: false, verificationStatus: 'pending' } });
     expect(approved.role).toBe('host');
     expect(approved.hostStatus.isApproved).toBe(true);
-    expect(pending.role).toBe('host');
+    expect(pending.role).toBe('consumer');
     expect(pending.hostStatus.verificationStatus).toBe('pending');
   });
 
@@ -74,4 +74,22 @@ describe('canonical user model', () => {
     expect(patch['wallet.creditBalance']).toBe(125);
     expect(patch.coins).toBeUndefined();
   });
+});
+
+
+test.each(['draft','in_progress','submitted','pending','under_review'])('%s application never promotes old unapproved role',status=>{
+ const raw={...completeUser,role:'host',hostStatus:{hasApplied:true,isApproved:false,verificationStatus:status}};
+ const user=normalizeUser('applicant',raw);expect(user.role).toBe('consumer');expect(isApprovedHost(user)).toBe(false);
+ expect(getLegacyMigrationPatch(raw,user).role).toBe('consumer');
+});
+test('trusted canonical approval takes precedence over stale consumer role and historical fields',()=>{
+ const raw={...completeUser,hostStatus:{isApproved:true,hasApplied:true,verificationStatus:'approved'},wallet:{creditBalance:123}};
+ const user=normalizeUser('approved',raw);expect(user.role).toBe('host');expect(isApprovedHost(user)).toBe(true);expect(user.wallet.creditBalance).toBe(123);
+ expect(getLegacyMigrationPatch(raw,user).role).toBeUndefined();
+});
+
+
+test('ambiguous legacy Host approval needs trusted review and is never rewritten by bootstrap',()=>{
+ const raw={role:'host',is_verified:true};const user=normalizeUser('legacy',raw),patch=getLegacyMigrationPatch(raw,user);
+ expect(isApprovedHost(user)).toBe(false);expect(patch.role).toBeUndefined();expect(patch.hostStatus).toBeUndefined();
 });

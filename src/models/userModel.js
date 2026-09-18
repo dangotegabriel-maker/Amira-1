@@ -1,3 +1,4 @@
+const accountRoles = require('../../functions/src/accountRole');
 export const USER_ROLES = Object.freeze({
   CONSUMER: 'consumer',
   HOST: 'host',
@@ -45,9 +46,9 @@ export const getLegacyCreditBalance = (data = {}) => finiteNumber(
   0,
 );
 
-export const isApprovedHost = (user) => Boolean(
-  user?.role === USER_ROLES.HOST && user?.hostStatus?.isApproved === true,
-);
+export const isApprovedHost = accountRoles.isApprovedHost;
+export const isConsumer = accountRoles.isConsumer;
+export const getAccountRole = accountRoles.accountRole;
 
 export const calculateAgeFromDob = (dob, now = new Date()) => {
   if (!dob) return null;
@@ -74,12 +75,9 @@ export const isProfileActuallyComplete = (user) => Boolean(user && !getRequiredP
 export const normalizeUser = (uid, data = {}, authUser = null) => {
   const username = data.username || data.name || authUser?.displayName || '';
   const profilePic = data.profilePic || data.photoURL || data.photo || data.photos?.[0] || authUser?.photoURL || '';
-  const legacyApproved = data.isApproved === true || data.is_verified === true;
+  const approved = isApprovedHost(data);
   const legacyAvailability = data.isOnline === true ? HOST_AVAILABILITY.ONLINE : HOST_AVAILABILITY.OFFLINE;
-  const hasCreatorCapability = legacyApproved || data?.hostStatus?.hasApplied === true;
-  const role = [USER_ROLES.CONSUMER, USER_ROLES.HOST].includes(data.role)
-    ? data.role
-    : hasCreatorCapability ? USER_ROLES.HOST : USER_ROLES.CONSUMER;
+  const role = getAccountRole(data);
   const walletCurrency = data?.wallet?.currency || data.currency || 'GHS';
   const earningsCurrency = data?.earnings?.currency || walletCurrency;
   const normalized = {
@@ -99,8 +97,8 @@ export const normalizeUser = (uid, data = {}, authUser = null) => {
       ...DEFAULT_HOST_STATUS,
       ...(data.hostStatus || {}),
       hasApplied: data?.hostStatus?.hasApplied ?? (role === USER_ROLES.HOST),
-      isApproved: data?.hostStatus?.isApproved ?? legacyApproved,
-      verificationStatus: data?.hostStatus?.verificationStatus || (legacyApproved ? 'approved' : 'not_started'),
+      isApproved: approved,
+      verificationStatus: data?.hostStatus?.verificationStatus || (approved ? 'approved' : 'not_started'),
       availability: data?.hostStatus?.availability || legacyAvailability,
     },
     wallet: {
@@ -156,6 +154,8 @@ export const normalizeUser = (uid, data = {}, authUser = null) => {
 // Callers merge this patch; they never replace the whole legacy document.
 export const getLegacyMigrationPatch = (data = {}, normalized) => {
   const patch = {};
+  // Repair only the known preapproval role bug; never rewrite approved roles.
+  if (data.role === 'host' && data.hostStatus?.isApproved === false) patch.role = 'consumer';
   if (!data.username && normalized.username) patch.username = normalized.username;
   if (!data.profilePic && normalized.profilePic) patch.profilePic = normalized.profilePic;
   if (!data.countryCode && normalized.countryCode) patch.countryCode = normalized.countryCode;
@@ -166,7 +166,7 @@ export const getLegacyMigrationPatch = (data = {}, normalized) => {
   if (!data?.wallet?.currency && normalized.wallet.currency) {
     patch['wallet.currency'] = normalized.wallet.currency;
   }
-  if (!data.hostStatus) patch.hostStatus = normalized.hostStatus;
+  if (!data.hostStatus && data.role !== 'host') patch.hostStatus = normalized.hostStatus;
   if (!data.earnings) patch.earnings = normalized.earnings;
   if (!data.settings) patch.settings = normalized.settings;
   if (!data.createdAt && data.created_at) patch.createdAt = data.created_at;

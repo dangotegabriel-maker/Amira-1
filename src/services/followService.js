@@ -1,11 +1,11 @@
 import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
 import { auth, db, dbService } from './firebaseService';
-import { isApprovedHost } from '../models/userModel';
+import { isApprovedHost, isConsumer } from '../models/userModel';
 
 export const canFollowProfile = (source, target) => Boolean(
   source && target && source.uid !== target.uid && (
-    (source.role === 'consumer' && isApprovedHost(target)) ||
-    (isApprovedHost(source) && target.role === 'consumer')
+    (isConsumer(source) && isApprovedHost(target)) ||
+    (isApprovedHost(source) && isConsumer(target))
   )
 );
 
@@ -13,7 +13,7 @@ const requireSource = async () => {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('Sign in required.');
   const profile = await dbService.getUserProfile(uid);
-  if (profile?.role !== 'consumer' && !isApprovedHost(profile)) {
+  if (!isConsumer(profile) && !isApprovedHost(profile)) {
     throw new Error('Only consumers and approved hosts can follow people.');
   }
   return { ...profile, uid };
@@ -31,7 +31,7 @@ const follow = async (targetId) => {
   // A transaction makes repeated follows idempotent without resetting createdAt.
   await runTransaction(db, async (transaction) => {
     if ((await transaction.get(reference)).exists()) return;
-    transaction.set(reference, source.role === 'consumer' ? {
+    transaction.set(reference, isConsumer(source) ? {
       consumerId: source.uid, hostId: targetId, createdAt: serverTimestamp(),
     } : {
       sourceId: source.uid, targetId, sourceRole: 'host', targetRole: 'consumer', createdAt: serverTimestamp(),

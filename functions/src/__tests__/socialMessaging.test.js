@@ -129,10 +129,10 @@ test('invalid text, forged system type and missing recipient consume nothing',as
  await expect(api.sendText('c',{receiverId:'h',messageId:'x',text:'fake',type:'friendship_created'})).rejects.toMatchObject({code:'invalid-argument'});
  docs.delete('users/h'); await expect(send()).rejects.toMatchObject({code:'not-found'}); expect(balance()).toBe(3);
 });
-test('host reply and receiving consume no consumer entitlement; pending host rejected',async()=>{
+test('approved host needs no pass; old pending host role remains subject to consumer passes',async()=>{
  await send('h'); expect(balance()).toBe(3); expect(balance('h')).toBeUndefined(); expect(matching('/messageTransactions/')).toHaveLength(0);
  docs.get('users/h').hostStatus.isApproved=false;
- await expect(send('h','two')).rejects.toMatchObject({code:'permission-denied'});
+ await expect(send('h','two')).rejects.toMatchObject({code:'resource-exhausted'});
 });
 test('no VIP unlimited default; trusted policy may authorize it without client changes',()=>{
  const vip={...consumer,vip:{status:'active',tier:'VIP_3'}};
@@ -209,4 +209,17 @@ test('unconnected, unrelated reviewer and blocked review are denied',async()=>{
  await expect(reviews.submit('c',{callId:'call1',rating:5})).rejects.toMatchObject({code:'permission-denied'});
  completedCall('call1'); await expect(reviews.submit('c2',{callId:'call1',rating:5})).rejects.toMatchObject({code:'permission-denied'});
  docs.set('users/h/blocked/c',{});await expect(reviews.submit('c',{callId:'call1',rating:5})).rejects.toMatchObject({code:'permission-denied'});
+});
+
+
+test.each(['submitted','pending','under_review'])('%s applicant uses consumer messaging and rewards',async(status)=>{
+ docs.get('users/c').role='host';docs.get('users/c').hostStatus={hasApplied:true,isApproved:false,verificationStatus:status};
+ expect(M.resolveMessagingEntitlement(docs.get('users/c'),{freeMessages:0})).toMatchObject({allowed:false,consume:1,source:'chat_window'});
+ expect(M.resolveMessagingEntitlement(docs.get('users/c'),{},undefined,{friends:true})).toMatchObject({allowed:true,consume:0,source:'friends'});
+ await send();expect(balance()).toBe(2);await expect(rewards.dashboard('c')).resolves.toHaveProperty('balances');
+});
+test('approved host with historical consumer role cannot claim consumer rewards',async()=>{
+ docs.get('users/h').role='consumer';
+ expect(M.resolveMessagingEntitlement(docs.get('users/h'),{freeMessages:0})).toMatchObject({allowed:true,consume:0,source:'host'});
+ await expect(rewards.claim('h')).rejects.toMatchObject({code:'permission-denied'});
 });

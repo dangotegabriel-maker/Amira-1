@@ -7,7 +7,7 @@ import { useUser } from '../../context/UserContext';
 import { authService } from '../../services/firebaseService';
 import { socketService } from '../../services/socketService';
 import { getCountryByCode } from '../../data/countries';
-import { isApprovedHost } from '../../models/userModel';
+import { isApprovedHost, isConsumer } from '../../models/userModel';
 import { profileViewService } from '../../services/profileViewService';
 import { hostApplicationService } from '../../services/hostApplicationService';
 import { CREATOR_CARD_COPY, getCreatorCardState } from '../../utils/creatorApplication';
@@ -29,8 +29,8 @@ const MyProfileScreen = ({ navigation }) => {
   const approvedHost = isApprovedHost(user);
   const creatorState = getCreatorCardState(user, applicationStatus);
   const creatorCopy = CREATOR_CARD_COPY[creatorState];
-  useEffect(() => { if (focused && user?.uid) profileViewService.getAggregateCount(user.uid).then(setProfileViewCount).catch(() => {}); }, [user?.uid, focused]);
-  useEffect(() => { if (user?.uid) hostApplicationService.getApplication().then((application)=>setApplicationStatus(application?.status||'')).catch(()=>{}); }, [user?.uid]);
+  useEffect(() => { if (focused && user?.uid && !approvedHost) profileViewService.getAggregateCount(user.uid).then(setProfileViewCount).catch(() => {}); }, [user?.uid, focused, approvedHost]);
+  useEffect(() => { if (focused && user?.uid && !approvedHost) hostApplicationService.getApplication().then((application)=>setApplicationStatus(application?.status||'')).catch(()=>{}); }, [user?.uid, focused, approvedHost]);
 
   const logout = () => Alert.alert('Log out', 'Are you sure you want to log out?', [
     { text: 'Cancel', style: 'cancel' },
@@ -47,11 +47,11 @@ const MyProfileScreen = ({ navigation }) => {
 
     {!approvedHost && <View style={styles.creditsCard}><Text style={styles.creditsLabel}>AMIRA CREDITS</Text><View style={styles.balanceRow}><Coins color="#FACC15" size={30} /><Text style={styles.balance}>{(user?.wallet?.creditBalance || 0).toLocaleString()}</Text></View><TouchableOpacity style={styles.recharge} onPress={() => navigation.navigate('RechargeHub')}><Text style={styles.rechargeText}>Recharge</Text></TouchableOpacity></View>}
 
-    {approvedHost && <Section title="CREATOR"><Row icon={Coins} label="Earnings" detail="View your earnings balance" onPress={() => navigation.navigate('HostEarnings')} /></Section>}
+    {approvedHost && <Section title="CREATOR"><Row icon={Coins} label="Earnings" detail="View pending earnings" onPress={() => navigation.navigate('HostEarnings')} /></Section>}
 
-    {user?.role === 'consumer' && <Section title="REWARDS"><Row icon={Gift} label="Rewards & Tasks" detail="Your rewards and Daily Check-In" onPress={() => navigation.navigate('Rewards')} /></Section>}
+    {isConsumer(user) && <Section title="REWARDS"><Row icon={Gift} label="Rewards & Tasks" detail="Your rewards and Daily Check-In" onPress={() => navigation.navigate('Rewards')} /></Section>}
 
-    <Section title="SOCIAL"><Row icon={Users} label="Following" detail="Manage creators you follow" onPress={() => navigation.navigate('FollowingList')} /><Row icon={Eye} label="Who Viewed Me" detail={`${profileViewCount} recent profile views`} onPress={() => navigation.navigate('WhoViewedMe')} /><Row icon={Crown} label="Amira VIP" detail="Explore VIP access and benefits" onPress={() => navigation.navigate('VipInfo')} /></Section>
+    <Section title="SOCIAL"><Row icon={Users} label="Following" detail={approvedHost ? "Manage consumers you follow" : "Manage creators you follow"} onPress={() => navigation.navigate('FollowingList')} />{!approvedHost && <><Row icon={Eye} label="Who Viewed Me" detail={`${profileViewCount} recent profile views`} onPress={() => navigation.navigate('WhoViewedMe')} /><Row icon={Crown} label="Amira VIP" detail="Explore VIP access and benefits" onPress={() => navigation.navigate('VipInfo')} /></>}</Section>
 
     <View style={styles.opportunity}><View style={styles.opportunityIcon}><Sparkles color="white" size={25}/></View><Text style={styles.opportunityTitle}>{approvedHost ? 'Creator Connect' : creatorCopy.title}</Text><Text style={styles.opportunityText}>{creatorCopy.description}</Text><TouchableOpacity style={styles.opportunityButton} disabled={creatorState==='pending'} onPress={()=>approvedHost?navigation.navigate('Connect'):navigation.navigate('HostApplication')}><Text style={styles.opportunityButtonText}>{approvedHost ? 'Open Connect' : creatorCopy.cta}</Text><ChevronRight color="white" size={18}/></TouchableOpacity></View>
 

@@ -1,4 +1,5 @@
 'use strict';
+const {isConsumer,isApprovedHost}=require('./accountRole');
 const D = require('./callDomain');
 const { prepareFreeVideoConsumption } = require('./freeVideoEntitlement');
 
@@ -107,7 +108,7 @@ const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError, recovery }) =>
         tx.get(db.doc(`users/${call.callerId}`)), tx.get(db.doc(`users/${call.receiverId}`)),
       ]);
       const nowMs = Date.now();
-      if (consumer.data()?.role !== 'consumer' || host.data()?.role !== 'host'
+      if (!isConsumer(consumer.data()) || !isApprovedHost(host.data())
           || host.data()?.hostStatus?.isApproved !== true || call.receiverId === uid
           || call.participantIds.length !== 2 || !call.participantIds.includes(call.receiverId)) {
         throw new HttpsError('permission-denied', 'Paid continuation requires the consumer and approved host participants.');

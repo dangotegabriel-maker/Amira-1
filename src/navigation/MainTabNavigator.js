@@ -37,7 +37,7 @@ const MainTabNavigator = () => {
   }, [approvedHost, navigation]);
 
   return (
-    <Tab.Navigator
+    <Tab.Navigator key={approvedHost ? "host" : "consumer"} initialRouteName={approvedHost ? "Connect" : "Home"}
       screenOptions={({ route }) => ({
         tabBarBadge: route.name === 'Messages' ? unreadBadge(unread) : undefined,
         tabBarIcon: ({ color, size }) => {

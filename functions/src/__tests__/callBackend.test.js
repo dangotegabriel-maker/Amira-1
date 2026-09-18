@@ -29,3 +29,11 @@ describe('trusted call backend domain',()=>{
  test('unique RTC UIDs reject unsafe values',()=>expect(()=>D.sanitizeRtcUid(0)).toThrow('invalid-rtc-uid'));
  test('paid increments depend on authoritative elapsed time',()=>expect(D.payableIncrementCount({paidStartedAtMs:1000,nowMs:21000})).toBe(2));
 });
+
+
+test.each(['submitted','pending','under_review'])('%s applicant is not callable despite old Host role',status=>{
+ expect(()=>start({creator:{...approved,hostStatus:{isApproved:false,hasApplied:true,verificationStatus:status,availability:'online'}}})).toThrow('unapproved-creator');
+});
+test('trusted approval overrides historical Consumer role for Host call access',()=>{
+ expect(()=>start({creator:{...approved,role:'consumer'}})).not.toThrow();
+});

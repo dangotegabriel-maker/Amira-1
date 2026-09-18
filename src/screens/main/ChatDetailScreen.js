@@ -21,7 +21,7 @@ import { useMessageActivity } from '../../context/MessageActivityContext';
 import { chatPassService, chatAccessLabel, CHAT_PASS_COPY } from '../../services/chatPassService';
 import { followService } from '../../services/followService';
 import { dbService } from '../../services/firebaseService';
-import { isApprovedHost } from '../../models/userModel';
+import { isApprovedHost, isConsumer } from '../../models/userModel';
 import { startVideoCall } from '../../services/callNavigationService';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
@@ -94,7 +94,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
     return () => { alive = false; activity.setActiveConversation(null); stop(); };
   }, [focused, receiverId, conversationId]);
   useEffect(() => {
-    if (!focused || user?.role !== 'consumer' || !receiverId || blocked.blocked) return undefined;
+    if (!focused || !isConsumer(user) || !receiverId || blocked.blocked) return undefined;
     let alive = true, timer;
     chatPassService.getAccess(receiverId).then((value) => {
       if (!alive) return;
@@ -103,7 +103,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
     }).catch(() => { if (alive) setAccess(null); });
     return () => { alive = false; clearTimeout(timer); };
   }, [focused, receiverId, user?.role, accessVersion, blocked.blocked]);
-  const hostActions = user?.role === 'consumer' && recipient?.uid === receiverId && isApprovedHost(recipient) && !blocked.blocked;
+  const hostActions = isConsumer(user) && recipient?.uid === receiverId && isApprovedHost(recipient) && !blocked.blocked;
 
   useEffect(() => {
     navigation.setOptions({
@@ -390,7 +390,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         />
       )}
 
-      {user?.role === 'consumer' && !blocked.blocked && <Text style={{ color: COLORS.textSecondary, fontSize: 12, paddingHorizontal: 14, paddingVertical: 6 }}>{chatAccessLabel(access)}</Text>}
+      {isConsumer(user) && !blocked.blocked && <Text style={{ color: COLORS.textSecondary, fontSize: 12, paddingHorizontal: 14, paddingVertical: 6 }}>{chatAccessLabel(access)}</Text>}
       <View
         style={[
           styles.composer,

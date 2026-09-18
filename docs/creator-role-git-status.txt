@@ -1,0 +1,35 @@
+ M firestore.rules
+ M functions/src/__tests__/callBackend.test.js
+ M functions/src/__tests__/callPaymentLifecycle.test.js
+ M functions/src/__tests__/socialMessaging.test.js
+ M functions/src/callDomain.js
+ M functions/src/callPaymentLifecycle.js
+ M functions/src/callRecovery.js
+ M functions/src/consumerRewards.js
+ M functions/src/index.js
+ M functions/src/messageEntitlements.js
+ M functions/src/socialMessaging.js
+ M src/context/UserContext.js
+ M src/models/__tests__/userModel.test.js
+ M src/models/userModel.js
+ M src/navigation/MainTabNavigator.js
+ M src/navigation/RootNavigator.js
+ M src/screens/host/HostApplicationScreen.js
+ M src/screens/host/HostEarningsScreen.js
+ M src/screens/main/ChatDetailScreen.js
+ M src/screens/main/FollowingScreen.js
+ M src/screens/main/MyProfileScreen.js
+ M src/screens/main/RewardsScreen.js
+ M src/screens/main/__tests__/messageEntitlementUi.test.js
+ M src/screens/main/__tests__/rewardsUi.test.js
+ M src/services/followService.js
+ M src/services/hostApplicationService.js
+ M src/utils/creatorApplication.js
+?? docs/creator-role-integrity-report.md
+?? functions/src/accountRole.js
+?? src/navigation/__tests__/
+?? src/screens/main/__tests__/hostAccountUi.test.js
+?? src/services/__tests__/creatorRoleRules.emulator.cjs
+?? src/services/__tests__/hostApplicationService.test.js
+?? src/services/__tests__/hostEarningsService.test.js
+?? src/services/hostEarningsService.js

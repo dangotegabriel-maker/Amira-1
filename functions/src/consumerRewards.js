@@ -1,11 +1,12 @@
 'use strict';
 const E = require('./economyDomain');
+const {isConsumer}=require('./accountRole');
 const { utcDateKey } = require('./callDomain');
 const M = require('./messageEntitlements');
 
 const createConsumerRewards = ({ db, FieldValue, HttpsError }) => {
   const requireConsumer = (profile) => {
-    if (profile?.role !== 'consumer') throw new HttpsError('permission-denied', 'Rewards are available to consumer accounts only.');
+    if (!isConsumer(profile)) throw new HttpsError('permission-denied', 'Rewards are available to consumer accounts only.');
   };
   const getState = (uid, claim = false) => db.runTransaction(async (tx) => {
     // Recomputed for each transaction attempt; request/device dates are ignored.

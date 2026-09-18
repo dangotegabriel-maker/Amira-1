@@ -608,3 +608,10 @@ test('new calls snapshot a trusted changed host rate',async()=>{
   mockDocs.get('users/host').hostProfile.videoRateCredits=100;
   expect(callData(callId).ratePerMinute).toBe(50);
 });
+
+
+test('old submitted applicant can call as Consumer without changing connected accounting',async()=>{
+ mockDocs.get('users/consumer').role='host';mockDocs.get('users/consumer').hostStatus={isApproved:false,hasApplied:true,verificationStatus:'submitted',availability:'offline'};
+ const callId=await connect();expect(callData(callId).accountingVersion).toBe(2);expect(callData(callId).connection.state).toBe('connected');
+ await expirePreview(callId);await expect(invoke('confirmPaidContinuation','consumer',{callId})).resolves.toMatchObject({billingMode:'paid'});
+});

@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Video, X } from 'lucide-react-native';
 import { useUser } from '../../context/UserContext';
 import { COLORS } from '../../theme/COLORS';
-import { calculateAgeFromDob } from '../../models/userModel';
+import { calculateAgeFromDob, isApprovedHost } from '../../models/userModel';
 import { INITIAL_HOST_TIER } from '../../config/pricing';
 import { BIO_TEMPLATES } from '../../data/bioTemplates';
 import { mediaService } from '../../services/mediaService';
@@ -20,7 +20,7 @@ const mediaUploadsEnabled = process.env.EXPO_PUBLIC_ENABLE_MEDIA_UPLOADS === 'tr
 const HostApplicationScreen = ({ navigation }) => {
   const { user, refreshUser } = useUser();
   const [step, setStep] = useState(0);
-  const [applicationStatus, setApplicationStatus] = useState('not_started');
+  const [applicationStatus, setApplicationStatus] = useState(user?.hostStatus?.verificationStatus || 'not_started');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [bio, setBio] = useState(user?.bio || '');
@@ -172,6 +172,8 @@ const HostApplicationScreen = ({ navigation }) => {
     finally { setBusy(false); }
   };
 
+  if (isApprovedHost(user)) return <View style={[styles.container, { padding: 20, paddingTop: 60 }]}><Text style={styles.sectionTitle}>Approved Host</Text><Text style={styles.note}>Your Creator application has been approved.</Text></View>;
+  if (['submitted','pending','under_review'].includes(applicationStatus)) return <View style={[styles.container, { padding: 20, paddingTop: 60 }]}><Text style={styles.sectionTitle}>Application Under Review</Text><Text style={styles.note}>Your application is waiting for review. You can continue using Amira as a Consumer.</Text><TouchableOpacity style={styles.next} onPress={() => navigation.goBack()}><Text style={styles.nextText}>Back</Text></TouchableOpacity></View>;
   if (loading) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
 
   const missingRequirements = getMissingCreatorRequirements({ profilePhoto, introVideo, evidence, payoutMethod });

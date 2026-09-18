@@ -73,3 +73,22 @@ test.each(['consumer', 'host'])('Profile rewards entry is scoped correctly for %
   }
   screen.unmount();
 });
+
+
+test.each(['submitted','pending','under_review'])('%s applicant keeps Consumer Profile entries',async(status)=>{
+ mockUser={uid:'p',role:'host',hostStatus:{isApproved:false,hasApplied:true,verificationStatus:status}};
+ const screen=render(<MyProfileScreen navigation={{navigate:jest.fn()}}/>);await flush();
+ for(const text of ['AMIRA CREDITS','Rewards & Tasks','Who Viewed Me','Amira VIP','Application Under Review'])expect(screen.getByText(text)).toBeTruthy();
+ expect(screen.queryByText('Earnings')).toBeNull();screen.unmount();
+});
+test('approved Profile hides consumer shortcuts despite historical Consumer data',async()=>{
+ mockUser={uid:'h',role:'consumer',hostStatus:{isApproved:true},wallet:{creditBalance:123},vip:{tier:'VIP_3',status:'active'}};
+ const screen=render(<MyProfileScreen navigation={{navigate:jest.fn()}}/>);await flush();
+ for(const text of ['AMIRA CREDITS','Recharge','Rewards & Tasks','Who Viewed Me','Amira VIP','Switch back to Consumer'])expect(screen.queryByText(text)).toBeNull();
+ expect(screen.getByText('Earnings')).toBeTruthy();expect(screen.getByText('Manage consumers you follow')).toBeTruthy();screen.unmount();
+ const rewards=render(<RewardsScreen/>);await flush();expect(rewards.toJSON()).toBeNull();expect(mockRewards.getDashboard).not.toHaveBeenCalled();rewards.unmount();
+});
+test('old pending Host role can still access Consumer rewards',async()=>{
+ mockUser={uid:'p',role:'host',hostStatus:{isApproved:false,verificationStatus:'submitted'}};
+ const screen=render(<RewardsScreen/>);await flush();expect(screen.getByText('Claim daily reward')).toBeTruthy();expect(mockRewards.getDashboard).toHaveBeenCalled();screen.unmount();
+});

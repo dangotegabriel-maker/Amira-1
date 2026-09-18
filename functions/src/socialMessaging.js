@@ -1,11 +1,12 @@
 'use strict';
+const {isConsumer, accountRole}=require('./accountRole');
 const M = require('./messageEntitlements');
 const { nonnegativeInteger } = require('./economyDomain');
 const validFollow = (a, b, data, aUid, bUid) => Boolean(data && (
-  (a?.role === 'consumer' && M.approvedHost(b) && data.consumerId === aUid && data.hostId === bUid)
-  || (M.approvedHost(a) && b?.role === 'consumer' && data.sourceId === aUid && data.targetId === bUid && data.sourceRole === 'host' && data.targetRole === 'consumer')
+  (isConsumer(a) && M.approvedHost(b) && data.consumerId === aUid && data.hostId === bUid)
+  || (M.approvedHost(a) && isConsumer(b) && data.sourceId === aUid && data.targetId === bUid && data.sourceRole === 'host' && data.targetRole === 'consumer')
 ));
-const summary = (uid, profile) => ({ uid, username: profile.username || '', profilePic: profile.profilePic || '', role: profile.role || '' });
+const summary = (uid, profile) => ({ uid, username: profile.username || '', profilePic: profile.profilePic || '', role: accountRole(profile) });
 const createSocialMessaging = ({ db, FieldValue, HttpsError }) => {
   const id = (value) => {
     if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value)) throw new HttpsError('invalid-argument', 'Invalid identifier.');
@@ -48,8 +49,8 @@ const createSocialMessaging = ({ db, FieldValue, HttpsError }) => {
     return db.runTransaction(async (tx) => {
       const profiles = await readPair(tx, ...participants), sender = profiles[participants.indexOf(uid)];
       const receiver = profiles[participants.indexOf(receiverId)];
-      if (M.approvedHost(sender) && receiver.role !== 'consumer') throw new HttpsError('permission-denied', 'Hosts can message consumers only.');
-      if (receiver.role !== 'consumer' && !M.approvedHost(receiver)) throw new HttpsError('permission-denied', 'Recipient is unavailable.');
+      if (M.approvedHost(sender) && !isConsumer(receiver)) throw new HttpsError('permission-denied', 'Hosts can message consumers only.');
+      if (!isConsumer(receiver) && !M.approvedHost(receiver)) throw new HttpsError('permission-denied', 'Recipient is unavailable.');
       const conversationRef = db.doc(`conversations/${conversationId}`), messageRef = db.doc(`conversations/${conversationId}/messages/${messageId}`);
       const rewardRef = db.doc(`consumerRewards/${uid}`);
       const windowRef = db.doc(`consumerRewards/${uid}/chatWindows/${conversationId}`);
