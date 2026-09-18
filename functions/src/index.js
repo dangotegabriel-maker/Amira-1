@@ -131,3 +131,9 @@ exports.onBlockRemoveSocial=onDocumentWritten({region,document:'users/{uid}/bloc
 const hostActivity=require('./hostActivity').createHostActivity({db,HttpsError});
 exports.getHostActivity=onCall(callable,async(request)=>hostActivity.list(requireAuth(request),request.data));
 exports.getPublicConsumerProfile=onCall(callable,async(request)=>hostActivity.consumerProfile(requireAuth(request),request.data?.consumerUid));
+
+const hostConnect=require('./hostConnect').createHostConnect({db,HttpsError});
+exports.getHostAvailability=onCall(callable,async request=>hostConnect.availability(requireAuth(request),request.data));
+exports.setHostAvailability=onCall(callable,async request=>hostConnect.setAvailability(requireAuth(request),request.data));
+exports.getHostConnectConsumers=onCall(callable,async request=>hostConnect.discover(requireAuth(request),request.data));
+exports.getHostConnectToday=onCall(callable,async request=>hostConnect.today(requireAuth(request),request.data));

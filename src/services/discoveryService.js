@@ -1,20 +1,5 @@
-import {
-  collection,
-  documentId,
-  getDocs,
-  limit,
-  query,
-  where,
-} from 'firebase/firestore';
-
-import { db } from './firebaseService';
-import { normalizeUser } from '../models/userModel';
-import { followService } from './followService';
 import { invokeSocial } from './socialBackend';
 import { isNewHost, NEW_HOST_WINDOW_DAYS } from '../utils/hostRecency';
-import { blockService } from './blockService';
-
-const DISCOVERY_LIMIT = 60;
 
 export { isNewHost, NEW_HOST_WINDOW_DAYS };
 
@@ -26,47 +11,6 @@ const rankForYou = (hosts) =>
 
     return score(b) - score(a) || a.uid.localeCompare(b.uid);
   });
-
-const normalizeHostDocs = (snapshot) =>
-  snapshot.docs
-    .map((entry) => normalizeUser(entry.id, entry.data()))
-    .filter(
-      (host) =>
-        host.role === 'host' &&
-        host.hostStatus?.isApproved === true
-    );
-
-/**
- * Consumer cards shown to approved hosts.
- *
- * Deliberately returns only fields needed by the discovery UI.
- * Do not expose wallet, earnings, email or phone through host Connect cards.
- */
-const toPublicConsumerCard = (consumer) => ({
-  uid: consumer.uid,
-  username: consumer.username,
-  profilePic: consumer.profilePic,
-  age: consumer.age,
-  gender: consumer.gender,
-  countryCode: consumer.countryCode,
-  countryName: consumer.countryName,
-  bio: consumer.hostProfile?.bio || consumer.bio || '',
-  interests: consumer.hostProfile?.interests || consumer.interests || [],
-  role: consumer.role,
-  isProfileComplete: consumer.isProfileComplete,
-  createdAt: consumer.createdAt || null,
-});
-
-const normalizeConsumerDocs = (snapshot, currentUid = '') =>
-  snapshot.docs
-    .map((entry) => normalizeUser(entry.id, entry.data()))
-    .filter(
-      (consumer) =>
-        consumer.role === 'consumer' &&
-        consumer.uid !== currentUid &&
-        consumer.isProfileComplete === true
-    )
-    .map(toPublicConsumerCard);
 
 export const discoveryService = {
   /**
@@ -82,47 +26,8 @@ export const discoveryService = {
    *
    * No demo/fake consumers are injected here.
    */
-  getConsumersForHosts: async (currentHostUid) => {
-    if (!currentHostUid) return [];
-
-    const [snapshot, blockedIds] = await Promise.all([
-      getDocs(
-        query(
-          collection(db, 'users'),
-          where('role', '==', 'consumer'),
-          limit(DISCOVERY_LIMIT)
-        )
-      ),
-      blockService.getBlockedIds(),
-    ]);
-
-    const blocked = new Set(blockedIds);
-
-    return normalizeConsumerDocs(
-      snapshot,
-      currentHostUid
-    ).filter(
-      (consumer) => !blocked.has(consumer.uid)
-    );
-  },
-
-  getFollowingConsumers: async (currentHostUid) => {
-    if (!currentHostUid) return [];
-    const [ids, blockedIds] = await Promise.all([
-      followService.getFollowingConsumerIds(),
-      blockService.getBlockedIds(),
-    ]);
-    const blocked = new Set(blockedIds);
-    const snapshots = [];
-    // Fetch followed IDs directly so the discovery limit does not hide follows.
-    for (let index = 0; index < ids.length; index += 30) {
-      snapshots.push(await getDocs(query(
-        collection(db, 'users'), where(documentId(), 'in', ids.slice(index, index + 30)),
-      )));
-    }
-    return snapshots.flatMap((snapshot) => normalizeConsumerDocs(snapshot, currentHostUid))
-      .filter((consumer) => !blocked.has(consumer.uid));
-  },
+  getConsumersForHosts: async () => (await invokeSocial('getHostConnectConsumers',{tab:'For You'})).people,
+  getFollowingConsumers: async () => (await invokeSocial('getHostConnectConsumers',{tab:'Following'})).people,
 
   getFollowingHosts: async () => rankForYou(await invokeSocial('getDiscoveryHosts', {tab:'Following'})),
 

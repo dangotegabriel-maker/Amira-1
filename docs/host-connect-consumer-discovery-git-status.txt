@@ -1,0 +1,16 @@
+﻿ M firestore.rules
+ M functions/src/__tests__/callPaymentLifecycle.test.js
+ M functions/src/index.js
+ M src/screens/host/HostDashboardScreen.js
+ M src/screens/main/__tests__/consumerLevelVisibility.test.js
+ M src/services/__tests__/creatorRoleRules.emulator.cjs
+ M src/services/__tests__/discoveryService.test.js
+ M src/services/discoveryService.js
+ M src/services/firebaseService.js
+?? docs/host-connect-consumer-discovery-git-status.txt
+?? docs/host-connect-consumer-discovery-report.md
+?? functions/src/hostConnect.js
+?? src/screens/host/__tests__/hostConnectUi.test.js
+?? src/services/__tests__/hostConnect.emulator.cjs
+?? src/services/__tests__/hostConnectService.test.js
+?? src/services/hostConnectService.js

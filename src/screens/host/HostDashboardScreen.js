@@ -1,15 +1,36 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
-import { followService } from '../../services/followService';
+import {hostConnectService} from '../../services/hostConnectService';
 import { COLORS } from '../../theme/COLORS';
-import { dbService } from '../../services/firebaseService';
+
 import { useUser } from '../../context/UserContext';
 import { isApprovedHost } from '../../models/userModel';
 import { callService } from '../../services/callService';
 import { discoveryService } from '../../services/discoveryService';
 import { getCountryByCode } from '../../data/countries';
 import IncomingCallCard from '../../components/IncomingCallCard';
+
+const ConsumerCard=({consumer,navigation})=>{
+  const [failed,setFailed]=useState(false);
+  useEffect(()=>setFailed(false),[consumer.uid,consumer.profilePic]);
+    const country = getCountryByCode(consumer.countryCode);
+    const details = [consumer.age, [country?.flag, country?.name].filter(Boolean).join(' ')].filter(Boolean).join(' / ');
+    const interests = Array.isArray(consumer.interests) ? consumer.interests.filter((item) => typeof item === 'string') : [];
+    return (
+      <View style={styles.consumerCard}>
+        <TouchableOpacity style={styles.consumerBody} onPress={() => navigation.navigate('UserProfile', { userId: consumer.uid })}>
+          {consumer.profilePic&&!failed ? <Image onError={()=>setFailed(true)} source={{ uri: consumer.profilePic }} style={styles.avatar} /> : <View style={[styles.avatar, styles.placeholder]}><Text style={styles.initial}>{consumer.username?.slice(0, 1)?.toUpperCase() || ''}</Text></View>}
+          <View style={styles.consumerInfo}>
+            <Text numberOfLines={1} style={styles.opportunityTitle}>{consumer.username}</Text>
+            {!!details && <Text numberOfLines={2} style={styles.opportunityText}>{details}</Text>}
+            {(consumer.bio || interests.length > 0) && <Text numberOfLines={2} style={styles.interests}>{consumer.bio || interests.slice(0, 2).join(' / ')}</Text>}
+          </View>
+        </TouchableOpacity>
+
+      </View>
+    );
+  };
 
 const HostDashboardScreen = ({ navigation }) => {
   const { user } = useUser();
@@ -20,8 +41,9 @@ const HostDashboardScreen = ({ navigation }) => {
   const [consumerError, setConsumerError] = useState('');
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [discoveryTab, setDiscoveryTab] = useState('For You');
-  const [followerCount, setFollowerCount] = useState(null);
-  const [followerError, setFollowerError] = useState(false);
+  const [status,setStatus]=useState(null),[statusError,setStatusError]=useState(false),[today,setToday]=useState(null),[todayError,setTodayError]=useState(false);
+  const toggleLock=useRef(false), statusVersion=useRef(0);
+  const uploadsEnabled=process.env.EXPO_PUBLIC_ENABLE_MEDIA_UPLOADS==='true';
   const isFocused = useIsFocused();
   const approvedHost = isApprovedHost(user);
 
@@ -45,19 +67,16 @@ const HostDashboardScreen = ({ navigation }) => {
     return () => { cancelled = true; };
   }, [user?.uid, approvedHost, refreshVersion, discoveryTab, isFocused]);
 
+  useEffect(()=>{
+    if(!approvedHost||!isFocused)return undefined;
+    const request=++statusVersion.current;let active=true;setStatus(null);setStatusError(false);setToday(null);setTodayError(false);
+    hostConnectService.availability().then(value=>{if(request===statusVersion.current)setStatus(value);}).catch(()=>{if(request===statusVersion.current)setStatusError(true);});
+    hostConnectService.today().then(value=>{if(active)setToday(value);}).catch(()=>{if(active)setTodayError(true);});
+    return()=>{active=false;statusVersion.current++;};
+  },[user?.uid,approvedHost,isFocused,refreshVersion,user?.hostStatus?.availability]);
+  const availability=user?.hostStatus?.availability==='busy'?'busy':status?.availability;
   useEffect(() => {
-    if (!approvedHost || !user?.uid) return undefined;
-    setFollowerCount(null);
-    setFollowerError(false);
-    return followService.subscribeFollowerCount(user.uid,
-      (count) => { setFollowerCount(count); setFollowerError(false); },
-      () => { setFollowerCount(null); setFollowerError(true); },
-    );
-  }, [user?.uid, approvedHost, refreshVersion]);
-
-  const availability = user?.hostStatus?.availability || 'offline';
-  useEffect(() => {
-  if (!user?.uid || availability !== 'online') {
+  if (!approvedHost || !isFocused || !user?.uid || availability !== 'online') {
     setIncomingCall(null);
     return undefined;
   }
@@ -77,48 +96,18 @@ const HostDashboardScreen = ({ navigation }) => {
 
     setIncomingCall(nextCall);
   });
-}, [user?.uid, availability]);
+}, [user?.uid, availability,approvedHost,isFocused]);
 
-  const updateOnlineStatus = async (online) => {
-    if (!isApprovedHost(user) || updating) return;
-    setUpdating(true);
-    try { await dbService.updateHostAvailability(online ? 'online' : 'offline'); }
-    catch (error) { Alert.alert('Update failed', error.message || 'Could not change availability.'); }
-    finally { setUpdating(false); }
+  const updateOnlineStatus=async online=>{
+    if(!approvedHost||toggleLock.current||!status?.canToggle||availability==='busy')return;
+    toggleLock.current=true;setUpdating(true);const request=++statusVersion.current;
+    try{const value=await hostConnectService.setAvailability(online?'online':'offline');if(request===statusVersion.current)setStatus(value);}
+    catch(error){if(request===statusVersion.current){setStatus(null);setStatusError(false);}Alert.alert('Update failed',error.message||'Could not change availability.');try{const value=await hostConnectService.availability();if(request===statusVersion.current)setStatus(value);}catch(e){if(request===statusVersion.current)setStatusError(true);}}
+    finally{toggleLock.current=false;setUpdating(false);}
   };
-
-  if (!isApprovedHost(user)) return null;
-  const today = user?.hostMetrics?.today || {};
-  const metrics = [
-    { label: 'Calls', value: today.calls || 0 },
-    { label: 'Call Time', value: `${today.callTimeMinutes || 0} min` },
-    { label: 'Earnings', value: `${today.earnings || 0}` },
-  ];
-
+  if(!approvedHost)return null;
   const refresh = () => setRefreshVersion((value) => value + 1);
-  const renderConsumer = ({ item: consumer }) => {
-    const country = getCountryByCode(consumer.countryCode);
-    const details = [consumer.age, [country?.flag, consumer.countryName || country?.name].filter(Boolean).join(' ')].filter(Boolean).join(' / ');
-    const interests = Array.isArray(consumer.interests) ? consumer.interests.filter((item) => typeof item === 'string') : [];
-    return (
-      <View style={styles.consumerCard}>
-        <TouchableOpacity style={styles.consumerBody} onPress={() => navigation.navigate('UserProfile', { userId: consumer.uid })}>
-          {consumer.profilePic ? <Image source={{ uri: consumer.profilePic }} style={styles.avatar} /> : <View style={[styles.avatar, styles.placeholder]}><Text style={styles.initial}>{consumer.username?.slice(0, 1)?.toUpperCase() || 'A'}</Text></View>}
-          <View style={styles.consumerInfo}>
-            <Text numberOfLines={1} style={styles.opportunityTitle}>{consumer.username}</Text>
-            {!!details && <Text numberOfLines={2} style={styles.opportunityText}>{details}</Text>}
-            {(consumer.bio || interests.length > 0) && <Text numberOfLines={2} style={styles.interests}>{consumer.bio || interests.slice(0, 2).join(' / ')}</Text>}
-          </View>
-        </TouchableOpacity>
-        <View style={styles.consumerActions}>
-          <TouchableOpacity style={styles.messageButton} onPress={() => navigation.navigate('ChatDetail', { userId: consumer.uid, name: consumer.username })}>
-            <Text style={styles.messageText}>Message</Text>
-          </TouchableOpacity>
-          {/* Future video invites can sit beside Message once supported. */}
-        </View>
-      </View>
-    );
-  };
+
 
   return <View style={styles.container}>
     <FlatList
@@ -126,16 +115,15 @@ const HostDashboardScreen = ({ navigation }) => {
       numColumns={2}
       columnWrapperStyle={styles.consumerRow}
       keyExtractor={(consumer) => consumer.uid}
-      renderItem={renderConsumer}
+      renderItem={({item})=><ConsumerCard consumer={item} navigation={navigation}/>}
       contentContainerStyle={styles.content}
       refreshing={loadingConsumers}
       onRefresh={refresh}
       ListHeaderComponent={<>
-        <Text style={styles.title}>Connect</Text>
-        <View style={styles.statusCard}><View style={{ flex: 1 }}><Text style={styles.sectionLabel}>CALL AVAILABILITY</Text><Text style={styles.statusTitle}>{availability === 'online' ? 'Available for Calls' : availability === 'busy' ? 'Busy on a Call' : 'Unavailable'}</Text><Text style={styles.statusText}>You choose when you are willing to receive video calls.</Text></View>{updating ? <ActivityIndicator color={COLORS.primary} /> : <Switch value={availability === 'online'} onValueChange={updateOnlineStatus} trackColor={{ true: COLORS.primary }} />}</View>
-        <Text style={styles.heading}>TODAY</Text>
-        <View style={styles.grid}>{metrics.map(({ label, value }) => <View style={styles.metric} key={label}><Text style={styles.metricValue}>{value}</Text><Text style={styles.metricLabel}>{label}</Text></View>)}</View>
-        <Text style={styles.followerSummary}>Followers (total): {followerError ? 'Unavailable - pull down to retry' : followerCount ?? 'Loading...'}</Text>
+        <Text style={styles.title}>Connect</Text><View style={{flexDirection:'row',alignItems:'center',gap:12,marginBottom:14}}>{user?.profilePic?<Image source={{uri:user.profilePic}} style={{width:44,height:44,borderRadius:22}}/>:null}<View><Text style={styles.opportunityTitle}>{user?.username}</Text><TouchableOpacity disabled accessibilityState={{disabled:true}} accessibilityLabel={uploadsEnabled?'Add Story, coming later':'Add Story, uploads unavailable'}><Text style={styles.opportunityText}>Add Story - Coming later</Text></TouchableOpacity></View></View>
+        <View style={styles.statusCard}><View style={{flex:1}}><Text style={styles.sectionLabel}>CALL AVAILABILITY</Text><Text style={styles.statusTitle}>{statusError?'Availability unavailable':availability==='busy'?'Busy on a Call':availability==='online'?'Online':availability==='offline'?'Offline':status?'Availability unavailable':'Loading availability...'}</Text></View><Switch accessibilityLabel="Host availability" disabled={updating||!status?.canToggle||availability==='busy'} value={availability==='online'} onValueChange={updateOnlineStatus} trackColor={{true:COLORS.primary}}/>{updating&&<ActivityIndicator color={COLORS.primary}/>}</View>
+        {statusError&&<TouchableOpacity onPress={refresh}><Text style={styles.messageText}>Retry availability</Text></TouchableOpacity>}
+        <View style={[styles.metric,{width:'100%',marginTop:12}]}><Text style={styles.sectionLabel}>TODAY</Text><Text style={styles.metricValue}>{todayError?'Unavailable':today?today.visitors:'Loading...'}</Text><Text style={styles.metricLabel}>Recent visitors today</Text>{todayError&&<TouchableOpacity onPress={refresh}><Text style={styles.messageText}>Retry summary</Text></TouchableOpacity>}</View>
         <View style={styles.discoveryTabs}>{['For You', 'Following'].map((tab) => (
           <TouchableOpacity key={tab} accessibilityRole="tab" accessibilityState={{ selected: discoveryTab === tab }} style={[styles.discoveryTab, discoveryTab === tab && styles.selectedTab]} onPress={() => setDiscoveryTab(tab)}>
             <Text style={[styles.tabText, discoveryTab === tab && styles.selectedTabText]}>{tab}</Text>
@@ -145,14 +133,12 @@ const HostDashboardScreen = ({ navigation }) => {
       </>}
       ListEmptyComponent={<View style={styles.opportunity}>
         {loadingConsumers ? <ActivityIndicator color={COLORS.primary} /> : <>
-          <Text style={styles.opportunityTitle}>{consumerError ? 'Unable to load people' : discoveryTab === 'Following' ? "You're not following anyone yet." : 'No people to connect with yet'}</Text>
+          <Text style={styles.opportunityTitle}>{consumerError ? 'Unable to load people' : discoveryTab === 'Following' ? "You're not following anyone yet." : 'No people to show right now.'}</Text>
           <Text style={styles.opportunityText}>{consumerError || (discoveryTab === 'Following' ? 'Follow people from their profiles to find them here. Only available profiles are shown.' : 'New profiles will appear here when available. Pull down to refresh.')}</Text>
           {consumerError ? <TouchableOpacity onPress={refresh} style={styles.messageButton}><Text style={styles.messageText}>Try again</Text></TouchableOpacity> : null}
         </>}
       </View>}
-      ListFooterComponent={<>
-        <View style={styles.profileState}><Text style={styles.opportunityTitle}>Profile readiness</Text><Text style={styles.opportunityText}>{user?.profilePic && user?.hostProfile?.bio && user?.hostProfile?.introVideoUrl ? 'Your public host profile has its core media.' : 'Add profile media and an introduction to improve marketplace readiness.'}</Text></View>
-      </>}
+
     />
     {incomingCall && <IncomingCallCard call={incomingCall} navigation={navigation} onDismiss={()=>setIncomingCall(null)} />}
   </View>;

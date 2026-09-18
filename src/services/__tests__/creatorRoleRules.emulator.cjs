@@ -37,7 +37,7 @@ async function main(){
  await denied(updateDoc(doc(p,'users/p'),{'hostStatus.isApproved':true}));
  await denied(updateDoc(doc(h,'users/h'),{role:'consumer'}));
  await denied(updateDoc(doc(h,'users/h'),{'hostStatus.isApproved':false}));
- await updateDoc(doc(h,'users/h'),{'hostStatus.availability':'offline'});checks++;
+ await denied(updateDoc(doc(h,'users/h'),{'hostStatus.availability':'offline'}));
  await updateDoc(doc(h,'users/h'),{'hostProfile.bio':'Normal edit'});checks++;
  await updateDoc(doc(p,'users/p'),{role:'consumer'});checks++;
  await getDoc(doc(p,'consumerRewards/p'));checks++;await getDoc(doc(c,'consumerRewards/c'));checks++;await denied(getDoc(doc(h,'consumerRewards/c')));

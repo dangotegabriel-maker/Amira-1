@@ -293,24 +293,7 @@ export const dbService = {
       throw error;
     }
   },
-  updateHostAvailability: async (availability) => {
-    const user = requireAuthenticatedUser();
-    const userRef = doc(db, 'users', user.uid);
-    const snapshot = await getDoc(userRef);
-    if (!snapshot.exists()) throw new Error('Profile not found.');
-    const profile = normalizeUserProfile(user.uid, snapshot.data(), user);
-    if (profile.role !== 'host' || profile.hostStatus?.isApproved !== true) {
-      throw new Error('Only approved hosts can change availability.');
-    }
-    if (!['online', 'offline', 'busy'].includes(availability)) {
-      throw new Error('Invalid host availability.');
-    }
-    await updateDoc(userRef, {
-      'hostStatus.availability': availability,
-      updatedAt: serverTimestamp(),
-    });
-    return { success: true };
-  },
+  updateHostAvailability: async (availability) => require('./hostConnectService').hostConnectService.setAvailability(availability),
   createUserProfile: async (uid, data = {}) => {
     try {
       const user = requireAuthenticatedUser(uid);
