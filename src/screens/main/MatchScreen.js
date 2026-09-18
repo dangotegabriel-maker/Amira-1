@@ -1,45 +1,53 @@
-import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { MessageCircle, RefreshCw, Sparkles, UserRound, Video } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
 import { discoveryService } from '../../services/discoveryService';
+import {useDiscoveryFilters} from '../../hooks/useDiscoveryFilters';
+import {filterDiscoveryHosts} from '../../utils/discoveryFilters';
 import HostCard from '../../components/HostCard';
 import { startVideoCall } from '../../services/callNavigationService';
 
 const MatchScreen = ({ navigation }) => {
   const { user } = useUser();
+  const [filters]=useDiscoveryFilters(); const focused=useIsFocused();
+  const seen=useRef([]),request=useRef(0);
+  const [error,setError]=useState('');
   const [hosts, setHosts] = useState([]);
   const [match, setMatch] = useState(null);
-  const [skipped, setSkipped] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const findMatch = useCallback(async (nextSkipped = skipped) => {
-    setLoading(true);
+  const findMatch = useCallback(async () => {
+    const version=++request.current;setLoading(true);setError('');
     try {
-      const eligible = await discoveryService.getApprovedHosts({ onlineOnly: true });
+      const eligible=filterDiscoveryHosts(await discoveryService.getApprovedHosts(),filters).filter(host=>host.hostStatus?.availability!=='busy');
+      if(version!==request.current)return;
       setHosts(eligible);
-      setMatch(discoveryService.getBestMatch(eligible, user, nextSkipped));
-    } finally { setLoading(false); }
-  }, [skipped, user]);
-
-  useFocusEffect(useCallback(() => { findMatch([]); }, [user?.uid, user?.countryCode]));
+      let nextMatch=discoveryService.getBestMatch(eligible,user,seen.current);
+      if(!nextMatch){seen.current=[];nextMatch=discoveryService.getBestMatch(eligible,user,[]);}
+      setMatch(nextMatch);
+    } catch(e){if(version===request.current){setHosts([]);setMatch(null);setError('Matches could not be loaded. Try again.');}}
+    finally {if(version===request.current)setLoading(false);}
+  },[filters,user?.uid,user?.countryCode]);
+  useFocusEffect(useCallback(()=>{findMatch();return()=>{request.current++;};},[findMatch]));
 
   const next = () => {
     if (!match) return findMatch([]);
-    const nextSkipped = [...skipped, match.uid];
+    const nextSkipped = [...seen.current, match.uid];
+    seen.current=nextSkipped;
     const nextMatch = discoveryService.getBestMatch(hosts, user, nextSkipped);
-    if (nextMatch) { setSkipped(nextSkipped); setMatch(nextMatch); }
-    else { setSkipped([]); setMatch(discoveryService.getBestMatch(hosts, user, [])); }
+    if (nextMatch) { setMatch(nextMatch); }
+    else { seen.current=[]; setMatch(discoveryService.getBestMatch(hosts, user, [])); }
   };
 
   if (loading) return <View style={styles.center}><Sparkles color={COLORS.primary} size={44} /><Text style={styles.finding}>Finding someone for you...</Text><ActivityIndicator color={COLORS.primary} /></View>;
-  if (!match) return <View style={styles.center}><Sparkles color={COLORS.primary} size={44} /><Text style={styles.emptyTitle}>No online match right now</Text><Text style={styles.emptyText}>Approved hosts may be offline. Try again later or browse Home.</Text><TouchableOpacity style={styles.primary} onPress={() => findMatch([])}><RefreshCw color="white" /><Text style={styles.primaryText}>Try Again</Text></TouchableOpacity></View>;
+  if (!match) return <View style={styles.center}><Sparkles color={COLORS.primary} size={44} /><Text style={styles.emptyTitle}>No eligible Hosts right now</Text><Text style={styles.emptyText}>{error||'Try changing your Home filters or come back later.'}</Text><TouchableOpacity style={styles.primary} onPress={() => findMatch([])}><RefreshCw color="white" /><Text style={styles.primaryText}>Try Again</Text></TouchableOpacity></View>;
 
-  const openProfile=()=>navigation.navigate('UserProfile',{userId:match.uid,demoHost:match.isDemo?match:undefined});
-  const message=()=>match.isDemo?Alert.alert('Development profile','Messaging this demo profile is unavailable.'):navigation.navigate('ChatDetail',{userId:match.uid,name:match.username});
-  return <View style={styles.container}><Text style={styles.title}>Your Amira Match</Text><Text style={styles.subtitle}>Discover someone new and start a conversation.</Text><HostCard host={match} compact showNewBadge={false} onPress={openProfile} onCallPress={() => startVideoCall({ navigation, creator: match })} /><View style={styles.actions}><TouchableOpacity style={styles.secondary} onPress={openProfile}><UserRound color={COLORS.primary} /><Text style={styles.secondaryText}>Profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={message}><MessageCircle color={COLORS.primary} /><Text style={styles.secondaryText}>Message</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={() => startVideoCall({ navigation, creator: match })}><Video color={COLORS.primary} /><Text style={styles.secondaryText}>Video</Text></TouchableOpacity></View><TouchableOpacity style={styles.primary} onPress={next}><RefreshCw color="white" /><Text style={styles.primaryText}>Next Match</Text></TouchableOpacity></View>;
+  const openProfile=()=>navigation.navigate('UserProfile',{userId:match.uid});
+  const message=()=>navigation.navigate('ChatDetail',{userId:match.uid,name:match.username});
+  return <View style={styles.container}><Text style={styles.title}>Your Amira Match</Text><Text style={styles.subtitle}>Discover someone new and start a conversation.</Text><HostCard host={match} compact autoCycle={focused} onPress={openProfile} onCallPress={() => startVideoCall({ navigation, creator: match })} /><View style={styles.actions}><TouchableOpacity style={styles.secondary} onPress={openProfile}><UserRound color={COLORS.primary} /><Text style={styles.secondaryText}>Profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={message}><MessageCircle color={COLORS.primary} /><Text style={styles.secondaryText}>Message</Text></TouchableOpacity><TouchableOpacity disabled={match.hostStatus?.availability!=='online'||!match.hostProfile?.videoRateCredits} style={styles.secondary} onPress={() => startVideoCall({ navigation, creator: match })}><Video color={COLORS.primary} /><Text style={styles.secondaryText}>Video</Text></TouchableOpacity></View><TouchableOpacity style={styles.primary} onPress={next}><RefreshCw color="white" /><Text style={styles.primaryText}>Next Match</Text></TouchableOpacity></View>;
 };
 
 const styles = StyleSheet.create({

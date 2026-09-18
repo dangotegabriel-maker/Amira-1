@@ -68,6 +68,14 @@ service cloud.firestore {
         allow delete: if owns(uid);
         allow update: if false;
       }
+      match /likes/{consumerUid} {
+        allow read: if (owns(uid) || owns(consumerUid)) && !blockedBetween(uid, consumerUid);
+        allow write: if false; // Authenticated, role-checked transactional Like callable only.
+      }
+      match /discoveryHidden/{hostUid} {
+        allow read: if owns(uid);
+        allow write: if false; // Consumer-only discovery preference callable.
+      }
       match /profileViews/{viewerUid} {
         allow read: if owns(uid) && canReadVisitorIdentities(uid);
         allow create, update: if false; // Trusted profile-view transaction only.

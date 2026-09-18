@@ -1,0 +1,12 @@
+jest.mock('firebase/firestore',()=>({}));
+jest.mock('../socialBackend',()=>({invokeSocial:jest.fn()}));
+jest.mock('../firebaseService',()=>({db:{}}));
+jest.mock('../blockService',()=>({blockService:{}}));
+jest.mock('../followService',()=>({followService:{}}));
+import {discoveryService} from '../discoveryService';
+import {invokeSocial} from '../socialBackend';
+const host=(uid,availability='offline')=>({uid,hostStatus:{isApproved:true,availability},hostProfile:{interests:[]}});
+beforeEach(()=>jest.clearAllMocks());
+test('bounded backend tabs use real data only, empty data remains empty',async()=>{invokeSocial.mockResolvedValue([]);expect(await discoveryService.getApprovedHosts()).toEqual([]);expect(await discoveryService.getFollowingHosts()).toEqual([]);expect(await discoveryService.getNewHosts()).toEqual([]);expect(invokeSocial.mock.calls).toEqual([['getDiscoveryHosts',{tab:'For You'}],['getDiscoveryHosts',{tab:'Following'}],['getDiscoveryHosts',{tab:'New'}]]);});
+test('existing For You rank is stable, online first and UID ties',async()=>{invokeSocial.mockResolvedValue([host('z'),host('b','online'),host('a','online')]);expect((await discoveryService.getApprovedHosts()).map(item=>item.uid)).toEqual(['a','b','z']);});
+test('normal Match prioritizes online, uses offline fallback and excludes Busy/unapproved/demo/seen',()=>{const pool=[host('offline'),host('online','online'),host('busy','busy'),{...host('pending'),hostStatus:{isApproved:false}},{...host('demo','online'),isDemo:true}];expect(discoveryService.getBestMatch(pool,{}).uid).toBe('online');expect(discoveryService.getBestMatch(pool,{},['online']).uid).toBe('offline');expect(discoveryService.getBestMatch(pool,{},['online','offline'])).toBeNull();});

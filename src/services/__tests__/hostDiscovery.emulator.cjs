@@ -1,0 +1,51 @@
+// Isolated localhost-only backend transactions and client security assertions.
+const assert=require('node:assert/strict'),Module=require('node:module');
+process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8289';
+const backendRequire=Module.createRequire(require.resolve('../../../functions/package.json'));
+const admin=backendRequire('firebase-admin/app'),{getFirestore:adminFirestore,FieldValue,Timestamp}=backendRequire('firebase-admin/firestore'),{HttpsError}=backendRequire('firebase-functions/v2/https');
+const {initializeApp,deleteApp}=require('firebase/app'),{getFirestore,connectFirestoreEmulator,doc,setDoc,getDoc,updateDoc,setLogLevel}=require('firebase/firestore');
+const {createHostDiscovery}=require('../../../functions/src/hostDiscovery');
+setLogLevel('silent');const projectId=`demo-amira-discovery-${Date.now()}`,serverApp=admin.initializeApp({projectId},projectId),db=adminFirestore(serverApp),apps=[];let checks=0;
+const service=createHostDiscovery({db,FieldValue,HttpsError});
+const check=(actual,expected)=>{assert.deepEqual(actual,expected);checks++;};
+const denied=async promise=>{await assert.rejects(promise,error=>error.code==='permission-denied');checks++;};
+const client=uid=>{const app=initializeApp({projectId,apiKey:'emulator-only'},uid);apps.push(app);const store=getFirestore(app);connectFirestoreEmulator(store,'127.0.0.1',8289,{mockUserToken:{sub:uid,user_id:uid}});return store;};
+const profile=(uid,approved=false)=>({uid,username:uid,role:approved?'host':'consumer',dob:'2000-01-01',countryCode:'GH',email:'private@example.test',payoutSetup:{bank:'private'},hostStatus:{isApproved:approved,hasApplied:approved,verificationStatus:approved?'approved':'not_started',availability:approved?'online':'offline'},wallet:{creditBalance:100},earnings:{pending:0,available:0},hostProfile:{videoRateCredits:37,rateTier:'ENTRY',interests:['Music'],gallery:['https://media.example/a','https://media.example/b']},vip:{tier:'FREE',status:'inactive'},profileViewStats:{recentCount:0},referralStats:{qualifiedCount:0,pendingCount:0}});
+const ids=hosts=>hosts.map(host=>host.uid).sort();
+async function main(){
+ for(const uid of ['c','p','h','legacy','old','reverse','demo'])await db.doc(`users/${uid}`).set(profile(uid,!['c','p'].includes(uid)));
+ await db.doc('users/p').update({role:'host','hostStatus.verificationStatus':'pending'});
+ await db.doc('users/demo').update({isDemo:true});
+ const now=Date.now();await db.doc('hostApplications/h').set({ownerUid:'h',status:'approved',approvedAt:Timestamp.fromMillis(now-13*86400000)});
+ await db.doc('hostApplications/old').set({ownerUid:'old',status:'approved',approvedAt:Timestamp.fromMillis(now-15*86400000)});
+ await db.doc('users/legacy').update({hostApprovedAt:Timestamp.fromMillis(now),hostCreatedAt:Timestamp.fromMillis(now)});
+ await db.doc('users/reverse/blocked/c').set({blockedUid:'c',createdAt:FieldValue.serverTimestamp()});
+ check(ids(await service.candidates('c')),['h','legacy','old']);check(ids(await service.candidates('c','New')),['h']);check(ids(await service.candidates('c','Following')),[]);
+ await db.doc('users/c/following/h').set({consumerId:'c',hostId:'h',createdAt:FieldValue.serverTimestamp()});
+ await db.doc('users/c/following/p').set({consumerId:'c',hostId:'p',createdAt:FieldValue.serverTimestamp()});
+ await db.doc('users/c/following/reverse').set({consumerId:'c',hostId:'reverse',createdAt:FieldValue.serverTimestamp()});
+ check(ids(await service.candidates('c','Following')),['h']);await db.doc('users/c/following/h').delete();check(ids(await service.candidates('c','Following')),[]);
+ await denied(service.candidates('h'));check(ids(await service.candidates('p')),['h','legacy','old','reverse']);
+ const result=await service.profile('c','h');check(result.hostProfile.videoRateCredits,37);check(result.hostApprovedAt,now-13*86400000);
+ for(const field of ['email','wallet','payoutSetup','earnings','dob'])check(Object.hasOwn(result,field),false);
+ check(result.social.likes,0);await Promise.all([service.setLike('c',{hostId:'h',liked:true}),service.setLike('c',{hostId:'h',liked:true}),service.setLike('c',{hostId:'h',liked:true})]);
+ check((await service.profile('c','h')).social.likes,1);check((await db.collection('users/h/likes').get()).size,1);check((await service.setLike('c',{hostId:'h',liked:true})).idempotent,true);
+ check((await service.setLike('c',{hostId:'h',liked:false})).liked,false);check((await service.profile('c','h')).social.likes,0);
+ await service.setLike('p',{hostId:'h',liked:true});check((await service.profile('c','h')).social.likes,1);await denied(service.setLike('legacy',{hostId:'h',liked:true}));await denied(service.setLike('c',{hostId:'p',liked:true}));
+ await assert.rejects(service.setLike('c',{hostId:'h',liked:true,consumerId:'p'}),error=>error.code==='invalid-argument');checks++;
+ const c=client('c'),p=client('p'),h=client('h');
+ for(const store of [c,p,h])await denied(setDoc(doc(store,'users/h/likes/c'),{consumerId:'c',hostId:'h',createdAt:new Date()}));
+ await getDoc(doc(h,'users/h/likes/p'));checks++;await denied(getDoc(doc(c,'users/h/likes/p')));
+ await denied(setDoc(doc(c,'users/c/discoveryHidden/h'),{hostId:'h'}));
+ await denied(updateDoc(doc(c,'users/c'),{'hostStatus.isApproved':true}));await denied(updateDoc(doc(h,'users/h'),{'hostProfile.videoRateCredits':999}));await denied(setDoc(doc(c,'consumerLevels/c'),{lifetimeQualifyingPurchasedCredits:99999}));await denied(setDoc(doc(h,'hostEarnings/h'),{pendingCreditsEquivalent:999}));
+ await denied(setDoc(doc(c,'hostApplications/c'),{ownerUid:'c',status:'approved',approvedAt:new Date()}));
+ await service.hide('c','h');check(ids(await service.candidates('c')),['legacy','old']);check((await db.doc('users/c/blocked/h').get()).exists,false);check((await service.profile('c','h')).uid,'h');
+ await db.doc('users/p/following/h').set({consumerId:'p',hostId:'h',createdAt:FieldValue.serverTimestamp()});await db.doc('users/h/following/p').set({sourceId:'h',targetId:'p',sourceRole:'host',targetRole:'consumer',createdAt:FieldValue.serverTimestamp()});
+ await Promise.all([service.cleanup('h','p',true),service.setLike('p',{hostId:'h',liked:true}).catch(error=>{assert.equal(error.code,'permission-denied');})]);
+ check((await db.doc('users/h/likes/p').get()).exists,false);check((await db.doc('users/p/following/h').get()).exists,false);check((await db.doc('users/h/following/p').get()).exists,false);await denied(service.profile('p','h'));await denied(service.setLike('p',{hostId:'h',liked:true}));check(ids(await service.candidates('p')),['legacy','old','reverse']);
+ // Existing direct client block records are also covered by the current-state trigger helper.
+ await db.doc('users/c/following/old').set({consumerId:'c',hostId:'old'});await service.setLike('c',{hostId:'old',liked:true});await setDoc(doc(c,'users/c/blocked/old'),{blockedUid:'old',createdAt:require('firebase/firestore').serverTimestamp()});await service.cleanup('c','old');check((await db.doc('users/old/likes/c').get()).exists,false);check((await db.doc('users/c/following/old').get()).exists,false);
+ await db.doc('users/c/blocked/old').delete();await db.doc('users/c/following/old').set({consumerId:'c',hostId:'old'});await service.cleanup('c','old');check((await db.doc('users/c/following/old').get()).exists,true);
+ console.log(`Discovery/profile backend and security: ${checks} checks passed (${projectId}, localhost only).`);
+}
+main().finally(()=>Promise.all([...apps.map(deleteApp),admin.deleteApp(serverApp)])).catch(error=>{console.error(error);process.exitCode=1;});

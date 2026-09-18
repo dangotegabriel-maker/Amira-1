@@ -116,3 +116,14 @@ const consumerLevels=require('./consumerLevels').createConsumerLevels({db,FieldV
 exports.getMyAmiraLevel=onCall(callable,async(request)=>consumerLevels.snapshot(requireAuth(request)));
 exports.claimAmiraLevelMilestone=onCall(callable,async(request)=>consumerLevels.claim(requireAuth(request),request.data));
 exports.getConsumerAmiraLevel=onCall(callable,async(request)=>consumerLevels.publicLevel(requireAuth(request),request.data?.consumerUid));
+
+const hostDiscovery=require('./hostDiscovery').createHostDiscovery({db,FieldValue,HttpsError});
+exports.getDiscoveryHosts=onCall(callable,async(request)=>hostDiscovery.candidates(requireAuth(request),request.data?.tab));
+exports.getPublicHostProfile=onCall(callable,async(request)=>hostDiscovery.profile(requireAuth(request),request.data?.hostId));
+exports.setHostLike=onCall(callable,async(request)=>hostDiscovery.setLike(requireAuth(request),request.data));
+exports.hideDiscoveryHost=onCall(callable,async(request)=>hostDiscovery.hide(requireAuth(request),request.data?.hostId));
+exports.blockAndRemoveSocial=onCall(callable,async(request)=>hostDiscovery.cleanup(requireAuth(request),request.data?.targetUid,true));
+// Re-read current blocks so delayed/retried events cannot erase new unblocked follows.
+exports.onBlockRemoveSocial=onDocumentWritten({region,document:'users/{uid}/blocked/{blockedUid}',retry:true},async(event)=>{
+  await hostDiscovery.cleanup(event.params.uid,event.params.blockedUid);
+});

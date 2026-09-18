@@ -10,17 +10,13 @@ import {
 import { db } from './firebaseService';
 import { normalizeUser } from '../models/userModel';
 import { followService } from './followService';
-import { DEV_FEATURES } from '../config/devFeatures';
-import { DEMO_HOSTS } from '../data/demoHosts';
+import { invokeSocial } from './socialBackend';
 import { isNewHost, NEW_HOST_WINDOW_DAYS } from '../utils/hostRecency';
 import { blockService } from './blockService';
 
 const DISCOVERY_LIMIT = 60;
 
 export { isNewHost, NEW_HOST_WINDOW_DAYS };
-
-const includeDemoFallback = (hosts) =>
-  !hosts.length && DEV_FEATURES.enableDemoHosts ? DEMO_HOSTS : hosts;
 
 const rankForYou = (hosts) =>
   [...hosts].sort((a, b) => {
@@ -77,45 +73,8 @@ export const discoveryService = {
    * Consumer-facing marketplace:
    * returns approved hosts.
    */
-  getApprovedHosts: async ({ onlineOnly = false } = {}) => {
-    const constraints = [
-      where('role', '==', 'host'),
-      where('hostStatus.isApproved', '==', true),
-    ];
-
-    if (onlineOnly) {
-      constraints.push(
-        where('hostStatus.availability', '==', 'online')
-      );
-    }
-
-    constraints.push(limit(DISCOVERY_LIMIT));
-
-    const [snapshot, blockedIds] = await Promise.all([
-      getDocs(
-        query(
-          collection(db, 'users'),
-          ...constraints
-        )
-      ),
-      blockService.getBlockedIds(),
-    ]);
-
-    const blocked = new Set(blockedIds);
-
-    const realHosts = normalizeHostDocs(snapshot).filter(
-      (host) => !blocked.has(host.uid)
-    );
-
-    const hosts = includeDemoFallback(realHosts).filter(
-      (host) =>
-        !blocked.has(host.uid) &&
-        (!onlineOnly ||
-          host.hostStatus?.availability === 'online')
-    );
-
-    return rankForYou(hosts);
-  },
+  getApprovedHosts: async () => rankForYou(await invokeSocial('getDiscoveryHosts', {tab:'For You'})),
+  getNewHosts: async () => (await invokeSocial('getDiscoveryHosts', {tab:'New'})).sort((a,b)=>b.hostApprovedAt-a.hostApprovedAt||a.uid.localeCompare(b.uid)),
 
   /**
    * Host-facing discovery:
@@ -165,45 +124,7 @@ export const discoveryService = {
       .filter((consumer) => !blocked.has(consumer.uid));
   },
 
-  getFollowingHosts: async () => {
-    const [ids, blockedIds] = await Promise.all([
-      followService.getFollowingHostIds(),
-      blockService.getBlockedIds(),
-    ]);
-
-    const blocked = new Set(blockedIds);
-
-    if (!ids.length) {
-      return DEV_FEATURES.enableDemoHosts
-        ? DEMO_HOSTS.filter((host) => host.demoFollowing)
-        : [];
-    }
-
-    const chunks = [];
-
-    for (let index = 0; index < ids.length; index += 30) {
-      chunks.push(ids.slice(index, index + 30));
-    }
-
-    const snapshots = await Promise.all(
-      chunks.map((chunk) =>
-        getDocs(
-          query(
-            collection(db, 'users'),
-            where(documentId(), 'in', chunk)
-          )
-        )
-      )
-    );
-
-    const realHosts = snapshots
-      .flatMap(normalizeHostDocs)
-      .filter((host) => !blocked.has(host.uid));
-
-    return !realHosts.length && DEV_FEATURES.enableDemoHosts
-      ? DEMO_HOSTS.filter((host) => host.demoFollowing)
-      : realHosts;
-  },
+  getFollowingHosts: async () => rankForYou(await invokeSocial('getDiscoveryHosts', {tab:'Following'})),
 
   searchAndFilter: (hosts, filters = {}) => {
     const search = String(filters.search || '')
@@ -345,7 +266,7 @@ export const discoveryService = {
 
     return (
       hosts
-        .filter((host) => !skipped.has(host.uid))
+        .filter((host) => host.hostStatus?.isApproved === true && !host.isDemo && host.hostStatus?.availability !== 'busy' && !skipped.has(host.uid))
         .map((host) => {
           let score =
             host.hostStatus?.availability === 'online'

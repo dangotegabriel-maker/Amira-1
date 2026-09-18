@@ -1,0 +1,27 @@
+﻿ M firestore.rules
+ M functions/src/index.js
+ M src/components/DiscoveryFilterModal.js
+ M src/components/HostCard.js
+ M src/screens/main/HomeScreen.js
+ M src/screens/main/MatchScreen.js
+ M src/screens/main/UserProfileScreen.js
+ M src/screens/main/__tests__/consumerLevelVisibility.test.js
+ M src/services/blockService.js
+ M src/services/discoveryService.js
+ M src/utils/__tests__/hostRecency.test.js
+ M src/utils/hostRecency.js
+?? docs/consumer-discovery-host-profile-git-status.txt
+?? docs/consumer-discovery-host-profile-report.md
+?? functions/src/__tests__/hostDiscovery.test.js
+?? functions/src/hostDiscovery.js
+?? functions/src/hostDiscoveryDomain.js
+?? src/components/__tests__/discoveryFilterModal.test.js
+?? src/components/__tests__/hostPhotoRotation.test.js
+?? src/hooks/useDiscoveryFilters.js
+?? src/hooks/useRotatingHostPhoto.js
+?? src/screens/main/__tests__/discoveryProfileUi.test.js
+?? src/services/__tests__/discoveryService.test.js
+?? src/services/__tests__/hostDiscovery.emulator.cjs
+?? src/services/hostProfileService.js
+?? src/utils/__tests__/discoveryFilters.test.js
+?? src/utils/discoveryFilters.js
