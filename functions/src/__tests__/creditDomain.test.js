@@ -1,0 +1,14 @@
+'use strict';
+const D=require('../creditDomain');
+
+const base={ownerUid:'consumer_1',purchasedCredits:20,bonusCredits:5,legacyCredits:10,unallocatedSpentCredits:0,totalBalance:35,accountingVersion:1};
+test('new wallet classifies existing compatibility value as legacy',()=>expect(D.readWallet(null,'consumer_1',17)).toEqual({...base,purchasedCredits:0,bonusCredits:0,legacyCredits:17,totalBalance:17}));
+test('trusted grants preserve provenance and total',()=>{expect(D.grant(base,'purchased',4)).toMatchObject({purchasedCredits:24,totalBalance:39});expect(D.grant(base,'bonus',4)).toMatchObject({bonusCredits:9,totalBalance:39});});
+test('legacy compatibility increase never becomes purchased',()=>expect(D.readWallet(base,'consumer_1',40)).toMatchObject({purchasedCredits:20,bonusCredits:5,legacyCredits:15,totalBalance:40}));
+test('ordinary compatibility spend becomes unallocated and fails closed for gifts',()=>{const state=D.readWallet(base,'consumer_1',30);expect(state.unallocatedSpentCredits).toBe(5);expect(D.walletProjection(state)).toMatchObject({compositionResolved:false,purchasedCredits:null,bonusCredits:null,legacyCredits:null,giftEligiblePurchasedCredits:0,totalCredits:30});});
+test('reversal removes purchase provenance without changing spendable total',()=>expect(D.reversePurchased(base,7)).toMatchObject({purchasedCredits:13,legacyCredits:17,totalBalance:35}));
+test('reversal cannot make purchased credits negative',()=>expect(()=>D.reversePurchased(base,21)).toThrow(/below zero/));
+test('wallet rejects broken invariants and unsafe numbers',()=>{expect(()=>D.readWallet({...base,totalBalance:99},'consumer_1',99)).toThrow(/invariant/);expect(()=>D.integer(1.2,'Credits')).toThrow();});
+test('catalog is server authoritative and strictly shaped',()=>{expect(D.packageCatalog({starter:{credits:50,amountMinor:1000,currency:'ghs',label:'Starter'}}).starter).toMatchObject({credits:50,amountMinor:1000,currency:'GHS'});expect(()=>D.packageCatalog({bad:{credits:1,amountMinor:2,currency:'GHS',clientPrice:1}})).toThrow();});
+test('provider proof must exactly match amount currency and reference',()=>{const attempt={reference:'ref_1',amountMinor:1000,currency:'GHS'},proof={success:true,reference:'ref_1',providerTransactionId:'txn_1',amountMinor:1000,currency:'ghs'};expect(D.providerVerification(proof,attempt)).toEqual({providerTransactionId:'txn_1'});expect(()=>D.providerVerification({...proof,amountMinor:999},attempt)).toThrow(/amount mismatch/);expect(()=>D.providerVerification({...proof,reference:'ref_2'},attempt)).toThrow(/reference mismatch/);});
+test('history projection omits provider and internal payloads',()=>{const projected=D.safeLedgerEntry('entry_1',{type:'recharge',direction:'credit',credits:5,bucket:'purchased',status:'succeeded',providerPayload:{secret:true},ownerUid:'consumer_1'});expect(projected).not.toHaveProperty('providerPayload');expect(projected).not.toHaveProperty('ownerUid');});

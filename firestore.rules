@@ -145,6 +145,12 @@ service cloud.firestore {
       allow read: if signedIn() && request.auth.uid in [resource.data.consumerId, resource.data.creatorId];
       allow write: if admin();
     }
+    match /creditWallets/{uid} {
+      allow read, write: if false;
+      match /ledger/{entryId} { allow read, write: if false; }
+    }
+    match /paymentAttempts/{reference} { allow read, write: if false; }
+    match /paymentReferences/{providerTransactionId} { allow read, write: if false; }
     // Private economy documents. Admin SDK transactions bypass client rules;
     // ordinary clients can never award rewards or author accounting splits.
     match /consumerRewards/{uid} {

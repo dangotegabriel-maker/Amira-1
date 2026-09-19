@@ -20,6 +20,7 @@ const callable={region,enforceAppCheck:false};
 const recovery=require('./callRecovery').createCallRecovery({db,FieldValue,HttpsError});
 const paymentLifecycle=P.createCallPaymentLifecycle({db,FieldValue,HttpsError,recovery});
 const consumerRewards=createConsumerRewards({db,FieldValue,HttpsError});
+const creditService=require('./creditService').createCreditService({db,FieldValue,HttpsError,packages:{}});
 const socialMessaging=require('./socialMessaging').createSocialMessaging({db,FieldValue,HttpsError});
 const requireAuth=(request)=>{if(!request.auth?.uid)throw new HttpsError('unauthenticated','Sign in is required.');return request.auth.uid;};
 const textId=(value,name)=>{if(typeof value!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(value))throw new HttpsError('invalid-argument',`Invalid ${name}.`);return value;};
@@ -92,6 +93,12 @@ exports.getConsumerRewards=onCall(callable,async(request)=>{
 exports.claimDailyCheckIn=onCall(callable,async(request)=>{
   try { return await consumerRewards.claim(requireAuth(request)); } catch(e) { throw mapError(e); }
 });
+exports.getCreditWallet=onCall(callable,request=>creditService.wallet(requireAuth(request),request.data||{}));
+exports.listCreditHistory=onCall(callable,request=>creditService.history(requireAuth(request),request.data||{}));
+exports.initializeCreditRecharge=onCall(callable,request=>creditService.initialize(requireAuth(request),request.data||{}));
+exports.verifyCreditRecharge=onCall(callable,request=>creditService.verify(requireAuth(request),request.data||{},async()=>{
+  throw new HttpsError('failed-precondition','Recharge verification is not configured.');
+}));
 exports._test={mapError};
 
 const publicIdentity=require('./publicIdentity').createPublicIdentity({db,HttpsError});

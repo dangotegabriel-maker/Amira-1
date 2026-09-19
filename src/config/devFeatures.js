@@ -6,7 +6,6 @@ export const canUseDemoHosts = ({ isDev = false, explicitlyDisabled = false } = 
 export const canUseCallSimulator = ({ isDev = false, enabled = false } = {}) => isDev === true && enabled === true;
 
 export const DEV_FEATURES = Object.freeze({
-  enableTestTopUps: isDevelopmentBuild && process.env.EXPO_PUBLIC_ENABLE_TEST_TOPUPS === 'true',
   enableDemoHosts: canUseDemoHosts({
     isDev: isDevelopmentBuild,
     explicitlyDisabled: process.env.EXPO_PUBLIC_ENABLE_DEMO_HOSTS === 'false',

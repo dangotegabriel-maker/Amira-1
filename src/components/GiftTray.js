@@ -4,11 +4,9 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, Animated, Di
 import { COLORS } from '../theme/COLORS';
 import { X, Coins, PlusCircle } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
-import { ledgerService } from '../services/ledgerService';
 import { hapticService } from '../services/hapticService';
 import { useNavigation } from '@react-navigation/native';
 import { useUser } from '../context/UserContext';
-import { dbService } from '../services/firebaseService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -74,40 +72,9 @@ const GiftTray = ({ visible, onClose, onGiftSent }) => {
   };
 
   const handleGiftTap = async (gift) => {
-    if (balance < gift.cost) {
-      hapticService.error();
-      alert("Insufficient coins! Please recharge.");
-      return;
-    }
-
-    // Spend coins
-    await dbService.updateWalletBalance(-gift.cost);
-    await ledgerService.spendCoins(gift.cost, 'target_user_id', gift.id).catch(() => {});
-    setBalance((current) => Math.max(0, current - gift.cost));
-    hapticService.mediumImpact();
-
-    // Combo Logic
-    if (lastGiftId === gift.id) {
-      setComboCount(prev => prev + 1);
-    } else {
-      setComboCount(1);
-      setLastGiftId(gift.id);
-    }
-
-    // Animation logic
-    Animated.sequence([
-      Animated.spring(scaleAnim, { toValue: 1.2 + (comboCount * 0.05), useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }),
-    ]).start();
-
-    // Reset combo after 300ms of inactivity
-    if (comboTimer.current) clearTimeout(comboTimer.current);
-    comboTimer.current = setTimeout(() => {
-      setComboCount(0);
-      setLastGiftId(null);
-    }, 300);
-
-    onGiftSent(gift, comboCount + 1);
+    void gift;
+    hapticService.error();
+    alert('Gifts are not available yet.');
   };
 
   const handleRecharge = () => {

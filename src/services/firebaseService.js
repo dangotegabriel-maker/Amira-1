@@ -400,48 +400,12 @@ export const dbService = {
     );
   },
   topUpWallet: async (amount) => {
-    const user = requireAuthenticatedUser();
-    const numericAmount = Number(amount);
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      throw new Error('Top-up amount must be greater than zero.');
-    }
-
-    const userRef = doc(db, 'users', user.uid);
-    const snapshot = await getDoc(userRef);
-    if (!snapshot.exists()) {
-      await dbService.createUserProfile(user.uid);
-    }
-
-    try {
-      await setDoc(userRef, {
-        wallet: {
-          creditBalance: increment(numericAmount),
-        },
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      return { success: true };
-    } catch (error) {
-      console.log('FIRESTORE ERROR:', error);
-      throw error;
-    }
+    void amount;
+    throw new Error('Credit changes require the trusted server.');
   },
   updateWalletBalance: async (amountDelta) => {
-    const user = requireAuthenticatedUser();
-    const numericDelta = Number(amountDelta);
-    if (!Number.isFinite(numericDelta)) throw new Error('Invalid wallet amount.');
-
-    try {
-      await setDoc(doc(db, 'users', user.uid), {
-        wallet: {
-          creditBalance: increment(numericDelta),
-        },
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      return { success: true };
-    } catch (error) {
-      console.log('FIRESTORE ERROR:', error);
-      throw error;
-    }
+    void amountDelta;
+    throw new Error('Credit changes require the trusted server.');
   },
   acknowledgeAccountDetails: async () => {
     const user = requireAuthenticatedUser();
@@ -451,52 +415,10 @@ export const dbService = {
     }, { merge: true });
   },
   claimDailyReward: async () => {
-    const user = requireAuthenticatedUser();
-    const userRef = doc(db, 'users', user.uid);
-    const today = new Date().toISOString().slice(0, 10);
-
-    return runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(userRef);
-      if (!snapshot.exists()) throw new Error('Profile not found.');
-      const data = snapshot.data();
-      if (data?.rewards?.dailyClaimedAt === today) {
-        return { claimed: false, balance: getWalletBalance(data) };
-      }
-      const balance = getWalletBalance(data) + 10;
-      transaction.set(userRef, {
-        wallet: { creditBalance: balance, currency: data?.wallet?.currency || 'COINS' },
-        rewards: {
-          ...(data.rewards || {}),
-          dailyClaimedAt: today,
-        },
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      return { claimed: true, balance };
-    });
+    throw new Error('Credit rewards require the trusted server.');
   },
   grantGoogleBindReward: async (googleUser) => {
-    const user = requireAuthenticatedUser();
-    const userRef = doc(db, 'users', user.uid);
-
-    return runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(userRef);
-      if (!snapshot.exists()) throw new Error('Profile not found.');
-      const data = snapshot.data();
-      if (data?.rewards?.googleLinked) return { rewarded: false };
-      const balance = getWalletBalance(data) + 50;
-      transaction.set(userRef, {
-        username: googleUser?.displayName || data.username || '',
-        email: googleUser?.email || data.email || '',
-        profilePic: googleUser?.photoURL || data.profilePic || '',
-        isGuest: false,
-        wallet: { creditBalance: balance, currency: data?.wallet?.currency || 'COINS' },
-        rewards: {
-          ...(data.rewards || {}),
-          googleLinked: true,
-        },
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      return { rewarded: true, balance };
-    });
+    void googleUser;
+    return { rewarded: false, deferred: true };
   },
 };
