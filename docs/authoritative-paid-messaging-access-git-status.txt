@@ -1,0 +1,13 @@
+ M firestore.rules
+ M functions/src/__tests__/creditDomain.test.js
+ M functions/src/__tests__/socialMessaging.test.js
+ M functions/src/creditDomain.js
+ M functions/src/messageEntitlements.js
+ M functions/src/socialMessaging.js
+ M src/screens/main/ChatDetailScreen.js
+ M src/services/__tests__/hostActivity.emulator.cjs
+ M src/services/__tests__/socialMessaging.emulator.cjs
+ M src/services/chatPassService.js
+?? docs/authoritative-paid-messaging-access-git-status.txt
+?? docs/authoritative-paid-messaging-access-report.md
+?? src/services/__tests__/paidMessagingAccess.emulator.cjs

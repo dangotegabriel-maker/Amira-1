@@ -259,6 +259,17 @@ const ChatDetailScreen = ({ route, navigation }) => {
         ]);
         return;
       }
+      if (error.details?.reason === 'insufficient_credits') {
+        Alert.alert('Not enough Credits', 'This message was not sent. Recharge is not available yet.', [
+          { text: 'View Recharge', onPress: () => navigation.navigate('RechargeHub') },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+        return;
+      }
+      if (error.details?.reason === 'paid_messaging_unavailable') {
+        Alert.alert('Messaging access unavailable', 'Paid messaging does not have an approved price yet. Your message was not sent.');
+        return;
+      }
       Alert.alert(
         'Message not sent',
         error.message

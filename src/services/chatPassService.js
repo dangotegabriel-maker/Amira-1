@@ -8,5 +8,7 @@ export const chatAccessLabel = (access) => {
   if (access.friends) return 'Friends - messaging is free';
   if (access.source === 'vip') return 'Messaging included with your membership';
   if (access.expiresAtMs > access.serverNowMs) return `Chat unlocked until ${new Date(access.expiresAtMs).toLocaleString()}`;
-  return access.balance > 0 ? 'Your next message uses 1 Chat Pass for 24 hours' : 'A Chat Pass is needed to continue this conversation';
+  if (access.balance > 0) return 'Your next message uses 1 Free Message and opens 24-hour access';
+  if (access.paidMessaging?.enabled) return `Your next message unlocks 24-hour access for ${access.paidMessaging.priceCredits} Credits`;
+  return 'Messaging access is unavailable right now';
 };

@@ -20,8 +20,8 @@ const profile=(uid,role)=>({uid,role,username:uid,isProfileComplete:true,hostSta
 const read=async(path)=>(await db.doc(path).get()).data();
 async function main(){
  const reset=await fetch(`http://127.0.0.1:8189/emulator/v1/projects/${projectId}/databases/(default)/documents`,{method:'DELETE'});assert.equal(reset.ok,true);
- for(const [uid,role] of [['c','consumer'],['c2','consumer'],['h','host']]) await db.doc(`users/${uid}`).set(profile(uid,role));
- const c=client('c'),h=client('h'),other=client('c2'),anon=client(null);
+ for(const [uid,role] of [['c','consumer'],['h2','host'],['h','host']]) await db.doc(`users/${uid}`).set(profile(uid,role));
+ const c=client('c'),h=client('h'),other=client('h2'),anon=client(null);
  check((await api.trackProfileView('c','h')).counted,true);
  check((await api.listProfileViews('h')).views[0].viewerUid,'c');
  check((await getDocs(collection(h,'users/h/profileViews'))).size,1);
@@ -62,7 +62,7 @@ async function main(){
  await Promise.all([api.sendText('c',send),api.sendText('c',send)]);check((await read('consumerRewards/c')).freeMessages,4);
  const messages=await getDocs(collection(h,'conversations/c__h/messages'));check(messages.size,2);
  await denied(setDoc(doc(c,'conversations/c__h/messages/forged'),{id:'forged',conversationId:'c__h',senderId:'c',receiverId:'h',type:'text',status:'sent',text:'bypass',createdAt:serverTimestamp()}));
- await denied(setDoc(doc(c,'conversations/c__c2'),{participantIds:['c','c2']}));
+ await denied(setDoc(doc(c,'conversations/c__h2'),{participantIds:['c','h2']}));
  await denied(updateDoc(doc(c,'consumerRewards/c'),{freeMessages:999}));
  await denied(updateDoc(doc(c,'consumerRewards/c'),{freeVideoSeconds:0}));
  await denied(setDoc(doc(c,'consumerRewards/c/messageTransactions/fake'),{source:'signup',delta:999}));
@@ -77,27 +77,27 @@ async function main(){
  await denied(updateDoc(doc(c,'conversations/c__h'),{'lastReadAt.h':serverTimestamp()}));
  await api.sendText('h',{receiverId:'c',messageId:'reply',text:'Host reply'});check((await read('consumerRewards/c')).freeMessages,4);check(await read('consumerRewards/h'),undefined);
  await db.doc('consumerRewards/c').update({freeMessages:0});
- await assert.rejects(api.sendText('c',{receiverId:'c2',messageId:'zero',text:'No allowance'}),e=>e.details?.reason==='insufficient_chat_passes');checks++;
- check(await read('conversations/c__c2'),undefined);
+ await assert.rejects(api.sendText('c',{receiverId:'h2',messageId:'zero',text:'No allowance'}),e=>e.details?.reason==='paid_messaging_unavailable');checks++;
+ check(await read('conversations/c__h2'),undefined);
  await rewards.claim('c');await rewards.claim('c');check((await read('consumerRewards/c')).freeMessages,3);
- await api.sendText('c',{receiverId:'c2',messageId:'first',text:'First real message'});check((await read('consumerRewards/c')).freeMessages,2);
- await runTransaction(other,async(tx)=>{const r=doc(other,'conversations/c__c2');await tx.get(r);tx.update(r,{'unreadCounts.c2':0,'lastReadAt.c2':serverTimestamp(),updatedAt:serverTimestamp()});});checks++;
+ await api.sendText('c',{receiverId:'h2',messageId:'first',text:'First real message'});check((await read('consumerRewards/c')).freeMessages,2);
+ await runTransaction(other,async(tx)=>{const r=doc(other,'conversations/c__h2');await tx.get(r);tx.update(r,{'unreadCounts.h2':0,'lastReadAt.h2':serverTimestamp(),updatedAt:serverTimestamp()});});checks++;
  await setDoc(doc(c,'users/c/blocked/h'),{blockedUid:'h',createdAt:serverTimestamp()});
  await denied(api.sendText('h',{receiverId:'c',messageId:'blocked',text:'Blocked'}));
  await denied(api.syncFriendship('c','h'));check((await read('consumerRewards/c')).freeMessages,2);
  // Forged window access and reputation writes are forbidden.
- await denied(updateDoc(doc(c,'consumerRewards/c/chatWindows/c__c2'),{expiresAt:new Date(Date.now()+999999999)}));
+ await denied(updateDoc(doc(c,'consumerRewards/c/chatWindows/c__h2'),{expiresAt:new Date(Date.now()+999999999)}));
  await denied(setDoc(doc(c,'consumerRewards/c/chatWindows/fake'),{expiresAt:new Date(Date.now()+999999999)}));
  await denied(setDoc(doc(h,'hostReputation/h'),{averageRating:5,reviewCount:999}));
  await denied(setDoc(doc(c,'callReviews/fake'),{callId:'fake',reviewerUid:'c',hostUid:'h',rating:5}));
  // New initial sends race on the same window, not just the same request.
- await db.doc('consumerRewards/c/chatWindows/c__c2').delete();
- await Promise.all(['race1','race2'].map(messageId=>api.sendText('c',{receiverId:'c2',messageId,text:'Racing'})));
+ await db.doc('consumerRewards/c/chatWindows/c__h2').delete();
+ await Promise.all(['race1','race2'].map(messageId=>api.sendText('c',{receiverId:'h2',messageId,text:'Racing'})));
  check((await read('consumerRewards/c')).freeMessages,1);
- const window=await read('consumerRewards/c/chatWindows/c__c2');
+ const window=await read('consumerRewards/c/chatWindows/c__h2');
  check(window.expiresAt.toMillis()-window.openedAt.toMillis(),86400000);
- await db.doc('consumerRewards/c/chatWindows/c__c2').update({expiresAt:Timestamp.fromMillis(Date.now()-1)});
- await api.sendText('c',{receiverId:'c2',messageId:'expired',text:'New window'});
+ await db.doc('consumerRewards/c/chatWindows/c__h2').update({expiresAt:Timestamp.fromMillis(Date.now()-1)});
+ await api.sendText('c',{receiverId:'h2',messageId:'expired',text:'New window'});
  check((await read('consumerRewards/c')).freeMessages,0);
  // Trusted completed-call reviews aggregate once under real transaction races.
  await deleteDoc(doc(c,'users/c/blocked/h'));

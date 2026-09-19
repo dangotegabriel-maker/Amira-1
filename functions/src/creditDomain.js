@@ -78,6 +78,21 @@ const reversePurchased = (wallet, credits) => {
     legacyCredits: wallet.legacyCredits + credits }, wallet.ownerUid, wallet.totalBalance);
 };
 
+// Generic product spending deliberately records no bucket order. Its inverse
+// is exact and may only restore spending previously recorded this way.
+const debitUnallocated = (wallet, credits) => {
+  integer(credits, 'Credits', { positive: true });
+  if (wallet.totalBalance < credits) throw new Error('Insufficient Credits.');
+  return readWallet({ ...wallet, unallocatedSpentCredits: wallet.unallocatedSpentCredits + credits,
+    totalBalance: wallet.totalBalance - credits }, wallet.ownerUid, wallet.totalBalance - credits);
+};
+const refundUnallocated = (wallet, credits) => {
+  integer(credits, 'Credits', { positive: true });
+  if (wallet.unallocatedSpentCredits < credits) throw new Error('Unallocated refund exceeds recorded spending.');
+  return readWallet({ ...wallet, unallocatedSpentCredits: wallet.unallocatedSpentCredits - credits,
+    totalBalance: wallet.totalBalance + credits }, wallet.ownerUid, wallet.totalBalance + credits);
+};
+
 const walletProjection = (wallet) => {
   const resolved = wallet.unallocatedSpentCredits === 0;
   return { totalCredits: wallet.totalBalance, currency: CURRENCY, accountingVersion: VERSION,
@@ -104,4 +119,4 @@ const safeLedgerEntry = (id, data = {}) => ({ id, type: data.type, direction: da
   affectsSpendable: data.affectsSpendable !== false, createdAtMs: data.createdAt?.toMillis?.() || null });
 
 module.exports = { VERSION, CURRENCY, integer, text, strictObject, packageCatalog, readWallet,
-  grant, reversePurchased, walletProjection, providerVerification, safeLedgerEntry };
+  grant, reversePurchased, debitUnallocated, refundUnallocated, walletProjection, providerVerification, safeLedgerEntry };

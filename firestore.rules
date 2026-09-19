@@ -151,6 +151,10 @@ service cloud.firestore {
     }
     match /paymentAttempts/{reference} { allow read, write: if false; }
     match /paymentReferences/{providerTransactionId} { allow read, write: if false; }
+    match /messageAccess/{conversationId} {
+      allow read, write: if false;
+      match /unlocks/{unlockId} { allow read, write: if false; }
+    }
     // Private economy documents. Admin SDK transactions bypass client rules;
     // ordinary clients can never award rewards or author accounting splits.
     match /consumerRewards/{uid} {

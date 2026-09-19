@@ -20,6 +20,13 @@ const activeVip = (user, now = Date.now()) => user?.vip?.status === 'active'
   && (!user.vip.expiresAt || millis(user.vip.expiresAt) > now);
 // Legacy freeMessages now stores Chat Passes, never a per-text quota.
 const CHAT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const NO_REPLY_MS = 10 * 60 * 1000;
+const paidMessagingPolicy = (config = {}) => {
+  const raw=config.paidMessaging;
+  const enabled=raw?.enabled===true && Number.isSafeInteger(raw.priceCredits) && raw.priceCredits>0;
+  return {enabled,priceCredits:enabled?raw.priceCredits:null,durationMs:CHAT_WINDOW_MS,noReplyMs:NO_REPLY_MS,
+    version:typeof raw?.version==='string'?raw.version.slice(0,80):'unconfigured'};
+};
 const chatPassBalance = (rewards = {}) => nonnegativeInteger(rewards.freeMessages ?? 0);
 const resolveMessagingEntitlement = (user, rewards = {}, policy = messagePolicy(), { friends = false, window, nowMs = Date.now() } = {}) => {
   if (approvedHost(user)) return { allowed: true, consume: 0, source: 'host' };
@@ -48,4 +55,9 @@ const prepareMessageGrant = async ({ tx, db, FieldValue, uid, amount, source, so
     tx.create(ledgerRef, transactionData({ uid, delta: amount, balance, source, sourceId, policyVersion, createdAt }));
   };
 };
-module.exports = { CHAT_WINDOW_MS, chatPassBalance, MESSAGE_DEFAULTS, GRANT_SOURCES, eventId, approvedHost, activeVip, millis, messagePolicy, resolveMessagingEntitlement, transactionData, prepareMessageGrant };
+const activeWindow=(window,nowMs)=>millis(window?.expiresAt)>nowMs;
+const timelyHostReply=({unlock,authorUid,type,createdAtMs})=>Boolean(unlock?.source==='paid'&&unlock.status==='awaiting_reply'
+  && authorUid===unlock.hostUid&&type==='text'&&createdAtMs>=millis(unlock.openedAt)&&createdAtMs<millis(unlock.refundDeadline));
+const refundDue=(unlock,nowMs)=>Boolean(unlock?.source==='paid'&&unlock.status==='awaiting_reply'&&nowMs>=millis(unlock.refundDeadline));
+module.exports = { CHAT_WINDOW_MS, NO_REPLY_MS, chatPassBalance, MESSAGE_DEFAULTS, GRANT_SOURCES, eventId, approvedHost, activeVip, millis, messagePolicy,
+  paidMessagingPolicy, activeWindow, timelyHostReply, refundDue, resolveMessagingEntitlement, transactionData, prepareMessageGrant };

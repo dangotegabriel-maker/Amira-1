@@ -35,7 +35,7 @@ const FieldValue = { serverTimestamp: () => new Date(Date.now()) };
 class HttpsError extends Error { constructor(code,message,details) { super(message); this.code=code; this.details=details; } }
 const api = createSocialMessaging({ db, FieldValue, HttpsError });
 const rewards = createConsumerRewards({ db, FieldValue, HttpsError });
-const consumer = { role: 'consumer', isProfileComplete: true, vip: { status: 'inactive', tier: 'FREE' } };
+const consumer = { role: 'consumer', isProfileComplete: true, vip: { status: 'inactive', tier: 'FREE' },wallet:{creditBalance:100} };
 const host = { role: 'host', isProfileComplete: true, hostStatus: { isApproved: true } };
 const balance = (uid='c') => docs.get(`consumerRewards/${uid}`)?.freeMessages;
 const matching = (part) => [...docs.keys()].filter(k => k.includes(part));
@@ -44,7 +44,7 @@ const follow = () => docs.set('users/c/following/h', { consumerId:'c',hostId:'h'
 const mutual = () => { follow(); docs.set('users/h/following/c',{ sourceId:'h',targetId:'c',sourceRole:'host',targetRole:'consumer' }); };
 beforeEach(() => {
  jest.useFakeTimers().setSystemTime(new Date('2026-09-11T12:00:00Z')); docs.clear(); queue=Promise.resolve();
- docs.set('users/c',clone(consumer)); docs.set('users/h',clone(host)); docs.set('users/c2',clone(consumer));
+ docs.set('users/c',clone(consumer)); docs.set('users/h',clone(host)); docs.set('users/h2',clone(host)); docs.set('users/c2',clone(consumer));
  docs.set('consumerRewards/c',{freeMessages:3,freeVideoSeconds:10});
 });
 afterEach(() => jest.useRealTimers());
@@ -109,7 +109,7 @@ test.each([3,1])('consumer balance %i is consumed atomically and receipt schema 
 });
 test('zero entitlement has typed failure and no conversation artifacts',async()=>{
  docs.get('consumerRewards/c').freeMessages=0;
- await expect(send()).rejects.toMatchObject({details:{reason:'insufficient_chat_passes'}});
+ await expect(send()).rejects.toMatchObject({details:{reason:'paid_messaging_unavailable'}});
  expect(matching('conversations/')).toHaveLength(0); expect(balance()).toBe(0);
 });
 test('duplicate retry at zero costs once; changed payload with same ID rejected',async()=>{
@@ -134,7 +134,7 @@ test('invalid text, forged system type and missing recipient consume nothing',as
 test('approved host needs no pass; old pending host role remains subject to consumer passes',async()=>{
  await send('h'); expect(balance()).toBe(3); expect(balance('h')).toBeUndefined(); expect(matching('/messageTransactions/')).toHaveLength(0);
  docs.get('users/h').hostStatus.isApproved=false;
- await expect(send('h','two')).rejects.toMatchObject({code:'resource-exhausted'});
+ await expect(send('h','two')).rejects.toMatchObject({code:'permission-denied'});
 });
 test('no VIP unlimited default; trusted policy may authorize it without client changes',()=>{
  const vip={...consumer,vip:{status:'active',tier:'VIP_3'}};
@@ -162,11 +162,42 @@ test('Chat Pass opens 24 hours; concurrent and later texts share one pass, anoth
   const window = docs.get('consumerRewards/c/chatWindows/c__h');
   expect(M.millis(window.expiresAt) - M.millis(window.openedAt)).toBe(M.CHAT_WINDOW_MS);
   await send('c','third'); expect(balance()).toBe(2);
-  await api.sendText('c',{receiverId:'c2',messageId:'other',text:'Hi'}); expect(balance()).toBe(1);
+  await api.sendText('c',{receiverId:'h2',messageId:'other',text:'Hi'}); expect(balance()).toBe(1);
   jest.advanceTimersByTime(M.CHAT_WINDOW_MS);
   await send('c','expired'); expect(balance()).toBe(0);
   jest.advanceTimersByTime(M.CHAT_WINDOW_MS);
-  await expect(send('c','expired-zero')).rejects.toMatchObject({details:{reason:'insufficient_chat_passes'}});
+  await expect(send('c','expired-zero')).rejects.toMatchObject({details:{reason:'paid_messaging_unavailable'}});
+});
+test('Host initiation is free and grants no Consumer reply access',async()=>{docs.get('consumerRewards/c').freeMessages=0;await send('h');expect(matching('/chatWindows/')).toHaveLength(0);await expect(send('c','reply')).rejects.toMatchObject({details:{reason:'paid_messaging_unavailable'}});});
+test('paid config is authoritative, debits generic provenance once and opens exact 24h access',async()=>{
+ docs.get('consumerRewards/c').freeMessages=0;docs.set('economyConfig/current',{paidMessaging:{enabled:true,priceCredits:7,version:'test-v1'}});
+ const beforeLevel=clone(docs.get('consumerLevels/c'));const result=await api.sendText('c',{receiverId:'h',messageId:'paid',text:'Hello',priceCredits:1});
+ expect(result).toMatchObject({chargedCredits:7,accessSource:'paid'});expect(docs.get('users/c').wallet.creditBalance).toBe(93);
+ expect(docs.get('creditWallets/c')).toMatchObject({legacyCredits:100,unallocatedSpentCredits:7,totalBalance:93});expect(docs.get('consumerLevels/c')).toEqual(beforeLevel);
+ const window=docs.get('consumerRewards/c/chatWindows/c__h');expect(M.millis(window.expiresAt)-M.millis(window.openedAt)).toBe(M.CHAT_WINDOW_MS);
+ expect(matching('message_unlock_')).toHaveLength(1);expect(matching('/unlocks/')).toHaveLength(1);
+ await api.sendText('c',{receiverId:'h',messageId:'paid-two',text:'Again'});expect(docs.get('users/c').wallet.creditBalance).toBe(93);
+});
+test('paid retry and simultaneous first sends charge once',async()=>{
+ docs.get('consumerRewards/c').freeMessages=0;docs.set('economyConfig/current',{paidMessaging:{enabled:true,priceCredits:5}});
+ await Promise.all([send('c','race','One'),send('c','race','One')]);expect(docs.get('users/c').wallet.creditBalance).toBe(95);
+ expect(matching('message_unlock_')).toHaveLength(1);expect(matching('/unlocks/')).toHaveLength(1);expect(matching('/messages/')).toHaveLength(1);
+});
+test('insufficient paid send creates no message, access or debit',async()=>{
+ docs.get('consumerRewards/c').freeMessages=0;docs.get('users/c').wallet.creditBalance=4;docs.set('economyConfig/current',{paidMessaging:{enabled:true,priceCredits:5}});
+ await expect(send()).rejects.toMatchObject({details:{reason:'insufficient_credits',requiredCredits:5}});expect(matching('/messages/')).toHaveLength(0);expect(matching('/unlocks/')).toHaveLength(0);expect(docs.get('users/c').wallet.creditBalance).toBe(4);
+});
+test('timely genuine Host text prevents refund; Consumer and system events do not qualify',async()=>{
+ docs.get('consumerRewards/c').freeMessages=0;docs.set('economyConfig/current',{paidMessaging:{enabled:true,priceCredits:5}});await send();
+ await send('c','consumer-two','Still me');jest.advanceTimersByTime(M.NO_REPLY_MS-1);await send('h','host-reply','Reply');jest.advanceTimersByTime(2);
+ expect(await api.reconcileNoReply('c','h')).toMatchObject({refunded:false,status:'replied'});expect(docs.get('users/c').wallet.creditBalance).toBe(95);
+});
+test('late/no reply refund is exact, idempotent, linked and keeps access active',async()=>{
+ docs.get('consumerRewards/c').freeMessages=0;docs.set('economyConfig/current',{paidMessaging:{enabled:true,priceCredits:6}});await send();const window=clone(docs.get('consumerRewards/c/chatWindows/c__h'));
+ jest.advanceTimersByTime(M.NO_REPLY_MS);expect(await api.reconcileNoReply('c','h')).toMatchObject({refunded:true,idempotent:false});expect(await api.reconcileNoReply('c','h')).toMatchObject({refunded:true});
+ expect(docs.get('users/c').wallet.creditBalance).toBe(100);expect(docs.get('creditWallets/c').unallocatedSpentCredits).toBe(0);expect(M.millis(window.expiresAt)).toBeGreaterThan(Date.now());
+ expect(matching('message_refund_')).toHaveLength(1);const unlock=docs.get(matching('/unlocks/')[0]);expect(unlock).toMatchObject({status:'refunded',chargeCredits:6});
+ await send('h','late','Too late');expect(docs.get(matching('/unlocks/')[0]).status).toBe('refunded');
 });
 test('live mutual follows make texts free; ending friendship restores pass rules without clawback', async () => {
   mutual(); await api.syncFriendship('c','h'); expect(balance()).toBe(8);
