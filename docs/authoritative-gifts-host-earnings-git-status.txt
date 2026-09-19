@@ -1,0 +1,71 @@
+﻿AMIRA CHECKPOINT 11 FINAL GIT STATUS (AFTER FOCUSED FINANCIAL AUDIT)
+
+Audit conclusion: no accounting flaw; no wallet-model behavior changed; 12 financial-order/proof tests added.
+Latest tests: root 61 suites/584 tests; Functions 13 suites/317 tests; focused Credit 34 tests.
+Affected emulators: Gifts 45, Credits 20, paid messaging 32, Level/rewards 53 checks passed.
+
+Branch and HEAD:
+amira-v2
+fe112c8
+
+git status --short:
+ M firestore.rules
+ M functions/src/__tests__/creditDomain.test.js
+ M functions/src/creditDomain.js
+ M functions/src/hostActivity.js
+ M functions/src/index.js
+ M src/components/GiftTray.js
+ M src/components/GiftingLeaderboard.js
+ M src/screens/host/HostActivityScreen.js
+ M src/screens/main/ChatDetailScreen.js
+ M src/screens/main/GiftLedgerScreen.js
+ M src/screens/main/LeaderboardScreen.js
+ M src/screens/main/MomentsScreen.js
+ M src/screens/main/UserProfileScreen.js
+ M src/screens/main/__tests__/consumerLevelVisibility.test.js
+ M src/screens/main/__tests__/discoveryProfileUi.test.js
+ M src/screens/main/__tests__/messageEntitlementUi.test.js
+ M src/screens/main/__tests__/profileViewTrackingUi.test.js
+ M src/services/__tests__/hostActivity.emulator.cjs
+?? docs/authoritative-gifts-host-earnings-git-status.txt
+?? docs/authoritative-gifts-host-earnings-report.md
+?? functions/src/__tests__/giftDomain.test.js
+?? functions/src/giftDomain.js
+?? functions/src/giftService.js
+?? src/components/__tests__/giftTray.test.js
+?? src/services/__tests__/giftFoundation.emulator.cjs
+?? src/services/giftService.js
+
+git diff --stat:
+ firestore.rules                                    |  10 +
+ functions/src/__tests__/creditDomain.test.js       |  29 ++-
+ functions/src/creditDomain.js                      |  15 +-
+ functions/src/hostActivity.js                      |  11 +-
+ functions/src/index.js                             |   4 +
+ src/components/GiftTray.js                         | 215 ++-------------------
+ src/components/GiftingLeaderboard.js               | 115 +----------
+ src/screens/host/HostActivityScreen.js             |   2 +-
+ src/screens/main/ChatDetailScreen.js               |   7 +-
+ src/screens/main/GiftLedgerScreen.js               | 113 +----------
+ src/screens/main/LeaderboardScreen.js              | 171 +---------------
+ src/screens/main/MomentsScreen.js                  |  19 +-
+ src/screens/main/UserProfileScreen.js              |   9 +-
+ .../main/__tests__/consumerLevelVisibility.test.js |   4 +-
+ .../main/__tests__/discoveryProfileUi.test.js      |   4 +-
+ .../main/__tests__/messageEntitlementUi.test.js    |   3 +-
+ .../main/__tests__/profileViewTrackingUi.test.js   |   2 +
+ src/services/__tests__/hostActivity.emulator.cjs   |   5 +-
+ 18 files changed, 118 insertions(+), 620 deletions(-)
+
+Untracked files:
+docs/authoritative-gifts-host-earnings-git-status.txt
+docs/authoritative-gifts-host-earnings-report.md
+functions/src/__tests__/giftDomain.test.js
+functions/src/giftDomain.js
+functions/src/giftService.js
+src/components/__tests__/giftTray.test.js
+src/services/__tests__/giftFoundation.emulator.cjs
+src/services/giftService.js
+
+Staged diff:
+(none)

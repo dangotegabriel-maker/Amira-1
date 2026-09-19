@@ -11,19 +11,20 @@ const createHostActivity=({db,HttpsError})=>{
  };
  const list=async(uid,input={})=>{
   if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(key=>key!=='tab')||(input.tab!==undefined&&!D.ACTIVITY_TABS.includes(input.tab)))throw new HttpsError('invalid-argument','Invalid activity request.');
-  await approved(uid);const tab=input.tab||'All',now=Date.now();if(tab==='Gifts')return {events:[],bounded:true,sourceLimit:D.SOURCE_LIMIT};
-  const types=tab==='All'?['Visitors','Likes','Followers','Calls']:[tab];
-  const queries={Visitors:()=>db.collection(`users/${uid}/profileViews`).orderBy('lastViewedAt','desc').limit(D.SOURCE_LIMIT).get(),Likes:()=>db.collection(`users/${uid}/likes`).orderBy('createdAt','desc').limit(D.SOURCE_LIMIT).get(),Followers:()=>db.collectionGroup('following').where('hostId','==',uid).limit(D.SOURCE_LIMIT).get(),Calls:()=>db.collection('callHistory').where('participantIds','array-contains',uid).orderBy('createdAt','desc').limit(D.SOURCE_LIMIT).get()};
+  await approved(uid);const tab=input.tab||'All',now=Date.now();
+  const types=tab==='All'?['Visitors','Likes','Followers','Gifts','Calls']:[tab];
+  const queries={Visitors:()=>db.collection(`users/${uid}/profileViews`).orderBy('lastViewedAt','desc').limit(D.SOURCE_LIMIT).get(),Likes:()=>db.collection(`users/${uid}/likes`).orderBy('createdAt','desc').limit(D.SOURCE_LIMIT).get(),Followers:()=>db.collectionGroup('following').where('hostId','==',uid).limit(D.SOURCE_LIMIT).get(),Gifts:()=>db.collection(`hostEarnings/${uid}/giftTransactions`).limit(D.SOURCE_LIMIT).get(),Calls:()=>db.collection('callHistory').where('participantIds','array-contains',uid).orderBy('createdAt','desc').limit(D.SOURCE_LIMIT).get()};
   const snapshots=await Promise.all(types.map(type=>queries[type]()));
   const candidates=[];
   for(let index=0;index<types.length;index++)for(const entry of snapshots[index].docs){
-   const type=types[index],record=entry.data();let actorUid,timestampMs,durationSeconds;
+   const type=types[index],record=entry.data();let actorUid,timestampMs,durationSeconds,giftName,earningCreditsEquivalent;
    if(type==='Visitors'){if(record.ownerUid!==uid||!D.verifiedView(record,'consumer_to_host',entry.id,now))continue;actorUid=entry.id;timestampMs=D.timestampMs(record.lastViewedAt);}
    if(type==='Likes'){if(record.hostId!==uid||record.consumerId!==entry.id)continue;actorUid=entry.id;timestampMs=D.validTime(record.createdAt,now);}
    if(type==='Followers'){const parts=entry.ref.path.split('/');if(parts.length!==4||parts[0]!=='users'||parts[2]!=='following'||parts[3]!==uid||record.consumerId!==parts[1]||record.hostId!==uid)continue;actorUid=parts[1];timestampMs=D.validTime(record.createdAt,now);}
    if(type==='Calls'){const call=await db.doc(`calls/${entry.id}`).get();const proof=D.completedCall(record,call.data(),entry.id,uid,now);if(!proof)continue;({actorUid,timestampMs,durationSeconds}=proof);}
+   if(type==='Gifts'){if(record.hostUid!==uid||record.status!=='succeeded'||record.accountingStatus!=='pending_internal')continue;actorUid=record.consumerUid;timestampMs=D.validTime(record.createdAt,now);giftName=typeof record.giftSnapshot?.name==='string'?record.giftSnapshot.name.slice(0,80):'Gift';earningCreditsEquivalent=Number.isSafeInteger(record.hostCreditsEquivalent)&&record.hostCreditsEquivalent>=0?record.hostCreditsEquivalent:null;if(earningCreditsEquivalent===null)continue;}
    if(!D.validId(actorUid)||timestampMs===null||timestampMs===undefined||actorUid===uid)continue;
-   candidates.push({id:`${type.toLowerCase()}:${type==='Followers'?actorUid:entry.id}`,type,actorUid,timestampMs,...(durationSeconds!==undefined?{durationSeconds}:{})});
+   candidates.push({id:`${type.toLowerCase()}:${type==='Followers'?actorUid:entry.id}`,type,actorUid,timestampMs,...(durationSeconds!==undefined?{durationSeconds}:{}),...(type==='Gifts'?{giftName,earningCreditsEquivalent}:{})});
   }
   const actors=new Map(await Promise.all([...new Set(candidates.map(event=>event.actorUid))].map(async actorUid=>{
    const [profile,left,right]=await Promise.all([db.doc(`users/${actorUid}`).get(),db.doc(`users/${uid}/blocked/${actorUid}`).get(),db.doc(`users/${actorUid}/blocked/${uid}`).get()]);

@@ -22,6 +22,7 @@ const paymentLifecycle=P.createCallPaymentLifecycle({db,FieldValue,HttpsError,re
 const consumerRewards=createConsumerRewards({db,FieldValue,HttpsError});
 const creditService=require('./creditService').createCreditService({db,FieldValue,HttpsError,packages:{}});
 const socialMessaging=require('./socialMessaging').createSocialMessaging({db,FieldValue,HttpsError});
+const giftService=require('./giftService').createGiftService({db,FieldValue,HttpsError});
 const requireAuth=(request)=>{if(!request.auth?.uid)throw new HttpsError('unauthenticated','Sign in is required.');return request.auth.uid;};
 const textId=(value,name)=>{if(typeof value!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(value))throw new HttpsError('invalid-argument',`Invalid ${name}.`);return value;};
 const mapError=(error)=>{if(error instanceof HttpsError)return error;const code={
@@ -119,6 +120,9 @@ exports.onFollowFriendship=onDocumentWritten({region,document:'users/{uid}/follo
 });
 
 exports.getChatAccess=onCall(callable,(request)=>socialMessaging.getChatAccess(requireAuth(request),request.data?.otherUid));
+exports.getGiftCatalog=onCall(callable,request=>giftService.catalog(requireAuth(request),request.data||{}));
+exports.sendGift=onCall(callable,request=>giftService.send(requireAuth(request),request.data||{}));
+exports.getPublicHostGifts=onCall(callable,request=>{requireAuth(request);return giftService.publicAggregates(request.data?.hostUid);});
 
 const callReviews=require('./callReviews').createCallReviews({db,FieldValue,HttpsError});
 exports.getCallReviewStatus=onCall(callable,(request)=>callReviews.status(requireAuth(request),request.data?.callId));

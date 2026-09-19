@@ -3,16 +3,13 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Dimensi
 import { Image } from 'expo-image';
 import { COLORS } from '../../theme/COLORS';
 import { Heart, MessageCircle, Share2, EyeOff, Plus } from 'lucide-react-native';
-import { TapGestureHandler, State, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { hapticService } from '../../services/hapticService';
-import { useGifting } from '../../context/GiftingContext';
-import { socketService } from '../../services/socketService';
 
 const { width, height } = Dimensions.get('window');
 const POST_IMAGE_HEIGHT = height * 0.5;
 
 const MomentsScreen = ({ navigation }) => {
-  const { triggerGiftOverlay } = useGifting();
   const [activeMoments, setActiveMoments] = useState([]);
   const [statusUsers, setStatusUsers] = useState([]);
 
@@ -115,15 +112,6 @@ const MomentsScreen = ({ navigation }) => {
     }
   };
 
-  const onDoubleTap = (userId) => (event) => {
-    if (event.nativeEvent.state === State.ACTIVE) {
-      const heartGift = { id: 'p2', name: 'Finger Heart', cost: 5, icon: '🫰' };
-      triggerGiftOverlay(heartGift.id, 'You', 1);
-      socketService.sendGift(userId, { giftId: heartGift.id, combo: 1 });
-      hapticService.success();
-    }
-  };
-
   const renderStatusBar = () => (
     <ScrollView
       horizontal
@@ -157,10 +145,6 @@ const MomentsScreen = ({ navigation }) => {
 
   const renderItem = ({ item }) => (
     <GestureHandlerRootView>
-      <TapGestureHandler
-        onHandlerStateChange={onDoubleTap(item.userId)}
-        numberOfTaps={2}
-      >
         <View style={styles.post}>
           <View style={styles.header}>
             <View style={styles.postAvatarContainer}>
@@ -196,7 +180,6 @@ const MomentsScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
-      </TapGestureHandler>
     </GestureHandlerRootView>
   );
 

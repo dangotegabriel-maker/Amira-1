@@ -92,6 +92,17 @@ const refundUnallocated = (wallet, credits) => {
   return readWallet({ ...wallet, unallocatedSpentCredits: wallet.unallocatedSpentCredits - credits,
     totalBalance: wallet.totalBalance + credits }, wallet.ownerUid, wallet.totalBalance + credits);
 };
+const giftEligiblePurchased = wallet => {
+  readWallet(wallet,wallet.ownerUid,wallet.totalBalance);
+  // Exact lower bound: unresolved spending U could have consumed at most
+  // min(purchasedCredits, U), so this is the guaranteed purchased remainder.
+  return Math.max(0,wallet.purchasedCredits-wallet.unallocatedSpentCredits);
+};
+const debitPurchasedGift = (wallet, credits) => {
+  integer(credits,'Credits',{positive:true});
+  if(giftEligiblePurchased(wallet)<credits)throw new Error('Insufficient eligible purchased Credits.');
+  return readWallet({...wallet,purchasedCredits:wallet.purchasedCredits-credits,totalBalance:wallet.totalBalance-credits},wallet.ownerUid,wallet.totalBalance-credits);
+};
 
 const walletProjection = (wallet) => {
   const resolved = wallet.unallocatedSpentCredits === 0;
@@ -100,7 +111,7 @@ const walletProjection = (wallet) => {
     purchasedCredits: resolved ? wallet.purchasedCredits : null,
     bonusCredits: resolved ? wallet.bonusCredits : null,
     legacyCredits: resolved ? wallet.legacyCredits : null,
-    giftEligiblePurchasedCredits: resolved ? wallet.purchasedCredits : 0 };
+    giftEligiblePurchasedCredits: giftEligiblePurchased(wallet) };
 };
 
 const providerVerification = (result, attempt) => {
@@ -119,4 +130,4 @@ const safeLedgerEntry = (id, data = {}) => ({ id, type: data.type, direction: da
   affectsSpendable: data.affectsSpendable !== false, createdAtMs: data.createdAt?.toMillis?.() || null });
 
 module.exports = { VERSION, CURRENCY, integer, text, strictObject, packageCatalog, readWallet,
-  grant, reversePurchased, debitUnallocated, refundUnallocated, walletProjection, providerVerification, safeLedgerEntry };
+  grant, reversePurchased, debitUnallocated, refundUnallocated, giftEligiblePurchased, debitPurchasedGift, walletProjection, providerVerification, safeLedgerEntry };

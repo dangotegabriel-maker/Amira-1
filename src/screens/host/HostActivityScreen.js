@@ -8,7 +8,7 @@ import {COLORS} from '../../theme/COLORS';
 const {ACTIVITY_TABS}=require('../../../functions/src/hostActivityDomain');
 const EMPTY={All:'No activity yet.',Visitors:'No profile visitors yet.',Likes:'No likes yet.',Followers:'No followers yet.',Gifts:'No gift activity yet.',Calls:'No calls yet.'};
 export const activityRelativeTime=(timestamp,now)=>{const minutes=Math.max(0,Math.floor((now-timestamp)/60000));return minutes===0?'Just now':minutes<60?`${minutes}m ago`:minutes<1440?`${Math.floor(minutes/60)}h ago`:`${Math.floor(minutes/1440)}d ago`;};
-const description=event=>event.type==='Visitors'?'Viewed your profile':event.type==='Likes'?'Liked your profile':event.type==='Followers'?'Followed you':`Video call \u00b7 ${Math.floor(event.durationSeconds/60)}:${String(event.durationSeconds%60).padStart(2,'0')}`;
+const description=event=>event.type==='Visitors'?'Viewed your profile':event.type==='Likes'?'Liked your profile':event.type==='Followers'?'Followed you':event.type==='Gifts'?`${event.giftName} · ${event.earningCreditsEquivalent} pending credit equivalent`:`Video call \u00b7 ${Math.floor(event.durationSeconds/60)}:${String(event.durationSeconds%60).padStart(2,'0')}`;
 const ActivityRow=({event,now,navigation})=>{
  const [failed,setFailed]=useState(false);
  useEffect(()=>setFailed(false),[event.actor.uid,event.actor.profilePic]);

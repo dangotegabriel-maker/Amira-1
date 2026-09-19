@@ -16,6 +16,8 @@ jest.mock('../../../services/blockService',()=>({blockService:{}}));
 jest.mock('../../../services/reportService',()=>({reportService:{}}));
 jest.mock('../../../services/callNavigationService',()=>({startVideoCall:jest.fn()}));
 jest.mock('../../../components/ReportUserModal',()=>()=>null);
+jest.mock('../../../components/GiftTray',()=>()=>null);
+jest.mock('../../../services/giftService',()=>({giftService:{publicHostGifts:async()=>({gifts:[]})}}));
 jest.mock('expo-video',()=>({VideoView:()=>null,useVideoPlayer:()=>({})}));
 const Profile=require('../UserProfileScreen').default,Card=require('../../../components/HostCard').default;
 const flush=async()=>act(async()=>{for(let i=0;i<12;i++)await Promise.resolve();});

@@ -17,6 +17,7 @@ jest.mock('../../../services/messagingService',()=>({messagingService:mockMessag
 jest.mock('../../../services/blockService',()=>({blockService:{getRelationship:async()=>({blocked:false})}}));
 jest.mock('../../../services/reportService',()=>({reportService:{}}));
 jest.mock('../../../components/ReportUserModal',()=>()=>null);
+jest.mock('../../../components/GiftTray',()=>({visible})=>visible?require('react').createElement(require('react-native').Text,null,'Authoritative Gift Tray'):null);
 jest.mock('lucide-react-native',()=>({MoreVertical:()=>null,Send:()=>null,Video:()=>null,Gift:()=>null}));
 const Chat=require('../ChatDetailScreen').default;
 const navigation={setOptions:jest.fn(),navigate:jest.fn()};
@@ -57,6 +58,6 @@ test.each([['consumer','host',true],['host','consumer',false],['consumer','consu
  expect(header.queryByLabelText(/Amira Level/)).toBeNull();
  expect(Boolean(header.queryByLabelText('Video call'))).toBe(shown);
  expect(Boolean(header.queryByLabelText('Gifts'))).toBe(shown);
- if(shown){fireEvent.press(header.getByLabelText('Gifts'));expect(Alert.alert).toHaveBeenCalledWith('Gifts are coming soon',expect.any(String));expect(mockMessaging.sendText).not.toHaveBeenCalled();}
+ if(shown){fireEvent.press(header.getByLabelText('Gifts'));expect(screen.getByText('Authoritative Gift Tray')).toBeTruthy();expect(mockMessaging.sendText).not.toHaveBeenCalled();}
  header.unmount();screen.unmount();
 });

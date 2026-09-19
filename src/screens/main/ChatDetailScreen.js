@@ -29,6 +29,7 @@ import { messagingService } from '../../services/messagingService';
 import { blockService } from '../../services/blockService';
 import { reportService } from '../../services/reportService';
 import ReportUserModal from '../../components/ReportUserModal';
+import GiftTray from '../../components/GiftTray';
 
 const toMillis = (value) => {
   if (!value) return 0;
@@ -85,6 +86,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   });
 
   const [reportOpen, setReportOpen] = useState(false);
+  const [giftOpen,setGiftOpen]=useState(false);
 
   const list = useRef(null);
   const pendingSend = useRef(null);
@@ -137,7 +139,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
         {hostActions && <>
           <TouchableOpacity accessibilityLabel="Video call" onPress={() => startVideoCall({ navigation, creator: recipient })}><Video color={COLORS.primary} /></TouchableOpacity>
-          <TouchableOpacity accessibilityLabel="Gifts" onPress={() => Alert.alert('Gifts are coming soon', 'Gifting is not available yet. No Credits will be spent.')}><Gift color={COLORS.primary} /></TouchableOpacity>
+          <TouchableOpacity accessibilityLabel="Gifts" onPress={() => setGiftOpen(true)}><Gift color={COLORS.primary} /></TouchableOpacity>
         </>}
         <TouchableOpacity
           onPress={() =>
@@ -459,7 +461,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
         )}
       </View>
 
-      <ReportUserModal
+    <GiftTray visible={giftOpen} onClose={()=>setGiftOpen(false)} hostUid={receiverId} source="messages"/>
+    <ReportUserModal
         visible={reportOpen}
         onClose={() =>
           setReportOpen(false)

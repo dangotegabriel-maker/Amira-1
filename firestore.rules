@@ -155,6 +155,12 @@ service cloud.firestore {
       allow read, write: if false;
       match /unlocks/{unlockId} { allow read, write: if false; }
     }
+    match /giftConfig/{documentId} { allow read, write: if false; }
+    match /giftTransactions/{transactionId} { allow read, write: if false; }
+    match /hostGiftAggregates/{hostUid} {
+      allow read, write: if false;
+      match /types/{giftId} { allow read, write: if false; }
+    }
     // Private economy documents. Admin SDK transactions bypass client rules;
     // ordinary clients can never award rewards or author accounting splits.
     match /consumerRewards/{uid} {
@@ -201,6 +207,10 @@ service cloud.firestore {
     match /hostEarnings/{uid} {
       allow read: if admin() || (owns(uid) && approvedHost(get(/databases/$(database)/documents/users/$(uid)).data));
       allow write: if false;
+      match /giftTransactions/{transactionId} {
+        allow read: if owns(uid) && approvedHost(get(/databases/$(database)/documents/users/$(uid)).data);
+        allow write: if false;
+      }
     }
     match /platformRevenue/{documentId} {
       allow read: if admin();

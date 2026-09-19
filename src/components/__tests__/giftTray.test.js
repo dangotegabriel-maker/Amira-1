@@ -1,0 +1,12 @@
+import React from 'react';
+import {Alert} from 'react-native';
+import {act,fireEvent,render} from '@testing-library/react-native';
+const mockCatalog=jest.fn(),mockSend=jest.fn(),mockNavigate=jest.fn();
+jest.mock('@react-navigation/native',()=>({useNavigation:()=>({navigate:mockNavigate})}));
+jest.mock('../../services/giftService',()=>({giftService:{catalog:mockCatalog,send:mockSend,requestId:()=> 'stable-request'}}));
+jest.mock('lucide-react-native',()=>({X:()=>null,Coins:()=>null}));
+const Tray=require('../GiftTray').default;const flush=async()=>act(async()=>{for(let i=0;i<10;i++)await Promise.resolve();});
+beforeEach(()=>{jest.clearAllMocks();jest.spyOn(Alert,'alert').mockImplementation(()=>{});});afterEach(()=>jest.restoreAllMocks());
+test('missing protected catalogue shows truthful unavailable state',async()=>{mockCatalog.mockResolvedValue({available:false,gifts:[]});const screen=render(<Tray visible hostUid="h" onClose={()=>{}}/>);await flush();expect(screen.getByText('Gifts are currently unavailable.')).toBeTruthy();screen.unmount();});
+test('one tap uses authoritative identifiers and acknowledges only after success',async()=>{mockCatalog.mockResolvedValue({available:true,gifts:[{giftId:'fixture',name:'Fixture Gift',priceCredits:7,asset:{kind:'emoji',key:'x'}}]});mockSend.mockResolvedValue({transactionId:'t'});const screen=render(<Tray visible hostUid="h" source="messages" onClose={()=>{}}/>);await flush();await act(async()=>fireEvent.press(screen.getByText('Fixture Gift')));expect(mockSend).toHaveBeenCalledWith({hostUid:'h',giftId:'fixture',source:'messages',requestId:'stable-request'});expect(Alert.alert).toHaveBeenCalledWith('Gift sent','Fixture Gift was sent.');screen.unmount();});
+test('purchased-credit insufficiency is distinct and Recharge is described as unavailable',async()=>{mockCatalog.mockResolvedValue({available:true,gifts:[{giftId:'fixture',name:'Fixture Gift',priceCredits:7,asset:{}}]});mockSend.mockRejectedValue({details:{reason:'insufficient_purchased_credits'}});const close=jest.fn(),screen=render(<Tray visible hostUid="h" onClose={close}/>);await flush();await act(async()=>fireEvent.press(screen.getByText('Fixture Gift')));const call=Alert.alert.mock.calls[0];expect(call[0]).toBe('More purchased Credits needed');expect(call[1]).toMatch(/Bonus and legacy Credits cannot be used/);call[2][0].onPress();expect(close).toHaveBeenCalled();expect(mockNavigate).toHaveBeenCalledWith('RechargeHub');screen.unmount();});

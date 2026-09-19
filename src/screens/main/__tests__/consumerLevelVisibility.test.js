@@ -21,8 +21,10 @@ jest.mock('../../../services/hostConnectService',()=>({hostConnectService:{avail
 jest.mock('../../../services/discoveryService',()=>({discoveryService:{getConsumersForHosts:async()=>[mockTarget]}}));
 jest.mock('../../../components/IncomingCallCard',()=>()=>null);
 jest.mock('../../../components/ReportUserModal',()=>()=>null);
+jest.mock('../../../components/GiftTray',()=>()=>null);
+jest.mock('../../../services/giftService',()=>({giftService:{publicHostGifts:async()=>({gifts:[]})}}));
 jest.mock('expo-video',()=>({VideoView:()=>null,useVideoPlayer:()=>({})}));
-jest.mock('lucide-react-native',()=>Object.fromEntries(['BadgeCheck','ChevronLeft','Flag','MessageCircle','ShieldAlert','UserMinus','UserPlus','Video'].map(key=>[key,()=>null])));
+jest.mock('lucide-react-native',()=>Object.fromEntries(['BadgeCheck','ChevronLeft','Flag','Gift','MessageCircle','ShieldAlert','UserMinus','UserPlus','Video'].map(key=>[key,()=>null])));
 const Profile=require('../UserProfileScreen').default,Connect=require('../../host/HostDashboardScreen').default;
 const flush=async()=>act(async()=>{for(let i=0;i<12;i++)await Promise.resolve();});
 beforeEach(()=>{jest.clearAllMocks();mockUser={uid:'h',role:'host',hostStatus:{isApproved:true,availability:'offline'}};mockTarget={uid:'c',username:'Real Consumer',role:'consumer',age:25,countryCode:'GH',level:10,amiraLevel:10,wallet:{creditBalance:99999}};mockLevel.getConsumer.mockResolvedValue({level:0});});

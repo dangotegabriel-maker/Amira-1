@@ -21,6 +21,8 @@ import { getCountryByCode } from '../../data/countries';
 import { isApprovedHost, isConsumer } from '../../models/userModel';
 import ReportUserModal from '../../components/ReportUserModal';
 import { startVideoCall } from '../../services/callNavigationService';
+import GiftTray from '../../components/GiftTray';
+import {giftService} from '../../services/giftService';
 
 const IntroVideo = ({ uri }) => {
   const player = useVideoPlayer(uri, (instance) => { instance.loop = true; });
@@ -53,6 +55,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   const [following, setFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [giftOpen,setGiftOpen]=useState(false),[publicGifts,setPublicGifts]=useState([]);
   const [blockState, setBlockState] = useState({ blockedByMe: false, blocked: false });
 
   useEffect(() => {
@@ -100,6 +103,8 @@ const UserProfileScreen = ({ route, navigation }) => {
     { text: 'Block', style: 'destructive', onPress: async () => { try{await blockService.block(userId); setBlockState({ blockedByMe: true, blocked: true });setFollowing(false);setLiked(false);setRelationshipLabel('Follow');setSocial(null);}catch(e){Alert.alert('Unable to block',e.message);} } },
   ]);
 
+  useEffect(()=>{if(!focused||!userId||!isApprovedHost(host))return;let active=true;giftService.publicHostGifts(userId).then(value=>{if(active)setPublicGifts(value.gifts||[]);}).catch(()=>{if(active)setPublicGifts([]);});return()=>{active=false;};},[focused,userId,host?.uid,host?.hostStatus?.isApproved]);
+
   if (loading) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
   if (!host) return <View style={styles.center}><ShieldAlert color={COLORS.primary} size={42} /><Text style={styles.unavailable}>This profile is unavailable.</Text><TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.backText}>Go back</Text></TouchableOpacity></View>;
 
@@ -134,12 +139,13 @@ const UserProfileScreen = ({ route, navigation }) => {
       {gallery.length > 0 && <View style={styles.section}><Text style={styles.sectionTitle}>Gallery</Text><FlatList horizontal data={gallery} keyExtractor={(item, index) => `${item}-${index}`} showsHorizontalScrollIndicator={false} renderItem={({ item }) => <Image source={{ uri: typeof item === 'string' ? item : item.url }} style={styles.galleryImage} />} /></View>}
       {approvedHost && host.hostProfile?.introVideoUrl ? <View style={styles.section}><Text style={styles.sectionTitle}>Introduction</Text><IntroVideo uri={host.hostProfile.introVideoUrl} /></View> : null}
       {approvedHost&&host.moments?.length>0&&<View style={styles.section}><Text style={styles.sectionTitle}>Moments</Text>{host.moments.map(item=>item.type==='video'?<IntroVideo key={item.id} uri={item.uri}/>:<Image key={item.id} source={{uri:item.uri}} style={styles.galleryImage}/>)}</View>}
+      {approvedHost&&publicGifts.length>0&&<View style={styles.section}><Text style={styles.sectionTitle}>Gifts</Text><View style={styles.tags}>{publicGifts.map(gift=><Text key={gift.giftId} style={styles.tag}>{gift.name} × {gift.count}</Text>)}</View></View>}
     </ScrollView>
     {approvedHost&&isConsumer(user)&&<View style={{backgroundColor:'white',paddingBottom:Math.max(12,insets.bottom)}}><View style={{flexDirection:'row',gap:6,padding:12}}>
     <TouchableOpacity disabled={likeBusy||blockState.blocked} accessibilityLabel={liked?'Unlike Host':'Like Host'} style={styles.smallAction} onPress={toggleLike}><Text style={styles.smallText}>{liked?'Liked':'Like'}</Text></TouchableOpacity>
     <TouchableOpacity disabled={blockState.blocked} style={styles.smallAction} onPress={message}><MessageCircle color={COLORS.primary}/><Text style={styles.smallText}>Message</Text></TouchableOpacity>
     <TouchableOpacity disabled={!available} style={styles.smallAction} onPress={()=>startVideoCall({navigation,creator:host})}><Video color={available?COLORS.primary:COLORS.textSecondary}/><Text style={styles.smallText}>{rate===null?'Video unavailable':`Video ${rate}/min`}</Text></TouchableOpacity>
-    <TouchableOpacity accessibilityState={{disabled:true}} disabled style={styles.smallAction}><Text style={[styles.smallText,{color:COLORS.textSecondary}]}>Gift</Text><Text style={{fontSize:9,color:COLORS.textSecondary}}>Coming later</Text></TouchableOpacity>
+    <TouchableOpacity disabled={blockState.blocked} style={styles.smallAction} onPress={()=>setGiftOpen(true)}><Text style={styles.smallText}>Gift</Text></TouchableOpacity>
     </View></View>}
     <Modal visible={showMore} transparent animationType="fade" onRequestClose={()=>setShowMore(false)}><View style={{flex:1,justifyContent:'flex-end',backgroundColor:'rgba(0,0,0,.35)'}}><View style={{backgroundColor:'white',padding:20,paddingBottom:Math.max(20,insets.bottom),borderTopLeftRadius:20,borderTopRightRadius:20}}>
     <TouchableOpacity style={styles.safetyAction} onPress={()=>{setShowMore(false);setShowReport(true);}}><Text style={styles.safetyText}>Report</Text></TouchableOpacity>
@@ -147,6 +153,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     {approvedHost&&isConsumer(user)&&<TouchableOpacity style={styles.safetyAction} onPress={()=>{setShowMore(false);hideHost();}}><Text style={styles.safetyText}>Not Interested</Text></TouchableOpacity>}
     <TouchableOpacity style={styles.safetyAction} onPress={()=>setShowMore(false)}><Text style={styles.safetyText}>Cancel</Text></TouchableOpacity>
     </View></View></Modal>
+    <GiftTray visible={giftOpen} onClose={()=>setGiftOpen(false)} hostUid={userId} source="host_profile"/>
     <ReportUserModal visible={showReport} onClose={() => setShowReport(false)} userName={host.username} onReport={async (reason, info) => { await reportService.submit({ reportedUserId:userId, contextType:'profile', contextId:userId, reason, details:info }); Alert.alert('Report received', 'Thank you.'); }} />
   </View>;
 };
