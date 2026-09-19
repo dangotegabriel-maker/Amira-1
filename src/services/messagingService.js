@@ -11,7 +11,8 @@ import {
   where,
 } from 'firebase/firestore';
 
-import { auth, db, dbService } from './firebaseService';
+import { auth, db } from './firebaseService';
+import { publicIdentityService } from './publicIdentityService';
 import { blockService } from './blockService';
 import { getDirectConversationId } from '../utils/socialDomain';
 
@@ -31,7 +32,7 @@ export const messagingService = {
       );
     }
 
-    const receiverProfile = await dbService.getUserProfile(receiverId);
+    const receiverProfile = await publicIdentityService.message(receiverId);
 
     if (!receiverProfile) {
       throw new Error('Recipient profile is unavailable.');

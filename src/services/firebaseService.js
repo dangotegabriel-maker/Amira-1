@@ -271,8 +271,10 @@ export const authService = {
 export const dbService = {
   getUserProfile: async (uid) => {
     try {
+      requireAuthenticatedUser(uid);
       const userRef = doc(db, 'users', uid);
       const userSnap = await getDoc(userRef);
+      requireAuthenticatedUser(uid);
       if (userSnap.exists()) {
         return normalizeUserProfile(uid, userSnap.data(), auth.currentUser);
       }
@@ -348,6 +350,7 @@ export const dbService = {
   },
   ensureUserProfile: async (authUser) => {
     if (!authUser?.uid) throw new Error('No authenticated user found.');
+    requireAuthenticatedUser(authUser.uid);
     const userRef = doc(db, 'users', authUser.uid);
     const snapshot = await getDoc(userRef);
     if (!snapshot.exists()) {
@@ -381,9 +384,11 @@ export const dbService = {
   },
   subscribeToUserProfile: (uid, onValue, onError) => {
     if (!uid) return () => {};
+    requireAuthenticatedUser(uid);
     return onSnapshot(
       doc(db, 'users', uid),
       (snapshot) => {
+        if (auth.currentUser?.uid !== uid) return;
         onValue(snapshot.exists()
           ? normalizeUserProfile(uid, snapshot.data(), auth.currentUser)
           : null);

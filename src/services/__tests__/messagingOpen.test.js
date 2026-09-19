@@ -7,6 +7,7 @@ jest.mock('firebase/firestore', () => ({
 }));
 jest.mock('../firebaseService', () => ({ auth: { currentUser: { uid: 'alice' } }, db: 'db', dbService: { getUserProfile: jest.fn(async uid => ({ uid, username: uid })) } }));
 jest.mock('../blockService', () => ({ blockService: { getRelationship: jest.fn(async () => ({ blocked: false })) } }));
+jest.mock('../publicIdentityService', () => ({publicIdentityService:{message:jest.fn(async uid=>({uid,username:uid}))}}));
 import { messagingService } from '../messagingService';
 
 describe('opening direct conversations', () => {

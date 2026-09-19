@@ -8,7 +8,7 @@ const mockMessaging={getConversationId:()=> 'c__h',prepareConversation:jest.fn(a
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true}));
 jest.mock('../../../context/MessageActivityContext',()=>({useMessageActivity:()=>({setActiveConversation:()=>{}})}));
 jest.mock('../../../services/chatPassService',()=>({CHAT_PASS_COPY:'1 Chat Pass unlocks a conversation for 24 hours.',chatAccessLabel:()=>'',chatPassService:{getAccess:async()=>({balance:3})}}));
-jest.mock('../../../services/firebaseService',()=>({dbService:{getUserProfile:async()=>({uid:'h',role:mockTargetRole,hostStatus:{isApproved:mockTargetRole==='host'}})}}));
+jest.mock('../../../services/publicIdentityService',()=>({publicIdentityService:{message:async()=>({uid:'h',username:'Ken',hostStatus:{isApproved:mockTargetRole==='host'}})}}));
 jest.mock('../../../services/followService',()=>({followService:{subscribeRelationship:()=>()=>{}}}));
 jest.mock('../../../services/callNavigationService',()=>({startVideoCall:jest.fn()}));
 jest.mock('../../../context/UserContext',()=>({useUser:()=>({user:{uid:'c',role:mockRole,hostStatus:{isApproved:mockRole==='host'}}})}));

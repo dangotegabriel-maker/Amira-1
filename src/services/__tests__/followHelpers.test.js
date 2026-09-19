@@ -1,4 +1,5 @@
 import { canFollowProfile, followingSnapshotToIds, followService } from '../followService';
+import { publicIdentityService } from '../publicIdentityService';
 import { auth, dbService } from '../firebaseService';
 import { deleteDoc, doc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
 
@@ -9,6 +10,8 @@ jest.mock('firebase/firestore', () => ({
 }));
 jest.mock('../firebaseService', () => ({ auth: { currentUser: null }, db: {}, dbService: { getUserProfile: jest.fn() } }));
 
+jest.mock('../publicIdentityService',()=>({publicIdentityService:{relationship:jest.fn()}}));
+jest.mock('../socialBackend',()=>({invokeSocial:jest.fn(async()=>({}))}));
 const consumer = { uid: 'consumer-a', role: 'consumer' };
 const host = { uid: 'host-a', role: 'host', hostStatus: { isApproved: true } };
 const pending = { uid: 'pending', role: 'host', hostStatus: { isApproved: false } };
@@ -32,6 +35,7 @@ test.each([
 const prepareFollow = (source, target, exists = false) => {
   auth.currentUser = { uid: source.uid };
   dbService.getUserProfile.mockImplementation(async (uid) => uid === source.uid ? source : target);
+  publicIdentityService.relationship.mockResolvedValue({valid:canFollowProfile(source,target)});
   doc.mockReturnValue('follow-reference');
   serverTimestamp.mockReturnValue('server-time');
   const transaction = { get: jest.fn().mockResolvedValue({ exists: () => exists }), set: jest.fn() };
@@ -42,6 +46,8 @@ const prepareFollow = (source, target, exists = false) => {
 test('host follows a consumer in the existing owned subcollection', async () => {
   const transaction = prepareFollow(host, consumer);
   await expect(followService.follow(consumer.uid)).resolves.toBe(true);
+  expect(dbService.getUserProfile).toHaveBeenCalledTimes(1);
+  expect(dbService.getUserProfile).toHaveBeenCalledWith(host.uid);
   expect(doc).toHaveBeenCalledWith({}, 'users', host.uid, 'following', consumer.uid);
   expect(transaction.set).toHaveBeenCalledWith('follow-reference', {
     sourceId: host.uid, targetId: consumer.uid, sourceRole: 'host', targetRole: 'consumer', createdAt: 'server-time',
@@ -97,4 +103,39 @@ test('follower listener reports snapshot totals and exposes cleanup and errors',
   expect(where).toHaveBeenCalledWith('hostId', '==', host.uid);
   expect(callback.mock.calls).toEqual([[3], [2]]);
   expect(onSnapshot).toHaveBeenCalledWith('incoming-query', expect.any(Function), onError);
+});
+
+test('relationship subscription uses only owner raw profile plus authorized subdocuments and preserves live breakup',async()=>{
+ auth.currentUser={uid:consumer.uid};
+ publicIdentityService.relationship.mockResolvedValue({valid:true});
+ doc.mockImplementation((_db,...parts)=>parts.join('/'));
+ const listeners=new Map(),stops=[];
+ const snapshot=(exists,data={})=>({exists:()=>exists,data:()=>data,metadata:{hasPendingWrites:false}});
+ onSnapshot.mockImplementation((path,_options,next)=>{listeners.set(path,next);const stop=jest.fn();stops.push(stop);return stop;});
+ const value=jest.fn(),stop=followService.subscribeRelationship(host.uid,value,jest.fn());
+ expect(listeners.has(`users/${host.uid}`)).toBe(false);
+ expect(listeners.size).toBe(5);
+ listeners.get(`users/${consumer.uid}`)(snapshot(true,consumer));
+ listeners.get(`users/${consumer.uid}/following/${host.uid}`)(snapshot(true));
+ listeners.get(`users/${host.uid}/following/${consumer.uid}`)(snapshot(true));
+ listeners.get(`users/${consumer.uid}/blocked/${host.uid}`)(snapshot(false));
+ listeners.get(`users/${host.uid}/blocked/${consumer.uid}`)(snapshot(false));
+ await Promise.resolve();await Promise.resolve();await Promise.resolve();
+ expect(value.mock.calls.at(-1)[0].label).toBe('Friends');
+ listeners.get(`users/${host.uid}/following/${consumer.uid}`)(snapshot(false));
+ expect(value.mock.calls.at(-1)[0].label).toBe('Following');
+ listeners.get(`users/${host.uid}/blocked/${consumer.uid}`)(snapshot(true));
+ expect(value.mock.calls.at(-1)[0]).toMatchObject({blocked:true,label:'Follow'});
+ expect(dbService.getUserProfile).not.toHaveBeenCalled();
+ stop();expect(stops.every(fn=>fn.mock.calls.length===1)).toBe(true);
+});
+
+test('unsubscribed relationship cannot display a late capability response',async()=>{
+ auth.currentUser={uid:consumer.uid};let resolve;
+ publicIdentityService.relationship.mockImplementation(()=>new Promise(done=>{resolve=done;}));
+ doc.mockImplementation((_db,...parts)=>parts.join('/'));
+ onSnapshot.mockImplementation((path,_options,next)=>{next({exists:()=>false,data:()=>consumer,metadata:{}});return ()=>{};});
+ const value=jest.fn(),stop=followService.subscribeRelationship(host.uid,value,jest.fn());
+ const calls=value.mock.calls.length;stop();resolve({valid:true});await Promise.resolve();
+ expect(value).toHaveBeenCalledTimes(calls);
 });

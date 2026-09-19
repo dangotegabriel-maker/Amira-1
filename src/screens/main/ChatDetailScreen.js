@@ -20,7 +20,7 @@ import { useAndroidKeyboardOverlap } from '../../hooks/useAndroidKeyboardOverlap
 import { useMessageActivity } from '../../context/MessageActivityContext';
 import { chatPassService, chatAccessLabel, CHAT_PASS_COPY } from '../../services/chatPassService';
 import { followService } from '../../services/followService';
-import { dbService } from '../../services/firebaseService';
+import { publicIdentityService } from '../../services/publicIdentityService';
 import { isApprovedHost, isConsumer } from '../../models/userModel';
 import { startVideoCall } from '../../services/callNavigationService';
 import { COLORS } from '../../theme/COLORS';
@@ -55,13 +55,17 @@ const ChatDetailScreen = ({ route, navigation }) => {
   useEffect(() => { const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active')); return () => sub.remove(); }, []);
   const activity = useMessageActivity();
   const keyboard = useAndroidKeyboardOverlap();
-  const [recipient, setRecipient] = useState(null);
+  const [recipientRecord, setRecipientRecord] = useState(null);
+  const recipient = recipientRecord?.actorUid === user?.uid && recipientRecord?.actorHost === isApprovedHost(user) && recipientRecord?.targetUid === route.params?.userId ? recipientRecord.profile : null;
+  const setRecipient = profile => setRecipientRecord(profile ? {actorUid:user?.uid,actorHost:isApprovedHost(user),targetUid:receiverId,profile} : null);
+  const [identityError,setIdentityError]=useState(false);
+  const [identityVersion,setIdentityVersion]=useState(0);
   const [access, setAccess] = useState(null);
   const [accessVersion, setAccessVersion] = useState(0);
   const insets = useSafeAreaInsets();
 
   const receiverId = route.params?.userId;
-  const name = route.params?.name || 'Conversation';
+  const name = recipient?.uid === receiverId ? recipient.username || 'Identity unavailable' : 'Conversation';
 
   const conversationId =
     user?.uid && receiverId
@@ -86,13 +90,14 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const pendingSend = useRef(null);
 
   useEffect(() => {
+    setRecipient(null); setIdentityError(false);
     if (!focused || !receiverId) return undefined;
     let alive = true;
-    dbService.getUserProfile(receiverId).then((profile) => { if (alive) setRecipient(profile); }).catch(() => {});
+    publicIdentityService.message(receiverId).then((profile) => { if (alive) setRecipient(profile); }).catch(() => {if(alive) setIdentityError(true);});
     activity.setActiveConversation(conversationId);
     const stop = followService.subscribeRelationship(receiverId, (value) => { setBlocked(value); setAccessVersion((n) => n + 1); }, () => {});
     return () => { alive = false; activity.setActiveConversation(null); stop(); };
-  }, [focused, receiverId, conversationId]);
+  }, [focused, receiverId, conversationId, identityVersion, user?.hostStatus?.isApproved, blocked.blocked]);
   useEffect(() => {
     if (!focused || !isConsumer(user) || !receiverId || blocked.blocked) return undefined;
     let alive = true, timer;
@@ -109,7 +114,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
     navigation.setOptions({
       headerTitle: () => (
         <TouchableOpacity
-          onPress={() =>
+          accessibilityLabel={identityError ? 'Retry conversation identity' : 'Open profile'}
+          onPress={() => identityError ? setIdentityVersion(n=>n+1) : recipient &&
             navigation.navigate('UserProfile', {
               userId: receiverId,
             })
@@ -122,7 +128,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
               color: COLORS.text,
             }}
           >
-            {name}
+            {identityError ? 'Identity unavailable. Retry' : name}
           </Text>
         </TouchableOpacity>
       ),
@@ -156,7 +162,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         </TouchableOpacity></View>
       ),
     });
-  }, [navigation, name, receiverId, blocked, hostActions, recipient]);
+  }, [navigation, name, receiverId, blocked, hostActions, recipient, identityError]);
 
   useEffect(() => {
     if (!conversationId) return undefined;

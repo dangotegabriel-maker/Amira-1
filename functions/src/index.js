@@ -94,6 +94,12 @@ exports.claimDailyCheckIn=onCall(callable,async(request)=>{
 });
 exports._test={mapError};
 
+const publicIdentity=require('./publicIdentity').createPublicIdentity({db,HttpsError});
+exports.getRelationshipCapability=onCall(callable,request=>publicIdentity.relationship(requireAuth(request),request.data));
+exports.getMessageIdentity=onCall(callable,request=>publicIdentity.message(requireAuth(request),request.data));
+exports.getCallParticipantIdentities=onCall(callable,request=>publicIdentity.calls(requireAuth(request),request.data));
+exports.listOwnedBlockedIdentities=onCall(callable,request=>publicIdentity.blockedProfiles(requireAuth(request),request.data));
+
 exports.sendTextMessage=onCall(callable,(request)=>socialMessaging.sendText(requireAuth(request),request.data));
 exports.trackProfileView=onCall(callable,async(request)=>{const uid=requireAuth(request),data=request.data;if(!data||data.context!=='full_profile'||Object.keys(data).some(key=>!['ownerUid','context'].includes(key)))throw new HttpsError('invalid-argument','Invalid profile view request.');return socialMessaging.trackProfileView(uid,data.ownerUid);});
 exports.listProfileViews=onCall(callable,async(request)=>{const uid=requireAuth(request);if(request.data&&Object.keys(request.data).length)throw new HttpsError('invalid-argument','Profile view information is private.');return socialMessaging.listProfileViews(uid);});

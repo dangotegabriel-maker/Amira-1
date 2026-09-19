@@ -1,5 +1,6 @@
 import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
 import { auth, db, dbService } from './firebaseService';
+import { publicIdentityService } from './publicIdentityService';
 import { isApprovedHost, isConsumer } from '../models/userModel';
 
 export const canFollowProfile = (source, target) => Boolean(
@@ -25,8 +26,8 @@ export const resolveFollowLabel = ({ following, followedBy, blocked = false, val
 
 const follow = async (targetId) => {
   const source = await requireSource();
-  const target = await dbService.getUserProfile(targetId);
-  if (!canFollowProfile(source, target)) throw new Error('This follow relationship is not supported.');
+  const capability = await publicIdentityService.relationship(targetId);
+  if (!capability.valid) throw new Error('This follow relationship is not supported.');
   const reference = doc(db, 'users', source.uid, 'following', targetId);
   // A transaction makes repeated follows idempotent without resetting createdAt.
   await runTransaction(db, async (transaction) => {
@@ -52,27 +53,40 @@ export const followService = {
     const uid = auth.currentUser?.uid;
     if (!uid || !targetId || uid === targetId) return () => {};
     const state = {}, ready = new Set();
-    let active = true, synced = false;
+    let active = true, synced = false, version = 0;
+    const emit = () => {
+      if (!active || ready.size !== 5 || auth.currentUser?.uid !== uid) return;
+      const value = {following:state.following, followedBy:state.followedBy, blocked:state.blockedByMe || state.blockedMe,
+        blockedByMe:state.blockedByMe, blockedMe:state.blockedMe, valid:state.valid === true};
+      value.label = resolveFollowLabel(value);
+      onValue(value);
+      if (value.label === 'Friends' && !synced) {
+        synced = true;
+        Promise.resolve().then(() => require('./socialBackend').invokeSocial('syncFriendship', {targetUid:targetId}))
+          .catch(error => {synced=false; if(active) onError?.(error);});
+      }
+    };
+    const refresh = () => {
+      const current=++version;
+      emit();
+      publicIdentityService.relationship(targetId).then(value => {
+        if (!active || current!==version) return;
+        state.valid=value.valid; emit();
+      }).catch(error => {if(active && current===version) {state.valid=false;emit();onError?.(error);}});
+    };
     const paths = {
-      source: ['users', uid], target: ['users', targetId],
+      source: ['users', uid],
       following: ['users', uid, 'following', targetId], followedBy: ['users', targetId, 'following', uid],
       blockedByMe: ['users', uid, 'blocked', targetId], blockedMe: ['users', targetId, 'blocked', uid],
     };
     const stops = Object.entries(paths).map(([key, path]) => onSnapshot(doc(db, ...path), { includeMetadataChanges: true }, (snapshot) => {
       if (snapshot.metadata?.hasPendingWrites) return;
-      state[key] = key === 'source' || key === 'target' ? { ...snapshot.data(), uid: key === 'source' ? uid : targetId } : snapshot.exists();
+      const previous=state[key];
+      state[key] = key === 'source' ? { ...snapshot.data(), uid } : snapshot.exists();
       ready.add(key);
-      if (!active || ready.size !== 6) return;
-      const value = { following: state.following, followedBy: state.followedBy,
-        blocked: state.blockedByMe || state.blockedMe, blockedByMe: state.blockedByMe, blockedMe: state.blockedMe,
-        valid: canFollowProfile(state.source, state.target) };
-      value.label = resolveFollowLabel(value);
-      onValue(value);
-      if (value.label === 'Friends' && !synced) {
-        synced = true;
-        Promise.resolve().then(() => require('./socialBackend').invokeSocial('syncFriendship', { targetUid: targetId }))
-          .catch((error) => { synced = false; if (active) onError?.(error); });
-      }
+      if (key==='source' && isApprovedHost(previous)!==isApprovedHost(state.source)) state.valid=false;
+      emit();
+      if (ready.size===5 && (previous!==state[key] || state.valid===undefined)) refresh();
     }, onError));
     return () => { active = false; stops.forEach((stop) => stop()); };
   },

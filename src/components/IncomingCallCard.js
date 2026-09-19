@@ -10,22 +10,26 @@ import {
 } from 'react-native';
 import { COLORS } from '../theme/COLORS';
 import { callService } from '../services/callService';
-import { dbService } from '../services/firebaseService';
+import { publicIdentityService } from '../services/publicIdentityService';
+import { useUser } from '../context/UserContext';
 
 const IncomingCallCard = ({ call, navigation, onDismiss }) => {
-  const [caller, setCaller] = useState(null);
+  const {user} = useUser();
+  const [identityError,setIdentityError]=useState(false);
+  const [identityVersion,setIdentityVersion]=useState(0);
+  const [callerRecord, setCallerRecord] = useState(null);
+  const caller = callerRecord?.ownerUid===user?.uid && callerRecord?.callId===(call?.callId || call?.id) ? callerRecord.profile : null;
+  const setCaller = profile => setCallerRecord(profile ? {ownerUid:user?.uid,callId,profile} : null);
   const [responding, setResponding] = useState(false);
 
   const callId = call?.callId || call?.id;
 
   useEffect(() => {
-    if (!call?.callerId) return;
-
-    dbService
-      .getUserProfile(call.callerId)
-      .then(setCaller)
-      .catch(() => {});
-  }, [call?.callerId]);
+    let alive=true; setCaller(null); setIdentityError(false);
+    if (callId) publicIdentityService.calls([callId]).then(items=>{if(alive) {setCaller(items[0]?.identity || null);setIdentityError(!items[0]?.identity);}})
+      .catch(()=>{if(alive) setIdentityError(true);});
+    return ()=>{alive=false;};
+  }, [callId,user?.uid,identityVersion]);
 
   useEffect(() => {
     const expiresAtMs = Number(call?.expiresAtMs || 0);
@@ -130,7 +134,8 @@ const IncomingCallCard = ({ call, navigation, onDismiss }) => {
         <Text style={styles.label}>Incoming video call</Text>
 
         <Text style={styles.name}>
-          {caller?.username || 'Amira member'}
+          {caller?.username || (identityError ? 'Caller identity unavailable' : 'Incoming call')}
+          {identityError && <Text onPress={()=>setIdentityVersion(n=>n+1)}> Retry</Text>}
         </Text>
 
         {caller?.countryName ? (
