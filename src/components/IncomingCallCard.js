@@ -138,6 +138,7 @@ const IncomingCallCard = ({ call, navigation, onDismiss }) => {
           {identityError && <Text onPress={()=>setIdentityVersion(n=>n+1)}> Retry</Text>}
         </Text>
 
+        {caller?.vipActive===true?<Text style={{color:'#B7791F',fontWeight:'900'}}>VIP</Text>:null}
         {caller?.countryName ? (
           <Text style={styles.country}>
             {caller.countryName}

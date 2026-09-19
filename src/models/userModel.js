@@ -127,8 +127,9 @@ export const normalizeUser = (uid, data = {}, authUser = null) => {
       ...(data.settings || {}),
     },
     vip: {
-      tier: ['FREE', 'VIP_1', 'VIP_2', 'VIP_3'].includes(data?.vip?.tier) ? data.vip.tier : 'FREE',
+      state: data?.vip?.state === 'VIP' ? 'VIP' : 'FREE',
       status: ['inactive', 'active', 'expired'].includes(data?.vip?.status) ? data.vip.status : 'inactive',
+      planId: ['vip_3_day','vip_7_day','vip_30_day'].includes(data?.vip?.planId) ? data.vip.planId : null,
       startsAt: data?.vip?.startsAt || null,
       expiresAt: data?.vip?.expiresAt || null,
     },

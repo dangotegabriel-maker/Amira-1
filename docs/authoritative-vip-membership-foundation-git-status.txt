@@ -1,0 +1,53 @@
+AMIRA CHECKPOINT 12 - AUTHORITATIVE VIP MEMBERSHIP FOUNDATION
+Captured before staging/commit: 2026-09-19 UTC
+
+Branch: amira-v2
+HEAD: c869512
+Required baseline: c869512
+
+Staged files: none
+Commits created: none
+Pushes: none
+Deployments: none
+Production mutations: none
+
+Working tree (git status --short):
+ M firestore.rules
+ M functions/src/__tests__/socialMessaging.test.js
+ M functions/src/hostActivity.js
+ M functions/src/index.js
+ M functions/src/messageEntitlements.js
+ M functions/src/profileViews.js
+ M functions/src/publicIdentity.js
+ M src/components/IncomingCallCard.js
+ M src/models/userModel.js
+ M src/screens/host/__tests__/hostActivityUi.test.js
+ M src/screens/main/UserProfileScreen.js
+ M src/screens/main/VIPStoreScreen.js
+ M src/screens/main/VipInfoScreen.js
+ M src/screens/main/WhoViewedMeScreen.js
+ M src/services/__tests__/userPrivacy.emulator.cjs
+ M src/services/__tests__/vipService.test.js
+ M src/services/firebaseService.js
+ M src/services/profileViewService.js
+ M src/services/vipService.js
+?? docs/authoritative-vip-membership-foundation-report.md
+?? docs/authoritative-vip-membership-foundation-git-status.txt
+?? functions/src/__tests__/vipDomain.test.js
+?? functions/src/vipDomain.js
+?? functions/src/vipService.js
+?? src/services/__tests__/vipFoundation.emulator.cjs
+
+Tracked diff summary before documentation files are tracked:
+ 19 files changed, 70 insertions(+), 102 deletions(-)
+
+Validation summary:
+- Full root Jest: 62 suites, 596 tests passed
+- Standalone Functions Jest: 14 suites, 329 tests passed
+- New VIP domain suite: 12 tests passed (included in Jest totals)
+- New VIP emulator/security suite: 46 checks passed
+- Existing emulator regression scripts: all passed
+- Babel/static parse: 247 files passed
+- git diff --check: passed
+
+This snapshot intentionally records an unstaged working tree. Untracked files do not appear in `git diff --stat` until staged, and staging is prohibited for this checkpoint.

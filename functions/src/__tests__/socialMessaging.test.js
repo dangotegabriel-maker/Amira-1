@@ -136,10 +136,10 @@ test('approved host needs no pass; old pending host role remains subject to cons
  docs.get('users/h').hostStatus.isApproved=false;
  await expect(send('h','two')).rejects.toMatchObject({code:'permission-denied'});
 });
-test('no VIP unlimited default; trusted policy may authorize it without client changes',()=>{
+test('VIP never bypasses messaging priority with unlimited access',()=>{
  const vip={...consumer,vip:{status:'active',tier:'VIP_3'}};
  expect(M.resolveMessagingEntitlement(vip,{freeMessages:0}).allowed).toBe(false);
- expect(M.resolveMessagingEntitlement(vip,{freeMessages:0},M.messagePolicy({unlimitedMessagingVipTiers:['VIP_3']}))).toMatchObject({allowed:true,consume:0});
+ expect(M.resolveMessagingEntitlement(vip,{freeMessages:0},M.messagePolicy({unlimitedMessagingVipTiers:['VIP_3']}))).toMatchObject({allowed:false,consume:1});
 });
 test('Daily Check-In awards 3 with an auditable once-only source and usable send',async()=>{
  docs.get('consumerRewards/c').freeMessages=0; await rewards.claim('c'); await rewards.claim('c'); expect(balance()).toBe(3);

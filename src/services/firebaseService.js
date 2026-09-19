@@ -104,7 +104,7 @@ export const DEFAULT_USER_PROFILE = {
   settings: {
     doNotDisturb: false,
   },
-  vip: { tier: 'FREE', status: 'inactive', startsAt: null, expiresAt: null },
+  vip: { state: 'FREE', status: 'inactive', planId: null, startsAt: null, expiresAt: null },
   profileViewStats: { recentCount: 0, updatedAt: null },
   referralCode: '',
   referredBy: null,

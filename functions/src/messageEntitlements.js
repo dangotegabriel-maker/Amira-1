@@ -12,8 +12,6 @@ const messagePolicy = (config = {}) => ({ ...MESSAGE_DEFAULTS,
   friendshipMessages: nonnegativeInteger(config.friendshipMessages ?? MESSAGE_DEFAULTS.friendshipMessages),
   signupMessages: nonnegativeInteger(config.signupMessages ?? MESSAGE_DEFAULTS.signupMessages),
   enableSignupMessages: config.enableSignupMessages === true,
-  // No tier has unlimited messaging by default. Only trusted config can enable it.
-  unlimitedVipTiers: (config.unlimitedMessagingVipTiers || []).filter((tier) => ['VIP_1', 'VIP_2', 'VIP_3'].includes(tier)),
 });
 const millis = (value) => value?.toMillis?.() ?? (value instanceof Date ? value.getTime() : typeof value === 'number' ? value : Date.parse(value) || 0);
 const activeVip = (user, now = Date.now()) => user?.vip?.status === 'active'
@@ -33,7 +31,6 @@ const resolveMessagingEntitlement = (user, rewards = {}, policy = messagePolicy(
   if (!isConsumer(user)) return { allowed: false, consume: 0, source: 'ineligible_role' };
   if (friends) return { allowed: true, consume: 0, source: 'friends' };
   if (millis(window?.expiresAt) > nowMs) return { allowed: true, consume: 0, source: 'chat_window' };
-  if (activeVip(user) && policy.unlimitedVipTiers.includes(user.vip.tier)) return { allowed: true, consume: 0, source: 'vip' };
   return { allowed: chatPassBalance(rewards) > 0, consume: 1, source: 'chat_window' };
 };
 const transactionData = ({ uid, delta, balance, source, sourceId, policyVersion, conversationId = null, messageId = null, otherUid = null, windowId = null, createdAt }) => {

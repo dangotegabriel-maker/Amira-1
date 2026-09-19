@@ -1,6 +1,7 @@
 'use strict';
 const {isConsumer,isApprovedHost}=require('./accountRole');
 const D=require('./hostActivityDomain');
+const V=require('./vipDomain');
 const createProfileViews=({db,FieldValue,HttpsError,clock=()=>Date.now()})=>{
  const id=value=>{if(!D.validId(value))throw new HttpsError('invalid-argument','Invalid profile.');return value;};
  const track=async(viewerUid,ownerUid)=>{
@@ -21,15 +22,17 @@ const createProfileViews=({db,FieldValue,HttpsError,clock=()=>Date.now()})=>{
  };
  const list=async uid=>{
   id(uid);const owner=await db.doc(`users/${uid}`).get();if(!owner.exists)throw new HttpsError('permission-denied','Profile views unavailable.');
-  const direction=isApprovedHost(owner.data())?'consumer_to_host':'host_to_consumer',reveal=isApprovedHost(owner.data()),now=clock();
+  const now=clock(),entitlement=await db.doc(`vipMemberships/${uid}`).get();
+  const direction=isApprovedHost(owner.data())?'consumer_to_host':'host_to_consumer',reveal=isApprovedHost(owner.data())||V.active(entitlement.data(),owner.data(),now);
   const snapshot=await db.collection(`users/${uid}/profileViews`).orderBy('lastViewedAt','desc').limit(D.VIEW_LIMIT).get();
   const views=(await Promise.all(snapshot.docs.map(async entry=>{
    const record=entry.data();if(record.ownerUid!==uid||!D.validId(entry.id)||!D.verifiedView(record,direction,entry.id,now))return null;
    const [person,left,right]=await Promise.all([db.doc(`users/${entry.id}`).get(),db.doc(`users/${uid}/blocked/${entry.id}`).get(),db.doc(`users/${entry.id}/blocked/${uid}`).get()]);
-   if(!person.exists||person.data().isDemo||left.exists||right.exists||(reveal?!isConsumer(person.data()):!isApprovedHost(person.data())))return null;
-   return {viewerUid:entry.id,lastViewedAtMs:D.timestampMs(record.lastViewedAt),firstViewedAtMs:D.timestampMs(record.firstViewedAt),viewCount:record.viewCount};
+   if(!person.exists||person.data().isDemo||left.exists||right.exists)return null;
+   const eligibleViewer=direction==='consumer_to_host'?isConsumer(person.data()):isApprovedHost(person.data());
+   if(!eligibleViewer)return null;
+   return {viewerUid:entry.id,identity:D.publicIdentity(entry.id,person.data()),lastViewedAtMs:D.timestampMs(record.lastViewedAt),firstViewedAtMs:D.timestampMs(record.firstViewedAt),viewCount:record.viewCount};
   }))).filter(Boolean).sort((a,b)=>b.lastViewedAtMs-a.lastViewedAtMs||a.viewerUid.localeCompare(b.viewerUid));
-  // VIP is deferred: Consumer responses never include identities, even with legacy VIP flags.
   return {count:views.length,countIsBounded:true,reveal,views:reveal?views:[]};
  };
  return {track,list};

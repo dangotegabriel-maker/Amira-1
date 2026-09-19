@@ -1,48 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
-import { COLORS } from '../../theme/COLORS';
-import { Check } from 'lucide-react-native';
-
-const VIPStoreScreen = () => {
-  const benefits = [
-    'Unlimited Swipes',
-    'See who likes you',
-    '5 Super Likes daily',
-    'Passport to any location',
-    'No Ads',
-  ];
-
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Go Premium</Text>
-        <Text style={styles.subtitle}>Unlock exclusive features</Text>
-      </View>
-
-      <View style={styles.benefitsCard}>
-        {benefits.map((b, i) => (
-          <View key={i} style={styles.benefitRow}>
-            <Check color={COLORS.primary} size={20} />
-            <Text style={styles.benefitText}>{b}</Text>
-          </View>
-        ))}
-      </View>
-
-      <TouchableOpacity style={styles.subscribeButton}>
-        <Text style={styles.subscribeText}>Subscribe Now - $9.99/mo</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  );
-};
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F8F8', padding: 20 },
-  header: { alignItems: 'center', marginVertical: 40 },
-  title: { fontSize: 32, fontWeight: 'bold', color: COLORS.black },
-  subtitle: { fontSize: 18, color: COLORS.textSecondary, marginTop: 10 },
-  benefitsCard: { backgroundColor: COLORS.white, padding: 25, borderRadius: 20, marginBottom: 40 },
-  benefitRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  benefitText: { marginLeft: 15, fontSize: 16, color: COLORS.text },
-  subscribeButton: { backgroundColor: COLORS.primary, padding: 20, borderRadius: 30, alignItems: 'center' },
-  subscribeText: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
-});
-export default VIPStoreScreen;
+import React,{useCallback,useState} from 'react';
+import {useFocusEffect} from '@react-navigation/native';
+import {ActivityIndicator,ScrollView,StyleSheet,Text,View} from 'react-native';
+import {Check,Crown} from 'lucide-react-native';
+import {COLORS} from '../../theme/COLORS';
+import {vipService} from '../../services/vipService';
+const benefits=['Who Viewed Me identities','VIP Host Content access','Consumer photo sharing','Future paid messaging and video-call discounts','Better controlled rewards'];
+export default function VIPStoreScreen(){const [state,setState]=useState(null),[plans,setPlans]=useState(null);useFocusEffect(useCallback(()=>{let live=true;Promise.all([vipService.state(),vipService.plans()]).then(([s,p])=>{if(live){setState(s);setPlans(p);}}).catch(()=>{if(live){setState({state:'FREE',active:false});setPlans({available:false,plans:[]});}});return()=>{live=false;};},[]));if(!state||!plans)return <View style={styles.center}><ActivityIndicator color={COLORS.primary}/></View>;return <ScrollView style={styles.container} contentContainerStyle={styles.content}><Crown color="#F59E0B" size={52}/><Text style={styles.title}>Amira VIP</Text>{state.active?<View style={styles.card}><Text style={styles.active}>VIP is active</Text><Text style={styles.body}>Plan: {state.planId}</Text><Text style={styles.body}>Expires {new Date(state.expiresAtMs).toLocaleString()}</Text><Text style={styles.note}>Fixed duration. No automatic renewal. Renewing or extending while active is unavailable.</Text></View>:<><Text style={styles.body}>One membership with fixed 3-day, 7-day, or 30-day purchase options.</Text><View style={styles.card}>{benefits.map(item=><View key={item} style={styles.row}><Check color={COLORS.primary} size={18}/><Text style={styles.benefit}>{item}</Text></View>)}</View>{!plans.available||!plans.plans.length?<Text style={styles.unavailable}>VIP purchasing is currently unavailable.</Text>:<Text style={styles.unavailable}>Checkout is not available yet.</Text>}</>}</ScrollView>;}
+const styles=StyleSheet.create({container:{flex:1,backgroundColor:'#F7F7F9'},content:{padding:22,alignItems:'center'},center:{flex:1,alignItems:'center',justifyContent:'center'},title:{fontSize:30,fontWeight:'900',color:COLORS.text,marginTop:12},card:{width:'100%',backgroundColor:'white',borderRadius:20,padding:20,marginTop:20},row:{flexDirection:'row',gap:10,marginBottom:13},benefit:{flex:1,color:COLORS.text},body:{color:COLORS.textSecondary,textAlign:'center',marginTop:10},note:{color:COLORS.textSecondary,lineHeight:21,marginTop:14},active:{fontSize:22,fontWeight:'900',color:COLORS.primary,textAlign:'center'},unavailable:{color:COLORS.textSecondary,fontWeight:'800',marginTop:24,textAlign:'center'}});

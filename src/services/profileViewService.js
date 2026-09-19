@@ -16,4 +16,5 @@ export const profileViewService = {
   })),
   countSince: async (ownerUid, since) => (await profileViewService.list(ownerUid)).filter((view) => view.lastViewedAt.toDate() >= since).length,
   getAggregateCount: async (ownerUid) => (await ownViews(ownerUid)).count,
+  result: ownViews,
 };

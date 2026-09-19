@@ -48,7 +48,8 @@ const createPublicIdentity = ({db, HttpsError}) => {
     if (!a || !b) return {callId,identity:null,canInteract:false};
     // Historical participants may retain tiny identity after role changes/block.
     // A block always disables navigation into a new interaction.
-    return {callId,identity:identity(targetUid,b),canInteract:!(await blocked(uid,targetUid))};
+    const vip=isApprovedHost(a)&&isConsumer(b)?await db.doc(`vipMemberships/${targetUid}`).get():null;
+    return {callId,identity:{...identity(targetUid,b),...(vip?{vipActive:require('./vipDomain').active(vip.data(),b,Date.now())}:{})},canInteract:!(await blocked(uid,targetUid))};
   };
   const calls = async (uid,input={}) => {
     validate(uid,input,['callIds']);

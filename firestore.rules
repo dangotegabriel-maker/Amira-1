@@ -37,7 +37,7 @@ service cloud.firestore {
     match /amiraIds/{amiraId} { allow read, write: if false; }
     match /users/{uid} {
       allow read: if owns(uid) || admin();
-      allow create: if owns(uid) && request.resource.data.uid == uid && !request.resource.data.keys().hasAny(['amiraId']) && request.resource.data.role == 'consumer' && !request.resource.data.keys().hasAny(['level','amiraLevel','lifetimeQualifyingPurchasedCredits']) && request.resource.data.hostStatus.isApproved == false && request.resource.data.get('hostProfile', {}).get('videoRateCredits',25) == 25 && request.resource.data.get('hostProfile', {}).get('rateTier','ENTRY') == 'ENTRY' && request.resource.data.wallet.creditBalance == 0 && request.resource.data.earnings.pending == 0 && request.resource.data.earnings.available == 0 && request.resource.data.vip.tier == 'FREE' && request.resource.data.vip.status == 'inactive' && request.resource.data.profileViewStats.recentCount == 0 && request.resource.data.referralStats.qualifiedCount == 0 && request.resource.data.referralStats.pendingCount == 0;
+      allow create: if owns(uid) && request.resource.data.uid == uid && !request.resource.data.keys().hasAny(['amiraId']) && request.resource.data.role == 'consumer' && !request.resource.data.keys().hasAny(['level','amiraLevel','lifetimeQualifyingPurchasedCredits']) && request.resource.data.hostStatus.isApproved == false && request.resource.data.get('hostProfile', {}).get('videoRateCredits',25) == 25 && request.resource.data.get('hostProfile', {}).get('rateTier','ENTRY') == 'ENTRY' && request.resource.data.wallet.creditBalance == 0 && request.resource.data.earnings.pending == 0 && request.resource.data.earnings.available == 0 && (request.resource.data.vip.get('state',null) == 'FREE' || request.resource.data.vip.get('tier',null) == 'FREE') && request.resource.data.vip.status == 'inactive' && request.resource.data.profileViewStats.recentCount == 0 && request.resource.data.referralStats.qualifiedCount == 0 && request.resource.data.referralStats.pendingCount == 0;
       allow update: if admin() || (owns(uid) && request.resource.data.get('amiraId', null) == resource.data.get('amiraId', null) && request.resource.data.keys().hasAny(['amiraId']) == resource.data.keys().hasAny(['amiraId']) && financialFieldsUnchanged() && levelFieldsAbsentOrUnchanged() && rateUnchanged() && approvalUnchanged() && vipUnchanged() && visitorStatsUnchanged() && referralRewardsUnchanged() && safeRoleUpdate() && (request.resource.data.hostStatus == resource.data.hostStatus || validApplicantUpdate()));
       allow delete: if false;
 
@@ -157,6 +157,14 @@ service cloud.firestore {
     }
     match /giftConfig/{documentId} { allow read, write: if false; }
     match /giftTransactions/{transactionId} { allow read, write: if false; }
+    match /vipConfig/{documentId} { allow read, write: if false; }
+    match /vipPaymentAttempts/{reference} { allow read, write: if false; }
+    match /vipContent/{contentId} { allow read, write: if false; }
+    match /vipMemberships/{uid} {
+      allow read: if owns(uid);
+      allow write: if false;
+      match /purchases/{purchaseId} { allow read: if owns(uid); allow write: if false; }
+    }
     match /hostGiftAggregates/{hostUid} {
       allow read, write: if false;
       match /types/{giftId} { allow read, write: if false; }

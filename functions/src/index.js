@@ -23,6 +23,7 @@ const consumerRewards=createConsumerRewards({db,FieldValue,HttpsError});
 const creditService=require('./creditService').createCreditService({db,FieldValue,HttpsError,packages:{}});
 const socialMessaging=require('./socialMessaging').createSocialMessaging({db,FieldValue,HttpsError});
 const giftService=require('./giftService').createGiftService({db,FieldValue,HttpsError});
+const vipService=require('./vipService').createVipService({db,FieldValue,Timestamp,HttpsError});
 const requireAuth=(request)=>{if(!request.auth?.uid)throw new HttpsError('unauthenticated','Sign in is required.');return request.auth.uid;};
 const textId=(value,name)=>{if(typeof value!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(value))throw new HttpsError('invalid-argument',`Invalid ${name}.`);return value;};
 const mapError=(error)=>{if(error instanceof HttpsError)return error;const code={
@@ -123,6 +124,12 @@ exports.getChatAccess=onCall(callable,(request)=>socialMessaging.getChatAccess(r
 exports.getGiftCatalog=onCall(callable,request=>giftService.catalog(requireAuth(request),request.data||{}));
 exports.sendGift=onCall(callable,request=>giftService.send(requireAuth(request),request.data||{}));
 exports.getPublicHostGifts=onCall(callable,request=>{requireAuth(request);return giftService.publicAggregates(request.data?.hostUid);});
+exports.getVipState=onCall(callable,request=>vipService.state(requireAuth(request),request.data||{}));
+exports.getVipPlans=onCall(callable,request=>vipService.plans(requireAuth(request),request.data||{}));
+exports.initializeVipPurchase=onCall(callable,request=>vipService.initialize(requireAuth(request),request.data||{}));
+exports.verifyVipPurchase=onCall(callable,request=>vipService.verify(requireAuth(request),request.data||{},async()=>{throw new HttpsError('failed-precondition','VIP payment verification is not configured.');}));
+exports.authorizeVipContent=onCall(callable,request=>vipService.contentAccess(requireAuth(request),request.data||{}));
+exports.authorizePhotoMessage=onCall(callable,request=>vipService.photoAccess(requireAuth(request),request.data||{}));
 
 const callReviews=require('./callReviews').createCallReviews({db,FieldValue,HttpsError});
 exports.getCallReviewStatus=onCall(callable,(request)=>callReviews.status(requireAuth(request),request.data?.callId));
