@@ -22,8 +22,9 @@ const createProfileViews=({db,FieldValue,HttpsError,clock=()=>Date.now()})=>{
  };
  const list=async uid=>{
   id(uid);const owner=await db.doc(`users/${uid}`).get();if(!owner.exists)throw new HttpsError('permission-denied','Profile views unavailable.');
+  if(!isConsumer(owner.data()))throw new HttpsError('permission-denied','Who Viewed Me is available to Consumers only.');
   const now=clock(),entitlement=await db.doc(`vipMemberships/${uid}`).get();
-  const direction=isApprovedHost(owner.data())?'consumer_to_host':'host_to_consumer',reveal=isApprovedHost(owner.data())||V.active(entitlement.data(),owner.data(),now);
+  const direction='host_to_consumer',reveal=V.active(entitlement.data(),owner.data(),now);
   const snapshot=await db.collection(`users/${uid}/profileViews`).orderBy('lastViewedAt','desc').limit(D.VIEW_LIMIT).get();
   const views=(await Promise.all(snapshot.docs.map(async entry=>{
    const record=entry.data();if(record.ownerUid!==uid||!D.validId(entry.id)||!D.verifiedView(record,direction,entry.id,now))return null;
@@ -31,9 +32,10 @@ const createProfileViews=({db,FieldValue,HttpsError,clock=()=>Date.now()})=>{
    if(!person.exists||person.data().isDemo||left.exists||right.exists)return null;
    const eligibleViewer=direction==='consumer_to_host'?isConsumer(person.data()):isApprovedHost(person.data());
    if(!eligibleViewer)return null;
-   return {viewerUid:entry.id,identity:D.publicIdentity(entry.id,person.data()),lastViewedAtMs:D.timestampMs(record.lastViewedAt),firstViewedAtMs:D.timestampMs(record.firstViewedAt),viewCount:record.viewCount};
-  }))).filter(Boolean).sort((a,b)=>b.lastViewedAtMs-a.lastViewedAtMs||a.viewerUid.localeCompare(b.viewerUid));
-  return {count:views.length,countIsBounded:true,reveal,views:reveal?views:[]};
+   return reveal?{viewerUid:entry.id,identity:D.publicIdentity(entry.id,person.data()),lastViewedAtMs:D.timestampMs(record.lastViewedAt),viewCount:record.viewCount}:{eligible:true};
+  }))).filter(Boolean);
+  if(reveal)views.sort((a,b)=>b.lastViewedAtMs-a.lastViewedAtMs||a.viewerUid.localeCompare(b.viewerUid));
+  return {vipActive:reveal,locked:!reveal,count:views.length,countIsBounded:true,sourceLimit:D.VIEW_LIMIT,reveal,views:reveal?views:[]};
  };
  return {track,list};
 };

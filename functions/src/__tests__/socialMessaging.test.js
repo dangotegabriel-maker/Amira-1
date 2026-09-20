@@ -51,16 +51,17 @@ afterEach(() => jest.useRealTimers());
 test.each([['c','h'],['h','c']])('profile view %s to %s uses existing records',async(a,b)=>{
  expect(await api.trackProfileView(a,b)).toEqual({counted:true});
  expect(docs.get(`users/${b}/profileViews/${a}`).viewCount).toBe(1);
- expect((await api.listProfileViews(b)).count).toBe(1);
+ if(b==='c')expect((await api.listProfileViews(b)).count).toBe(1);
+ else await expect(api.listProfileViews(b)).rejects.toMatchObject({code:'permission-denied'});
 });
-test('Host identities are visible only to their owner; Consumer view identities remain deferred even with VIP flags',async()=>{
- await api.trackProfileView('c','h'); await api.trackProfileView('h','c');
- expect((await api.listProfileViews('h')).views[0].viewerUid).toBe('c');
- expect((await api.listProfileViews('c')).views).toEqual([]);
- docs.get('users/c').vip={status:'active',tier:'VIP_1',expiresAt:Date.now()+1000};
- expect((await api.listProfileViews('c')).views).toEqual([]);
- expect((await api.listProfileViews('c')).reveal).toBe(false);
- jest.advanceTimersByTime(1001); expect((await api.listProfileViews('c')).views).toEqual([]);
+test('FREE response serializes no identity metadata; authoritative VIP reveals safe current Host then expires',async()=>{
+ await api.trackProfileView('h','c');
+ const free=await api.listProfileViews('c'),serialized=JSON.stringify(free);
+ expect(free).toMatchObject({count:1,locked:true,vipActive:false,views:[]});
+ for(const secret of ['h','viewerUid','username','profilePic','countryCode','lastViewedAtMs'])expect(serialized).not.toContain(secret);
+ docs.set('vipMemberships/c',{status:'active',startsAt:new Date(Date.now()-1),expiresAt:new Date(Date.now()+1000)});
+ const vip=await api.listProfileViews('c');expect(vip.locked).toBe(false);expect(vip.views[0].viewerUid).toBe('h');expect(Object.keys(vip.views[0].identity).sort()).toEqual(['countryCode','profilePic','uid','username']);
+ jest.advanceTimersByTime(1001);expect(await api.listProfileViews('c')).toMatchObject({count:1,locked:true,views:[]});expect(docs.has('users/c/profileViews/h')).toBe(true);
 });
 test('self view ignored and incomplete target not recorded',async()=>{
  expect(await api.trackProfileView('c','c')).toEqual({counted:false});
@@ -71,12 +72,12 @@ test('30 minute dedupe, concurrent retries and later repeat keep one visible row
  await Promise.all([api.trackProfileView('c','h'),api.trackProfileView('c','h')]);
  jest.advanceTimersByTime(1799999); expect((await api.trackProfileView('c','h')).counted).toBe(false);
  jest.advanceTimersByTime(1); expect((await api.trackProfileView('c','h')).counted).toBe(true);
- expect(docs.get('users/h/profileViews/c').viewCount).toBe(2); expect((await api.listProfileViews('h')).count).toBe(1);
+ expect(docs.get('users/h/profileViews/c').viewCount).toBe(2);await expect(api.listProfileViews('h')).rejects.toMatchObject({code:'permission-denied'});
 });
 test.each(['users/c/blocked/h','users/h/blocked/c'])('blocks reject views and filter old entries: %s',async(path)=>{
  await api.trackProfileView('c','h'); docs.set(path,{});
  await expect(api.trackProfileView('c','h')).rejects.toMatchObject({code:'permission-denied'});
- expect((await api.listProfileViews('h')).count).toBe(0);
+ await expect(api.listProfileViews('h')).rejects.toMatchObject({code:'permission-denied'});
 });
 test('one-way follow is not friends; reciprocal creates event and consumer grant only',async()=>{
  follow(); expect((await api.syncFriendship('c','h')).friends).toBe(false);

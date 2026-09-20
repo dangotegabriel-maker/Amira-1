@@ -23,7 +23,7 @@ async function main(){
  for(const [uid,role] of [['c','consumer'],['h2','host'],['h','host']]) await db.doc(`users/${uid}`).set(profile(uid,role));
  const c=client('c'),h=client('h'),other=client('h2'),anon=client(null);
  check((await api.trackProfileView('c','h')).counted,true);
- check((await api.listProfileViews('h')).views[0].viewerUid,'c');
+ await denied(api.listProfileViews('h'));
  check((await getDocs(collection(h,'users/h/profileViews'))).size,1);
  check((await api.trackProfileView('h','c')).counted,true);
  check((await api.listProfileViews('c')).views.length,0); check((await api.listProfileViews('c')).count,1);
@@ -38,7 +38,7 @@ async function main(){
  check((await api.trackProfileView('c','h')).counted,true); check((await read('users/h/profileViews/c')).viewCount,2);
  await denied(setDoc(doc(c,'users/h/profileViews/c'),{viewerUid:'c',viewCount:999}));
  await setDoc(doc(h,'users/h/blocked/c'),{blockedUid:'c',createdAt:serverTimestamp()});
- await denied(api.trackProfileView('c','h')); check((await api.listProfileViews('h')).count,0);
+ await denied(api.trackProfileView('c','h'));await denied(api.listProfileViews('h'));
  await deleteDoc(doc(h,'users/h/blocked/c'));
  // Existing follow schema; reciprocal point read is private to the two users.
  await setDoc(doc(c,'users/c/following/h'),{consumerId:'c',hostId:'h',createdAt:serverTimestamp()});

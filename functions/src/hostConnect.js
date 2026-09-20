@@ -25,7 +25,7 @@ const createHostConnect=({db,HttpsError})=>{
   people.sort((a,b)=>(tab==='For You'?score(b)-score(a):0)||a.uid.localeCompare(b.uid));
   return {people,bounded:true,candidateLimit:LIMIT};
  };
- const today=async(uid,input={})=>{validate(input,[]);await owner(uid);const views=await require('./profileViews').createProfileViews({db,HttpsError}).list(uid),now=Date.now(),start=now-now%86400000;return {visitors:views.views.filter(view=>view.lastViewedAtMs>=start&&view.lastViewedAtMs<=now).length,bounded:true,sourceLimit:D.VIEW_LIMIT,dayStartMs:start};};
+ const today=async(uid,input={})=>{validate(input,[]);await owner(uid);const now=Date.now(),start=now-now%86400000,snapshot=await db.collection(`users/${uid}/profileViews`).orderBy('lastViewedAt','desc').limit(D.VIEW_LIMIT).get();const eligible=await Promise.all(snapshot.docs.map(async entry=>{const record=entry.data(),time=D.timestampMs(record.lastViewedAt);if(record.ownerUid!==uid||!D.verifiedView(record,'consumer_to_host',entry.id,now)||time<start)return false;const [person,left,right]=await Promise.all([db.doc(`users/${entry.id}`).get(),db.doc(`users/${uid}/blocked/${entry.id}`).get(),db.doc(`users/${entry.id}/blocked/${uid}`).get()]);return person.exists&&isConsumer(person.data())&&!person.data().isDemo&&!left.exists&&!right.exists;}));return {visitors:eligible.filter(Boolean).length,bounded:true,sourceLimit:D.VIEW_LIMIT,dayStartMs:start};};
  return {availability,setAvailability,discover,today};
 };
 module.exports={createHostConnect,LIMIT};
