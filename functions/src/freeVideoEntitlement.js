@@ -15,10 +15,11 @@ const selectFreeVideoAllowance = ({ dailyEligible, rewards, config }) => {
 // reads before debiting. Call lock serializes sessions; the consumed counter
 // makes repeated synchronization/end requests debit each second at most once.
 const prepareFreeVideoConsumption = async ({ tx, db, FieldValue, callRef, call, nowMs }) => {
-  if (call.freeVideoSource !== 'consumer_rewards' || call.status !== 'connected') return () => {};
+  if (!['consumer_rewards','quick_match_intro_plus_rewards'].includes(call.freeVideoSource) || call.status !== 'connected') return () => {};
   const consumed = E.nonnegativeInteger(call.freeVideoConsumedSeconds ?? 0);
-  const elapsed = Math.min(E.nonnegativeInteger(call.freeVideoAllowanceSeconds),
-    Math.max(0, Math.floor((nowMs - call.connectedAtMs) / 1000)));
+  const intro=call.source==='quick_match'?(call.quickMatchIntroSeconds||20):0;
+  const elapsed = Math.min(E.nonnegativeInteger(call.freeVideoRewardSeconds ?? call.freeVideoAllowanceSeconds),
+    Math.max(0, Math.floor((nowMs - call.connectedAtMs) / 1000)-intro));
   const delta = Math.max(0, elapsed - consumed);
   if (!delta) return () => {};
   const rewardRef = db.doc(`consumerRewards/${call.callerId}`), rewardSnap = await tx.get(rewardRef);

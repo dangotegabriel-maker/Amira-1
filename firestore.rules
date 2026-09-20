@@ -165,6 +165,12 @@ service cloud.firestore {
       allow write: if false;
       match /purchases/{purchaseId} { allow read: if owns(uid); allow write: if false; }
     }
+    match /quickMatchConfig/{documentId} { allow read, write: if false; }
+    match /quickMatchActive/{uid} { allow read, write: if false; }
+    match /quickMatchRequests/{uid} {
+      allow read, write: if false;
+      match /requests/{requestId} { allow read, write: if false; }
+    }
     match /hostGiftAggregates/{hostUid} {
       allow read, write: if false;
       match /types/{giftId} { allow read, write: if false; }

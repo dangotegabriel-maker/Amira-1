@@ -20,6 +20,8 @@ jest.mock('../../../services/callService',()=>({callService:{}}));
 jest.mock('../../../services/hostConnectService',()=>({hostConnectService:{availability:async()=>({availability:'offline',canToggle:true}),today:async()=>({visitors:0})}}));
 jest.mock('../../../services/discoveryService',()=>({discoveryService:{getConsumersForHosts:async()=>[mockTarget]}}));
 jest.mock('../../../components/IncomingCallCard',()=>()=>null);
+jest.mock('../../../services/quickMatchService',()=>({quickMatchService:{offer:async()=>({offer:null}),respond:jest.fn()}}));
+jest.mock('../../../components/QuickMatchOfferCard',()=>()=>null);
 jest.mock('../../../components/ReportUserModal',()=>()=>null);
 jest.mock('../../../components/GiftTray',()=>()=>null);
 jest.mock('../../../services/giftService',()=>({giftService:{publicHostGifts:async()=>({gifts:[]})}}));

@@ -11,6 +11,8 @@ jest.mock('../../../services/discoveryService',()=>({discoveryService:mockDiscov
 jest.mock('../../../services/profileViewService',()=>({profileViewService:{track:mockTrack}}));
 jest.mock('../../../services/callService',()=>({callService:{subscribeIncoming:()=>()=>{}}}));
 jest.mock('../../../components/IncomingCallCard',()=>()=>null);
+jest.mock('../../../services/quickMatchService',()=>({quickMatchService:{offer:async()=>({offer:null}),respond:jest.fn()}}));
+jest.mock('../../../components/QuickMatchOfferCard',()=>()=>null);
 const Connect=require('../HostDashboardScreen').default;
 const flush=async()=>act(async()=>{for(let i=0;i<12;i++)await Promise.resolve();});
 beforeEach(()=>{jest.clearAllMocks();mockUser={uid:'h',username:'Actual Host',hostStatus:{isApproved:true,availability:'offline'}};mockConnect.availability.mockResolvedValue({availability:'offline',canToggle:true});mockConnect.today.mockResolvedValue({visitors:0});mockConnect.setAvailability.mockResolvedValue({availability:'online',canToggle:true});mockDiscovery.getConsumersForHosts.mockResolvedValue([{uid:'c',username:'Actual Consumer',profilePic:'https://example.test/real.jpg',countryCode:'GH',age:null}]);mockDiscovery.getFollowingConsumers.mockResolvedValue([]);});

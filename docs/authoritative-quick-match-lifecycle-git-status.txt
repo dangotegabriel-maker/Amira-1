@@ -1,0 +1,49 @@
+AMIRA CHECKPOINT 13 - AUTHORITATIVE QUICK MATCH + MATCH RESERVATION LIFECYCLE
+Captured before staging/commit: 2026-09-20 UTC
+
+Branch: amira-v2
+HEAD: 42dc875
+Required baseline: 42dc875
+
+Staged files: none
+Commits created: none
+Pushes: none
+Deployments: none
+Production mutations: none
+
+Modified tracked files:
+firestore.rules
+functions/src/callRecovery.js
+functions/src/freeVideoEntitlement.js
+functions/src/index.js
+src/screens/host/HostDashboardScreen.js
+src/screens/host/__tests__/hostConnectUi.test.js
+src/screens/main/MatchScreen.js
+src/screens/main/__tests__/consumerLevelVisibility.test.js
+src/screens/main/__tests__/discoveryProfileUi.test.js
+
+New untracked files:
+docs/authoritative-quick-match-lifecycle-report.md
+docs/authoritative-quick-match-lifecycle-git-status.txt
+functions/src/__tests__/quickMatchDomain.test.js
+functions/src/quickMatchDomain.js
+functions/src/quickMatchService.js
+src/components/QuickMatchOfferCard.js
+src/services/__tests__/quickMatchLifecycle.emulator.cjs
+src/services/quickMatchService.js
+
+Deleted files: none
+
+Tracked diff summary before documentation/new files are tracked:
+9 files changed, 56 insertions(+), 10 deletions(-)
+
+Validation:
+- Root Jest: 63 suites, 616 tests passed
+- Functions Jest: 15 suites, 349 tests passed
+- Quick Match domain: 20 tests passed
+- Quick Match emulator/security: 56 checks passed after final edge-case fixes
+- All 17 emulator scripts: passed; 758 numbered checks plus follow-rules assertions (Quick Match affected suite rerun; other isolated results unchanged)
+- Babel/static parse: 253 files passed
+- git diff --check: passed
+
+This is intentionally an unstaged working-tree snapshot. Untracked files do not appear in git diff --stat until staged, and staging is prohibited.

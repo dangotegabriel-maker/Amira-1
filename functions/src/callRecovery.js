@@ -70,8 +70,11 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
         ...call.participantIds.map((id) => connection.participants[id].lastSeenAtMs)) + A.CONNECTION_LEASE_MS;
     }
     if (connection) call = { ...call, connection };
-    const freeUsed = connection ? Math.min(call.freeVideoAllowanceSeconds || 0, Math.floor(connection.freeMs / 1000)) : call.freeVideoConsumedSeconds || 0;
-    if (call.billingMode === 'preview' && freeUsed >= (call.freeVideoAllowanceSeconds || 0)) {
+    const introSeconds=call.source==='quick_match'?(call.quickMatchIntroSeconds||20):0;
+    const previewUsed=connection?Math.floor(connection.freeMs/1000):0;
+    const freeUsed = connection ? Math.min(call.freeVideoRewardSeconds ?? call.freeVideoAllowanceSeconds ?? 0,
+      Math.max(0,previewUsed-introSeconds)) : call.freeVideoConsumedSeconds || 0;
+    if (call.billingMode === 'preview' && previewUsed >= (call.freeVideoAllowanceSeconds || 0)) {
       call = { ...call, billingMode: 'awaiting_paid_confirmation', paymentDecisionDeadlineMs: now + D.PAID_DECISION_SECONDS * 1000 };
     }
     if (call.billingMode === 'awaiting_paid_confirmation' && now >= call.paymentDecisionDeadlineMs) {
@@ -86,6 +89,8 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
       tx.get(consumerRef), tx.get(hostRef), tx.get(rewardRef), tx.get(db.doc('economyConfig/current')),
       tx.get(hostMoneyRef), tx.get(platformRef), ...locks.map((lock) => tx.get(lock)),
     ]);
+    const quickRef=call.source==='quick_match'?db.doc(`quickMatchRequests/${call.callerId}/requests/${call.quickMatchRequestId}`):null;
+    const quickSnap=quickRef?await tx.get(quickRef):null;
     if (action === 'confirm' && !ending) {
       if (uid !== call.callerId || !isConsumer(consumer.data()) || !isApprovedHost(host.data())
         || host.data()?.hostStatus?.isApproved !== true || call.participantIds.length !== 2 || !call.participantIds.includes(call.receiverId))
@@ -128,7 +133,7 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
         billingIncrement: n }]); balance -= credit; count = n;
     }
     const deltaFree = Math.max(0, freeUsed - (call.freeVideoConsumedSeconds || 0));
-    if (call.freeVideoSource === 'consumer_rewards' && deltaFree) {
+    if (['consumer_rewards','quick_match_intro_plus_rewards'].includes(call.freeVideoSource) && deltaFree) {
       const seconds = reward.data()?.freeVideoSeconds || 0;
       if (seconds < deltaFree) throw new HttpsError('failed-precondition', 'Free video balance is inconsistent.');
       tx.update(rewardRef, { freeVideoSeconds: seconds - deltaFree, updatedAt: FieldValue.serverTimestamp() });
@@ -154,7 +159,16 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
       tx.set(db.doc(`callHistory/${callId}`), { callId, participantIds: call.participantIds, callerId: call.callerId,
         receiverId: call.receiverId, createdAt: call.createdAt, connectedAt: call.connectedAt || null,
         endedAt: call.endedAt, durationSeconds: call.durationSeconds, paidDurationSeconds: call.paidDurationSeconds,
-        billedCredits: call.billedCredits, ratePerMinute: call.ratePerMinute, status: call.status, endReason: reason });
+        billedCredits: call.billedCredits, ratePerMinute: call.ratePerMinute, status: call.status, endReason: reason,
+        source: call.source || 'direct' });
+      if(quickSnap?.exists){
+        if(quickSnap.data().fundingStatus==='reserved'){
+          const Q=require('./quickMatchDomain'),released=Q.release(reward.data());
+          tx.update(rewardRef,{...released,updatedAt:FieldValue.serverTimestamp()});
+          tx.update(quickRef,{status:'connection_failed',fundingStatus:'released',endedAt:FieldValue.serverTimestamp(),endReason:reason});
+        }else if(quickSnap.data().fundingStatus==='consumed')tx.update(quickRef,{status:'completed',endedAt:FieldValue.serverTimestamp(),endReason:reason});
+        tx.delete(db.doc(`quickMatchActive/${call.callerId}`));
+      }
       lockSnaps.forEach((lock, i) => { if (lock.data()?.callId === callId) tx.delete(locks[i]); });
       const hostIndex = call.participantIds.indexOf(call.receiverId);
       if (host.exists && host.data().hostStatus?.availability === 'busy'

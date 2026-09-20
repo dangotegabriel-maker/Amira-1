@@ -12,6 +12,7 @@ jest.mock('../../../services/discoveryService',()=>({discoveryService:mockDiscov
 jest.mock('../../../services/hostActivityService',()=>({hostActivityService:{}}));
 jest.mock('../../../services/hostProfileService',()=>({hostProfileService:mockProfile}));
 jest.mock('../../../services/callNavigationService',()=>({startVideoCall:mockCall}));
+jest.mock('../../../services/quickMatchService',()=>({quickMatchService:{start:jest.fn(),cancel:jest.fn()}}));
 jest.mock('../../../services/firebaseService',()=>({dbService:{}}));
 jest.mock('../../../services/followService',()=>({canFollowProfile:()=>true,followService:mockFollow}));
 jest.mock('../../../services/blockService',()=>({blockService:{getRelationship:async()=>({blocked:false}),block:async()=>{}}}));
