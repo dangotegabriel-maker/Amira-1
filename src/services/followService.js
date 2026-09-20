@@ -60,6 +60,7 @@ export const followService = {
         blockedByMe:state.blockedByMe, blockedMe:state.blockedMe, valid:state.valid === true};
       value.label = resolveFollowLabel(value);
       onValue(value);
+      if (value.label !== 'Friends') synced = false;
       if (value.label === 'Friends' && !synced) {
         synced = true;
         Promise.resolve().then(() => require('./socialBackend').invokeSocial('syncFriendship', {targetUid:targetId}))

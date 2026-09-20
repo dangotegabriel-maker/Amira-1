@@ -9,6 +9,13 @@ const validFollow = (a, b, data, aUid, bUid) => Boolean(data && (
   || (M.approvedHost(a) && isConsumer(b) && data.sourceId === aUid && data.targetId === bUid && data.sourceRole === 'host' && data.targetRole === 'consumer')
 ));
 const summary = (uid, profile) => ({ uid, username: profile.username || '', profilePic: profile.profilePic || '', role: accountRole(profile) });
+const followIncarnation = (snapshot) => {
+  const value = snapshot?.data()?.createdAt;
+  if (value && Number.isInteger(value.seconds) && Number.isInteger(value.nanoseconds)) return `${value.seconds}.${value.nanoseconds}`;
+  if (value && typeof value.toMillis === 'function') return String(value.toMillis());
+  if (value instanceof Date) return String(value.getTime());
+  return null;
+};
 const createSocialMessaging = ({ db, FieldValue, HttpsError, now: clock = () => Date.now() }) => {
   const id = (value) => {
     if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value)) throw new HttpsError('invalid-argument', 'Invalid identifier.');
@@ -148,24 +155,42 @@ const createSocialMessaging = ({ db, FieldValue, HttpsError, now: clock = () => 
   const syncFriendship = async (a, b) => {
     const participants = pair(a, b), conversationId = participants.join('__'), friendshipId = M.eventId('friendship', participants);
     return db.runTransaction(async (tx) => {
-      const profiles = await readPair(tx, ...participants);
-      const [first, second, event, config, conversation] = await Promise.all([
+      const [profileA, profileB, blocked, reverseBlocked, first, second, event, config, conversation] = await Promise.all([
+        tx.get(db.doc(`users/${participants[0]}`)), tx.get(db.doc(`users/${participants[1]}`)),
+        tx.get(db.doc(`users/${participants[0]}/blocked/${participants[1]}`)), tx.get(db.doc(`users/${participants[1]}/blocked/${participants[0]}`)),
         tx.get(db.doc(`users/${participants[0]}/following/${participants[1]}`)),
         tx.get(db.doc(`users/${participants[1]}/following/${participants[0]}`)),
         tx.get(db.doc(`friendships/${friendshipId}`)), tx.get(db.doc('economyConfig/current')),
         tx.get(db.doc(`conversations/${conversationId}`)),
       ]);
-      const mutual = validFollow(profiles[0], profiles[1], first.data(), ...participants)
+      const profiles = [profileA.data(), profileB.data()];
+      const mutual = profileA.exists && profileB.exists && !blocked.exists && !reverseBlocked.exists
+        && validFollow(profiles[0], profiles[1], first.data(), ...participants)
         && validFollow(profiles[1], profiles[0], second.data(), participants[1], participants[0]);
-      if (!mutual || event.exists) return { friends: mutual, created: false };
+      const state = event.data();
+      if (!mutual) {
+        if (event.exists && state.active !== false) tx.set(db.doc(`friendships/${friendshipId}`), { active: false, endedAt: FieldValue.serverTimestamp() }, { merge: true });
+        return { friends: false, created: false };
+      }
+      const incarnations = [followIncarnation(first), followIncarnation(second)];
+      const activationKey = incarnations.every(Boolean) ? incarnations.join('__') : null;
+      // Existing records predate transition tracking. Adopt their current mutual
+      // follows without replaying the historical event or one-time grant.
+      if (event.exists && state.active !== false && (!state.activationKey || state.activationKey === activationKey)) {
+        if (!state.activationKey && activationKey) tx.set(db.doc(`friendships/${friendshipId}`), { active: true, activationKey }, { merge: true });
+        return { friends: true, created: false };
+      }
       validateConversation(conversation.data(), participants);
       const policy = M.messagePolicy(config.data());
-      const grants = await Promise.all(participants.map((uid) => M.prepareMessageGrant({ tx, db, FieldValue, uid,
+      const grants = event.exists ? [] : await Promise.all(participants.map((uid) => M.prepareMessageGrant({ tx, db, FieldValue, uid,
         amount: policy.friendshipMessages, source: 'friendship', sourceId: friendshipId, policyVersion: policy.version })));
-      const now = FieldValue.serverTimestamp(), messageId = `friendship_${friendshipId}`;
-      const message = { type: 'friendship_created', text: 'You are now friends 🎉', createdAt: now, senderId: null };
+      const transitionCount = event.exists ? (Number.isSafeInteger(state.transitionCount) ? state.transitionCount : 1) + 1 : 1;
+      const now = FieldValue.serverTimestamp(), messageId = `friendship_${friendshipId}_${transitionCount}`;
+      const message = { type: 'friendship_created', text: "You're now Friends 🤝", createdAt: now, senderId: null };
       grants.forEach((grant) => grant());
-      tx.create(db.doc(`friendships/${friendshipId}`), { participantIds: participants, conversationId, messageId, createdAt: now, policyVersion: policy.version });
+      const friendship = { participantIds: participants, conversationId, messageId, active: true, activationKey, transitionCount, activatedAt: now, updatedAt: now, policyVersion: policy.version };
+      if (event.exists) tx.set(db.doc(`friendships/${friendshipId}`), friendship, { merge: true });
+      else tx.create(db.doc(`friendships/${friendshipId}`), { ...friendship, createdAt: now });
       tx.create(db.doc(`conversations/${conversationId}/messages/${messageId}`), { ...message, id: messageId, conversationId, participantIds: participants, status: 'sent' });
       tx.set(db.doc(`conversations/${conversationId}`), conversationPatch(conversation.data(), participants, profiles, message, now));
       return { friends: true, created: true };

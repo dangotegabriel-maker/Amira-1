@@ -54,13 +54,15 @@ async function main(){
  await denied(setDoc(doc(c,'conversations/c__h/messages/fake'),{type:'friendship_created'}));
  await deleteDoc(doc(h,'users/h/following/c')); check((await api.syncFriendship('c','h')).friends,false);
  await setDoc(doc(h,'users/h/following/c'),{sourceId:'h',targetId:'c',sourceRole:'host',targetRole:'consumer',createdAt:serverTimestamp()});
- await api.syncFriendship('c','h'); check((await read('consumerRewards/c')).freeMessages,5);
+ await Promise.all([api.syncFriendship('c','h'),api.syncFriendship('h','c')]); check((await read('consumerRewards/c')).freeMessages,5);
+ check((await db.collection('conversations/c__h/messages').get()).size,2);
+ check((await read(`friendships/${require('../../../functions/src/messageEntitlements').eventId('friendship',['c','h'])}`)).transitionCount,2);
  // End friendship to exercise non-friend windows.
  await deleteDoc(doc(h,'users/h/following/c'));
  // Real transactions race on one reward balance and deterministic message ID.
  const send={receiverId:'h',messageId:'retry',text:'Hello'};
  await Promise.all([api.sendText('c',send),api.sendText('c',send)]);check((await read('consumerRewards/c')).freeMessages,4);
- const messages=await getDocs(collection(h,'conversations/c__h/messages'));check(messages.size,2);
+ const messages=await getDocs(collection(h,'conversations/c__h/messages'));check(messages.size,3);
  await denied(setDoc(doc(c,'conversations/c__h/messages/forged'),{id:'forged',conversationId:'c__h',senderId:'c',receiverId:'h',type:'text',status:'sent',text:'bypass',createdAt:serverTimestamp()}));
  await denied(setDoc(doc(c,'conversations/c__h2'),{participantIds:['c','h2']}));
  await denied(updateDoc(doc(c,'consumerRewards/c'),{freeMessages:999}));
@@ -84,7 +86,7 @@ async function main(){
  await runTransaction(other,async(tx)=>{const r=doc(other,'conversations/c__h2');await tx.get(r);tx.update(r,{'unreadCounts.h2':0,'lastReadAt.h2':serverTimestamp(),updatedAt:serverTimestamp()});});checks++;
  await setDoc(doc(c,'users/c/blocked/h'),{blockedUid:'h',createdAt:serverTimestamp()});
  await denied(api.sendText('h',{receiverId:'c',messageId:'blocked',text:'Blocked'}));
- await denied(api.syncFriendship('c','h'));check((await read('consumerRewards/c')).freeMessages,2);
+ check(await api.syncFriendship('c','h'),{friends:false,created:false});check((await read('consumerRewards/c')).freeMessages,2);
  // Forged window access and reputation writes are forbidden.
  await denied(updateDoc(doc(c,'consumerRewards/c/chatWindows/c__h2'),{expiresAt:new Date(Date.now()+999999999)}));
  await denied(setDoc(doc(c,'consumerRewards/c/chatWindows/fake'),{expiresAt:new Date(Date.now()+999999999)}));

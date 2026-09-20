@@ -40,8 +40,8 @@ const host = { role: 'host', isProfileComplete: true, hostStatus: { isApproved: 
 const balance = (uid='c') => docs.get(`consumerRewards/${uid}`)?.freeMessages;
 const matching = (part) => [...docs.keys()].filter(k => k.includes(part));
 const send = (uid='c', messageId='one', text='Hello') => api.sendText(uid,{ receiverId: uid==='h'?'c':'h', messageId, text });
-const follow = () => docs.set('users/c/following/h', { consumerId:'c',hostId:'h' });
-const mutual = () => { follow(); docs.set('users/h/following/c',{ sourceId:'h',targetId:'c',sourceRole:'host',targetRole:'consumer' }); };
+const follow = () => docs.set('users/c/following/h', { consumerId:'c',hostId:'h',createdAt:new Date(Date.now()) });
+const mutual = () => { follow(); docs.set('users/h/following/c',{ sourceId:'h',targetId:'c',sourceRole:'host',targetRole:'consumer',createdAt:new Date(Date.now()) }); };
 beforeEach(() => {
  jest.useFakeTimers().setSystemTime(new Date('2026-09-11T12:00:00Z')); docs.clear(); queue=Promise.resolve();
  docs.set('users/c',clone(consumer)); docs.set('users/h',clone(host)); docs.set('users/h2',clone(host)); docs.set('users/c2',clone(consumer));
@@ -87,14 +87,16 @@ test('one-way follow is not friends; reciprocal creates event and consumer grant
  expect(docs.get(matching('/messages/')[0])).toMatchObject({type:'friendship_created',senderId:null});
  expect(docs.get(matching('/messageTransactions/')[0])).toMatchObject({source:'friendship',delta:5});
 });
-test('concurrent friendship retries, unfollow/refollow never regrant or recreate history',async()=>{
+test('concurrent retries create one event; unfollow/refollow creates a new transition without regranting',async()=>{
  mutual(); await Promise.all([api.syncFriendship('c','h'),api.syncFriendship('h','c')]);
  docs.delete('users/h/following/c'); expect((await api.syncFriendship('c','h')).friends).toBe(false);
- mutual(); await api.syncFriendship('c','h'); expect(balance()).toBe(8); expect(matching('/messages/')).toHaveLength(1);
+ jest.advanceTimersByTime(1); mutual(); await Promise.all([api.syncFriendship('c','h'),api.syncFriendship('h','c')]);
+ expect(balance()).toBe(8); expect(matching('/messages/')).toHaveLength(2);
+ expect(docs.get(matching('friendships/')[0])).toMatchObject({active:true,transitionCount:2});
 });
 test('blocked or forged unsupported mutual relationship cannot create friendship',async()=>{
  mutual(); docs.set('users/c/blocked/h',{});
- await expect(api.syncFriendship('c','h')).rejects.toMatchObject({code:'permission-denied'});
+ expect(await api.syncFriendship('c','h')).toEqual({friends:false,created:false});
  docs.delete('users/c/blocked/h'); docs.set('users/h',clone(consumer));
  expect((await api.syncFriendship('c','h')).friends).toBe(false); expect(balance()).toBe(3);
 });
