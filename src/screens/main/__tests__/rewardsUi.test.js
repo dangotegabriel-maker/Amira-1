@@ -5,6 +5,7 @@ jest.setTimeout(30000);
 let mockUser, mockRewardsListener;
 const mockIdentityEnsure=jest.fn();
 const mockRewards = { getDashboard: jest.fn(), claimDailyCheckIn: jest.fn(),
+  getTasks: jest.fn(), claimTask: jest.fn(),
   subscribe: jest.fn((listener) => { mockRewardsListener = listener; return () => {}; }) };
 jest.mock('../../../context/UserContext', () => ({ useUser: () => ({ user: mockUser }) }));
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
@@ -26,6 +27,7 @@ beforeEach(() => {
   mockIdentityEnsure.mockResolvedValue({amiraId:null});
   jest.clearAllMocks(); jest.useFakeTimers(); mockUser = { uid: 'c', role: 'consumer' };
   mockRewards.getDashboard.mockResolvedValue(dashboard());
+  mockRewards.getTasks.mockResolvedValue({configAvailable:false,gettingStarted:[],daily:[]});
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
 afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
@@ -102,5 +104,6 @@ test.each([false,true])('My Level profile entry remains Consumer-only, approved=
  expect(Boolean(screen.queryByText('My Level'))).toBe(!approved);if(!approved){fireEvent.press(screen.getByText('My Level'));expect(navigation.navigate).toHaveBeenCalledWith('MyLevel');expect(screen.getByText('Rewards & Tasks')).toBeTruthy();}screen.unmount();
 });
 test('Rewards shows no obsolete Gift tile or claim copy and explains UTC resets',async()=>{const next=dashboard();next.schedule[3]={};mockRewards.getDashboard.mockResolvedValue(next);const screen=render(<RewardsScreen/>);await flush();expect(screen.queryByText(/promotional gift/i)).toBeNull();expect(screen.getByText(/Missing a UTC day resets/)).toBeTruthy();expect(screen.getByText('Check-in only')).toBeTruthy();screen.unmount();});
+test('task sections fail closed without config and claim only server-claimable definitions',async()=>{mockRewards.getTasks.mockResolvedValue({configAvailable:true,gettingStarted:[{id:'bio',scope:'getting_started',title:'Add a bio',description:'Tell Hosts about yourself.',progress:1,target:1,claimable:true,claimed:false,reward:{type:'FREE_MESSAGES',amount:2,description:'2 Chat Passes'}}],daily:[]});mockRewards.claimTask.mockResolvedValue({claimed:true,idempotent:false});const screen=render(<RewardsScreen/>);await flush();expect(screen.getByText('Getting Started')).toBeTruthy();expect(screen.getByText('Daily Tasks')).toBeTruthy();expect(screen.getAllByText(/2 Chat Passes/).length).toBeGreaterThan(0);fireEvent.press(screen.getByText('Claim'));await flush();expect(mockRewards.claimTask).toHaveBeenCalledWith('getting_started','bio');screen.unmount();});
 
 test.each([false,true])('own Consumer/Host full account profile displays ensured public identity, never UID: %p',async approved=>{mockUser={uid:'internal-private-uid',username:'Actual account',hostStatus:{isApproved:approved}};mockIdentityEnsure.mockResolvedValue({amiraId:'AMR-583921'});const screen=render(<MyProfileScreen navigation={{}}/>);await flush();expect(screen.getByText('AMR-583921')).toBeTruthy();expect(screen.getByLabelText('Copy Amira ID')).toBeTruthy();expect(screen.queryByText('internal-private-uid')).toBeNull();screen.unmount();});

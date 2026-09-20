@@ -3,6 +3,7 @@ const {isConsumer, accountRole}=require('./accountRole');
 const M = require('./messageEntitlements');
 const C = require('./creditDomain');
 const { nonnegativeInteger } = require('./economyDomain');
+const rewardEvidence=require('./rewardEvidence');
 const validFollow = (a, b, data, aUid, bUid) => Boolean(data && (
   (isConsumer(a) && M.approvedHost(b) && data.consumerId === aUid && data.hostId === bUid)
   || (M.approvedHost(a) && isConsumer(b) && data.sourceId === aUid && data.targetId === bUid && data.sourceRole === 'host' && data.targetRole === 'consumer')
@@ -122,6 +123,7 @@ const createSocialMessaging = ({ db, FieldValue, HttpsError, now: clock = () => 
       }
       const message = { text, senderId: uid, type: 'text', createdAt: now };
       tx.create(messageRef, { ...message, id: messageId, conversationId, receiverId, status: 'sent' });
+      if(senderConsumer)rewardEvidence.record(tx,db,FieldValue,{consumerUid:uid,criterion:'SEND_ELIGIBLE_MESSAGE',eventId:messageId,occurredAtMs:serverNowMs,metadata:{hostUid:receiverId,messageId}});
       tx.set(conversationRef, conversationPatch(conversation.data(), participants, profiles, message, now, uid));
       return { conversationId, messageId, idempotent: false, windowOpened: decision.consume === 1||Boolean(paid),accessSource:paid?'paid':decision.source,chargedCredits:paid?.price||0 };
     });

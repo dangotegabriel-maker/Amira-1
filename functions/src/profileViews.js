@@ -2,6 +2,7 @@
 const {isConsumer,isApprovedHost}=require('./accountRole');
 const D=require('./hostActivityDomain');
 const V=require('./vipDomain');
+const rewardEvidence=require('./rewardEvidence');
 const createProfileViews=({db,FieldValue,HttpsError,clock=()=>Date.now()})=>{
  const id=value=>{if(!D.validId(value))throw new HttpsError('invalid-argument','Invalid profile.');return value;};
  const track=async(viewerUid,ownerUid)=>{
@@ -16,6 +17,7 @@ const createProfileViews=({db,FieldValue,HttpsError,clock=()=>Date.now()})=>{
    if(verified&&nowMs-D.timestampMs(record.lastViewedAt)<D.VIEW_DEDUP_MS)return {counted:false};
    const now=FieldValue.serverTimestamp();
    tx.set(db.doc(`users/${ownerUid}/profileViews/${viewerUid}`),{viewerUid,ownerUid,direction,profileViewVersion:1,firstViewedAt:verified&&D.validTime(record.firstViewedAt,nowMs)!==null?record.firstViewedAt:now,lastViewedAt:now,viewCount:verified&&Number.isSafeInteger(record.viewCount)&&record.viewCount>0&&record.viewCount<Number.MAX_SAFE_INTEGER?record.viewCount+1:1});
+   if(direction==='consumer_to_host')rewardEvidence.record(tx,db,FieldValue,{consumerUid:viewerUid,criterion:'VIEW_HOST_PROFILE',eventId:`${ownerUid}_${Math.floor(nowMs/D.VIEW_DEDUP_MS)}`,occurredAtMs:nowMs,metadata:{hostUid:ownerUid}});
    if(!previous.exists)tx.update(db.doc(`users/${ownerUid}`),{'profileViewStats.recentCount':(owner.data().profileViewStats?.recentCount||0)+1});
    return {counted:true};
   });

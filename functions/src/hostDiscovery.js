@@ -1,6 +1,7 @@
 'use strict';
 const {isConsumer,isApprovedHost}=require('./accountRole');
 const {projectHost}=require('./hostDiscoveryDomain');
+const rewardEvidence=require('./rewardEvidence');
 const CANDIDATE_LIMIT=60;
 const createHostDiscovery=({db,FieldValue,HttpsError})=>{
  const identifier=value=>{if(typeof value!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(value))throw new HttpsError('invalid-argument','Invalid profile.');return value;};
@@ -39,7 +40,7 @@ const createHostDiscovery=({db,FieldValue,HttpsError})=>{
   return db.runTransaction(async tx=>{
    const snaps=await pairReads(tx,uid,target);eligiblePair(snaps);
    const ref=db.doc(`users/${target}/likes/${uid}`),existing=await tx.get(ref);
-   if(input.liked&&!existing.exists)tx.create(ref,{consumerId:uid,hostId:target,createdAt:FieldValue.serverTimestamp()});
+   if(input.liked&&!existing.exists){tx.create(ref,{consumerId:uid,hostId:target,createdAt:FieldValue.serverTimestamp()});rewardEvidence.record(tx,db,FieldValue,{consumerUid:uid,criterion:'LIKE_HOST',eventId:target,metadata:{hostUid:target}});}
    if(!input.liked&&existing.exists)tx.delete(ref);
    return {liked:input.liked,idempotent:existing.exists===input.liked};
   });

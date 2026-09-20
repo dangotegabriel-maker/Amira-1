@@ -21,6 +21,8 @@ const RewardsScreen = () => {
   const [error, setError] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [tasks, setTasks] = useState(null);
+  const [taskClaiming, setTaskClaiming] = useState('');
   const consumer = isConsumer(user);
 
   useEffect(() => {
@@ -29,9 +31,9 @@ const RewardsScreen = () => {
     setDashboard(null); setRewards(null); setError('');
     const load = async () => {
       try {
-        const next = await rewardsService.getDashboard();
+        const [next, taskState] = await Promise.all([rewardsService.getDashboard(), rewardsService.getTasks()]);
         if (!active) return;
-        setDashboard(next); setError('');
+        setDashboard(next); setTasks(taskState); setError('');
         // UI refresh only. Claim eligibility always uses the backend's UTC date.
         const nextMidnight = (Math.floor(next.serverNowMs / 86400000) + 1) * 86400000;
         midnightTimer = setTimeout(load, Math.max(250, nextMidnight - next.serverNowMs + 250));
@@ -59,6 +61,19 @@ const RewardsScreen = () => {
     } catch (failure) { Alert.alert('Unable to claim reward', failure.message || 'Please try again.'); }
     finally { setClaiming(false); }
   };
+  const claimTask = async (task) => {
+    const key=`${task.scope}:${task.id}`;if(taskClaiming||!task.claimable)return;
+    setTaskClaiming(key);try{const result=await rewardsService.claimTask(task.scope,task.id);setTasks(await rewardsService.getTasks());Alert.alert(result.idempotent?'Already claimed':'Reward claimed',task.reward.description);}catch(failure){Alert.alert('Unable to claim reward',failure.message||'Please try again.');}finally{setTaskClaiming('');}
+  };
+  const taskSection=(title,items,empty)=> <View style={styles.card}>
+    <Text style={styles.heading}>{title}</Text>
+    {!items?.length?<Text style={styles.body}>{empty}</Text>:items.map(task=><View key={`${task.scope}:${task.id}`} style={styles.task}>
+      <Text style={styles.taskTitle}>{task.title}</Text><Text style={styles.body}>{task.description}</Text>
+      <Text style={styles.note}>{task.progress} of {task.target} complete · {task.reward.description}</Text>
+      <Text style={styles.status}>{task.claimed?'Claimed':task.claimable?'Ready to claim':'In progress'}</Text>
+      {task.claimable&&!task.claimed&&<TouchableOpacity style={styles.taskClaim} onPress={()=>claimTask(task)} disabled={!!taskClaiming}><Text style={styles.claimText}>{taskClaiming===`${task.scope}:${task.id}`?'Claiming…':'Claim'}</Text></TouchableOpacity>}
+    </View>)}
+  </View>;
 
   return <ScrollView style={styles.container} contentContainerStyle={styles.content}>
     <Text style={styles.title}>Rewards &amp; Tasks</Text>
@@ -88,6 +103,8 @@ const RewardsScreen = () => {
           {claiming ? <ActivityIndicator color="white" /> : <Text style={styles.claimText}>Claim daily reward</Text>}
         </TouchableOpacity>}
       </View>
+      {taskSection('Getting Started',tasks?.gettingStarted,tasks?.configAvailable?'No Getting Started tasks are active.':'Getting Started rewards are unavailable right now.')}
+      {taskSection('Daily Tasks',tasks?.daily,tasks?.configAvailable?'No Daily Tasks are active today.':'Daily Task rewards are unavailable right now.')}
     </>}
   </ScrollView>;
 };
@@ -105,5 +122,7 @@ const styles = StyleSheet.create({
   selectedDay: { borderColor: COLORS.primary, backgroundColor: '#FFF1F4' }, dayTitle: { color: COLORS.text, fontWeight: '800' },
   claim: { backgroundColor: COLORS.primary, borderRadius: 24, minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   claimText: { color: 'white', fontWeight: '800' }, link: { color: COLORS.primary, fontWeight: '800', marginTop: 12 },
+  task: { borderTopWidth: 1, borderTopColor: '#E9E9ED', paddingTop: 14, marginTop: 14 }, taskTitle: { color: COLORS.text, fontWeight: '800', fontSize: 16 },
+  status: { color: COLORS.primary, fontWeight: '700', marginTop: 8 }, taskClaim: { backgroundColor: COLORS.primary, borderRadius: 20, alignSelf: 'flex-start', paddingHorizontal: 22, paddingVertical: 10, marginTop: 10 },
 });
 export default RewardsScreen;

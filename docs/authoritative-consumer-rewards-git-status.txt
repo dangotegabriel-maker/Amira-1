@@ -1,0 +1,40 @@
+AMIRA CHECKPOINT 17 — AUTHORITATIVE CONSUMER REWARDS GIT STATUS
+Captured: 2026-09-20 UTC
+Branch: amira-v2
+HEAD: 896b29e9532e3c563e50e0c17d37f69f217fc0e3
+Baseline subject: feat: add authoritative Who Viewed Me VIP access
+
+STAGED FILES
+(none)
+
+UNSTAGED / UNTRACKED CHECKPOINT FILES
+ M firestore.rules
+ M functions/src/hostDiscovery.js
+ M functions/src/index.js
+ M functions/src/profileViews.js
+ M functions/src/socialMessaging.js
+ M src/screens/main/RewardsScreen.js
+ M src/screens/main/__tests__/rewardsUi.test.js
+ M src/services/rewardsService.js
+?? docs/authoritative-consumer-rewards-report.md
+?? docs/authoritative-consumer-rewards-git-status.txt
+?? functions/src/__tests__/rewardTaskDomain.test.js
+?? functions/src/consumerRewardTasks.js
+?? functions/src/rewardEvidence.js
+?? functions/src/rewardTaskDomain.js
+?? src/services/__tests__/consumerRewardTasks.emulator.cjs
+
+VALIDATION
+- Full root Jest: 65 suites / 661 tests passed.
+- Standalone Functions Jest: 17 suites / 393 tests passed.
+- Focused task domain: 22 tests passed.
+- Focused Rewards UI: 17 tests passed.
+- Consumer task emulator: 34 checks passed.
+- Complete emulator matrix: all 19 scripts completed assertions (16 on 8289, 3 on 8189).
+- Legacy 8189 test runner printed successful exit; Firebase CLI later returned a shutdown timeout.
+- Static parse: 262 JS/JSX/CJS and 4 JSON files passed.
+- git diff --check: passed (line-ending notices only).
+
+NO ACTIONS PERFORMED
+No deployment, staging, commit, push, production mutation, Storage enablement, billing enablement, or Paystack call.
+

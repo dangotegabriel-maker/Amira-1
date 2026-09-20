@@ -5,10 +5,12 @@ import { app, auth, db } from './firebaseService';
 import './callService';
 
 const functions = getFunctions(app, 'us-central1');
-const invoke = async (name) => (await httpsCallable(functions, name)({})).data;
+const invoke = async (name, data = {}) => (await httpsCallable(functions, name)(data)).data;
 export const rewardsService = {
   getDashboard: () => invoke('getConsumerRewards'),
   claimDailyCheckIn: () => invoke('claimDailyCheckIn'),
+  getTasks: () => invoke('getConsumerRewardTasks'),
+  claimTask: (scope, taskId) => invoke('claimConsumerRewardTask', { scope, taskId }),
   subscribe: (onValue, onError) => {
     const uid = auth.currentUser?.uid;
     if (!uid) return () => {};

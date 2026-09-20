@@ -195,6 +195,16 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+    match /consumerRewardConfig/{documentId} { allow read, write: if false; }
+    match /consumerRewardEvidence/{uid} {
+      allow read, write: if false;
+      match /events/{eventId} { allow read, write: if false; }
+    }
+    match /consumerRewardClaims/{claimId} {
+      allow read: if signedIn() && resource.data.consumerUid == request.auth.uid
+        && consumer(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
+      allow write: if false;
+    }
     match /hostReputation/{hostUid} {
       allow read: if signedIn();
       allow write: if false;
