@@ -15,6 +15,7 @@ jest.mock('../../../services/followService',()=>({canFollowProfile:()=>false,fol
 jest.mock('../../../services/blockService',()=>({blockService:{}}));
 jest.mock('../../../services/reportService',()=>({reportService:{}}));
 jest.mock('../../../services/callNavigationService',()=>({startVideoCall:jest.fn()}));
+jest.mock('../../../services/sponsoredInviteService',()=>({sponsoredInviteService:{send:jest.fn()}}));
 jest.mock('../../../components/ReportUserModal',()=>()=>null);
 jest.mock('../../../components/GiftTray',()=>()=>null);
 jest.mock('../../../services/giftService',()=>({giftService:{publicHostGifts:async()=>({gifts:[]})}}));

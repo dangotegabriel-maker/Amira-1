@@ -171,6 +171,8 @@ service cloud.firestore {
       allow read, write: if false;
       match /requests/{requestId} { allow read, write: if false; }
     }
+    match /sponsoredCallInvites/{inviteId} { allow read, write: if false; }
+    match /sponsoredInvitePairs/{pairId} { allow read, write: if false; }
     match /hostGiftAggregates/{hostUid} {
       allow read, write: if false;
       match /types/{giftId} { allow read, write: if false; }

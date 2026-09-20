@@ -23,6 +23,7 @@ import ReportUserModal from '../../components/ReportUserModal';
 import { startVideoCall } from '../../services/callNavigationService';
 import GiftTray from '../../components/GiftTray';
 import {giftService} from '../../services/giftService';
+import {sponsoredInviteService} from '../../services/sponsoredInviteService';
 
 const IntroVideo = ({ uri }) => {
   const player = useVideoPlayer(uri, (instance) => { instance.loop = true; });
@@ -57,6 +58,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   const [showReport, setShowReport] = useState(false);
   const [giftOpen,setGiftOpen]=useState(false),[publicGifts,setPublicGifts]=useState([]);
   const [blockState, setBlockState] = useState({ blockedByMe: false, blocked: false });
+  const [inviteBusy,setInviteBusy]=useState(false);
 
   useEffect(() => {
     if(!userId){setLoading(false);return undefined;}
@@ -115,6 +117,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   const rate=Number.isSafeInteger(host.hostProfile?.videoRateCredits)&&host.hostProfile.videoRateCredits>0?host.hostProfile.videoRateCredits:null;
   const available=!blockState.blocked&&host.hostStatus?.availability==='online'&&rate!==null;
   const message=()=>navigation.navigate('ChatDetail',{userId,name:host.username});
+  const invite=async()=>{if(inviteBusy||blockState.blocked)return;setInviteBusy(true);try{const value=await sponsoredInviteService.send(userId,'consumer_profile');Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer will review the call terms before accepting.`);}catch(e){Alert.alert('Unable to invite',e.message);}finally{setInviteBusy(false);}};
   return <View style={styles.container}>
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.hero}>
@@ -131,6 +134,7 @@ const UserProfileScreen = ({ route, navigation }) => {
       <View style={styles.actions}>
         {canFollowProfile(user, host) && !blockState.blocked && <TouchableOpacity style={[styles.action, following && styles.following]} onPress={toggleFollow} disabled={followBusy}>{following ? <UserMinus color={COLORS.primary} /> : <UserPlus color="white" />}<Text style={[styles.actionText, following && { color: COLORS.primary }]}>{host.isDemo ? (following ? 'Following' : 'Follow') : relationshipLabel}</Text></TouchableOpacity>}
         {!approvedHost&&<TouchableOpacity disabled={blockState.blocked} style={styles.smallAction} onPress={message}><MessageCircle color={COLORS.primary}/><Text style={styles.smallText}>Message</Text></TouchableOpacity>}
+        {!approvedHost&&isApprovedHost(user)&&<TouchableOpacity disabled={blockState.blocked||inviteBusy} style={styles.smallAction} onPress={invite}><Video color={COLORS.primary}/><Text style={styles.smallText}>{inviteBusy?'Inviting…':'Invite'}</Text></TouchableOpacity>}
       </View>
 
       {approvedHost&&<View style={styles.section}><Text style={styles.rate}>{rate===null?'Video rate unavailable':`${rate} Credits/min`}</Text><View style={{flexDirection:'row',justifyContent:'space-around',marginTop:15}}>{[['Followers','followers'],['Following','followingCount'],['Likes','likes']].map(([label,key])=><View key={key} style={{alignItems:'center'}}><Text>{socialError||!social?'Unavailable':social[key]}</Text><Text>{label}</Text></View>)}</View></View>}

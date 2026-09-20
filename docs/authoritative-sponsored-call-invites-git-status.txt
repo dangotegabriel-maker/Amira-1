@@ -1,0 +1,58 @@
+﻿Checkpoint 15 Git status snapshot
+Branch: amira-v2
+HEAD: 8ddfb12
+Index/staged diff: none
+
+Working tree:
+ M firestore.indexes.json
+ M firestore.rules
+ M functions/src/__tests__/callPaymentLifecycle.test.js
+ M functions/src/callRecovery.js
+ M functions/src/index.js
+ M src/screens/host/HostActivityScreen.js
+ M src/screens/host/__tests__/hostActivityUi.test.js
+ M src/screens/main/ChatDetailScreen.js
+ M src/screens/main/HomeScreen.js
+ M src/screens/main/UserProfileScreen.js
+ M src/screens/main/__tests__/consumerLevelVisibility.test.js
+ M src/screens/main/__tests__/discoveryProfileUi.test.js
+ M src/screens/main/__tests__/messageEntitlementUi.test.js
+ M src/screens/main/__tests__/profileViewTrackingUi.test.js
+ M src/services/__tests__/callRecoveryRules.emulator.cjs
+?? docs/authoritative-sponsored-call-invites-git-status.txt
+?? docs/authoritative-sponsored-call-invites-report.md
+?? functions/src/__tests__/sponsoredInviteDomain.test.js
+?? functions/src/sponsoredInviteDomain.js
+?? functions/src/sponsoredInviteService.js
+?? src/components/SponsoredCallInviteBanner.js
+?? src/services/__tests__/sponsoredInviteLifecycle.emulator.cjs
+?? src/services/sponsoredInviteService.js
+
+Tracked diff stat (untracked files are listed above but absent from this stat):
+ firestore.indexes.json                                |  8 ++++++++
+ firestore.rules                                       |  2 ++
+ functions/src/__tests__/callPaymentLifecycle.test.js  | 19 +++++++++++++++++++
+ functions/src/callRecovery.js                         |  7 ++++++-
+ functions/src/index.js                                |  8 +++++++-
+ src/screens/host/HostActivityScreen.js                | 11 +++++++----
+ src/screens/host/__tests__/hostActivityUi.test.js     |  6 ++++--
+ src/screens/main/ChatDetailScreen.js                  |  6 +++++-
+ src/screens/main/HomeScreen.js                        |  3 ++-
+ src/screens/main/UserProfileScreen.js                 |  4 ++++
+ .../main/__tests__/consumerLevelVisibility.test.js    |  1 +
+ src/screens/main/__tests__/discoveryProfileUi.test.js |  1 +
+ .../main/__tests__/messageEntitlementUi.test.js       |  3 ++-
+ .../main/__tests__/profileViewTrackingUi.test.js      |  1 +
+ src/services/__tests__/callRecoveryRules.emulator.cjs |  1 +
+ 15 files changed, 70 insertions(+), 11 deletions(-)
+
+Validation:
+- Root Jest: 64 suites / 638 tests passed
+- Functions Jest: 16 suites / 371 tests passed
+- Sponsored emulator: 28 checks passed
+- Emulator scripts: 18 / 18 passed on localhost demo projects
+- Babel/static parse: 259 files passed
+- Firestore index JSON: parsed successfully
+- git diff --check: passed
+- Physical validation: not performed
+- Deployment/staging/commit/push/production mutation: none

@@ -16,6 +16,14 @@
     { "collectionGroup": "calls", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "status", "order": "ASCENDING" },
       { "fieldPath": "expiresAtMs", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "sponsoredCallInvites", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "expiresAtMs", "order": "ASCENDING" }
+    ]},
+    { "collectionGroup": "sponsoredCallInvites", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "consumerUid", "order": "ASCENDING" },
+      { "fieldPath": "status", "order": "ASCENDING" }
     ]}
     ,{ "collectionGroup": "users", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "role", "order": "ASCENDING" },

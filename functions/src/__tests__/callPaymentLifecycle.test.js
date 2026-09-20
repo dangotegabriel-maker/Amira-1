@@ -124,6 +124,7 @@ const expirePreview = async (callId) => {
   await advanceTo(callData(callId).connectedAtMs + callData(callId).freeVideoAllowanceSeconds*1000);
   return invoke('syncVideoCallPaymentState','consumer',{callId});
 };
+const sponsoredInvite=async(id='invite_12345678')=>invoke('sendSponsoredCallInvite','host',{consumerUid:'consumer',requestId:id,source:'consumer_profile'});
 
 beforeEach(() => {
   jest.useFakeTimers().setSystemTime(new Date('2026-09-08T12:00:00Z'));
@@ -668,6 +669,24 @@ describe('accounting version 3 automatic paid continuation',()=>{
   expect(mockDocs.get('creditWallets/consumer')).toMatchObject({purchasedCredits:60,bonusCredits:40,unallocatedSpentCredits:4,totalBalance:96});
   expect(mockDocs.get('users/consumer')).toMatchObject({level:7,lifetimeQualifyingPurchasedCredits:900});
  });
+});
+
+describe('sponsored invite authority',()=>{
+ test('approved Online Host sends one idempotent protected invite and Not now creates no call',async()=>{
+  const first=await sponsoredInvite();const retry=await sponsoredInvite();expect(first).toMatchObject({status:'pending',hostUid:'host',consumerUid:'consumer',sponsoredSeconds:30});expect(retry.idempotent).toBe(true);
+  await expect(invoke('respondToSponsoredCallInvite','consumer',{inviteId:first.inviteId,action:'decline'})).resolves.toMatchObject({status:'declined'});expect([...mockDocs.keys()].filter(x=>x.startsWith('calls/'))).toHaveLength(0);
+ });
+ test('accept reserves exactly one existing-engine call and double Accept returns it',async()=>{
+  const offer=await sponsoredInvite();const accepted=await invoke('respondToSponsoredCallInvite','consumer',{inviteId:offer.inviteId,action:'accept',termsFingerprint:offer.termsFingerprint});const again=await invoke('respondToSponsoredCallInvite','consumer',{inviteId:offer.inviteId,action:'accept',termsFingerprint:offer.termsFingerprint});expect(again).toMatchObject({callId:accepted.callId,idempotent:true});expect(callData(accepted.callId)).toMatchObject({source:'sponsored_invite',sponsoredSeconds:30,accountingVersion:3,status:'connecting'});expect(mockDocs.get('users/host').hostStatus.availability).toBe('busy');
+ });
+ test('changed Host rate refreshes terms and cannot silently create a call',async()=>{
+  const offer=await sponsoredInvite();mockDocs.get('users/host').hostProfile.videoRateCredits=31;const changed=await invoke('respondToSponsoredCallInvite','consumer',{inviteId:offer.inviteId,action:'accept',termsFingerprint:offer.termsFingerprint});expect(changed.status).toBe('terms_changed');expect(changed.termsFingerprint).not.toBe(offer.termsFingerprint);expect([...mockDocs.keys()].filter(x=>x.startsWith('calls/'))).toHaveLength(0);
+ });
+ test('30 sponsored connected seconds charge and earn zero, then entry increment starts automatically',async()=>{
+  const offer=await sponsoredInvite(),accepted=await invoke('respondToSponsoredCallInvite','consumer',{inviteId:offer.inviteId,action:'accept',termsFingerprint:offer.termsFingerprint}),callId=accepted.callId;
+  await invoke('acknowledgeVideoConnected','consumer',{callId});await invoke('acknowledgeVideoConnected','host',{callId});await advanceTo(callData(callId).connectedAtMs+29999);expect(callData(callId)).toMatchObject({billingMode:'preview',sponsoredConnectedSeconds:29,billedCredits:0});expect(balance()).toBe(100);expect(mockDocs.get('hostEarnings/host')).toBeUndefined();await advanceTo(Date.now()+1);expect(callData(callId)).toMatchObject({billingMode:'paid',settledIncrements:1,billedCredits:4,sponsoredConnectedSeconds:30});
+ });
+ test('Offline, Busy, demo, pending Creator, blocks and active locks fail closed',async()=>{for(const patch of [{hostStatus:{isApproved:true,availability:'offline'}},{hostStatus:{isApproved:true,availability:'busy'}},{isDemo:true},{hostStatus:{isApproved:false,availability:'online'}}]){mockDocs.get('users/host').hostStatus=patch.hostStatus||mockDocs.get('users/host').hostStatus;mockDocs.get('users/host').isDemo=patch.isDemo;await expect(sponsoredInvite(`invite_${Math.random().toString(36).slice(2,12)}`)).rejects.toBeTruthy();mockDocs.get('users/host').hostStatus={isApproved:true,availability:'online'};delete mockDocs.get('users/host').isDemo;}mockDocs.set('users/host/blocked/consumer',{});await expect(sponsoredInvite('invite_blocked12')).rejects.toBeTruthy();mockDocs.delete('users/host/blocked/consumer');mockDocs.set('activeCallLocks/host',{callId:'other'});await expect(sponsoredInvite('invite_locked123')).rejects.toBeTruthy();});
 });
 
 

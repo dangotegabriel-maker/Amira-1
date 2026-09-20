@@ -16,6 +16,7 @@ jest.mock('../../../services/blockService',()=>({blockService:{getRelationship:a
 jest.mock('../../../services/reportService',()=>({reportService:{}}));
 jest.mock('../../../services/profileViewService',()=>({profileViewService:{track:async()=>{}}}));
 jest.mock('../../../services/callNavigationService',()=>({startVideoCall:jest.fn()}));
+jest.mock('../../../services/sponsoredInviteService',()=>({sponsoredInviteService:{send:jest.fn()}}));
 jest.mock('../../../services/callService',()=>({callService:{}}));
 jest.mock('../../../services/hostConnectService',()=>({hostConnectService:{availability:async()=>({availability:'offline',canToggle:true}),today:async()=>({visitors:0})}}));
 jest.mock('../../../services/discoveryService',()=>({discoveryService:{getConsumersForHosts:async()=>[mockTarget]}}));

@@ -27,6 +27,7 @@ async function main(){
     await updateDoc(doc(store,'users',uid),{'hostProfile.bio':'Ordinary editable bio'});checks++;
     for(const path of ['calls/forged','activeCallLocks/forged','creditTransactions/forged','hostEarnings/forged','platformRevenue/forged'])
       await denied(setDoc(doc(store,path),{participantIds:[uid,'h'],consumerId:uid,creatorId:'h',durationSeconds:999,creditBalance:999}));
+    for(const path of ['sponsoredCallInvites/forged','sponsoredInvitePairs/h__c'])await denied(setDoc(doc(store,path),{hostUid:'h',consumerUid:'c',status:'accepted',sponsoredSeconds:999,score:0}));
   }
   await denied(updateDoc(doc(consumer,'users/h'),{'hostProfile.videoRateCredits':1}));
   await setDoc(doc(admin,'calls/protected'),{participantIds:['c','h'],callerId:'c',receiverId:'h',status:'connected',accountingVersion:3,billingMode:'paid',economicsSnapshot:{consumerRatePerMinute:25},settledIncrements:1,paidDurationSeconds:0,freeVideoConsumedSeconds:0,connection:{epoch:0}});checks++;

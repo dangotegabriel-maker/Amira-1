@@ -1,0 +1,10 @@
+'use strict';
+const D=require('../sponsoredInviteDomain');
+test('sponsored duration and invite lifetime are distinct protected constants',()=>{expect(D.SPONSORED_SECONDS).toBe(30);expect(D.INVITE_SECONDS).toBe(60);});
+test('fingerprint is stable and changes for material rate or VIP policy',()=>{const base={baseRatePerMinute:25,consumerRatePerMinute:25,vipPolicyVersion:null};expect(D.fingerprint(base)).toBe(D.fingerprint({...base,freeVideoSeconds:99}));expect(D.fingerprint(base)).not.toBe(D.fingerprint({...base,consumerRatePerMinute:24}));expect(D.fingerprint(base)).not.toBe(D.fingerprint({...base,vipPolicyVersion:'new'}));});
+test('declines trigger pair suppression without a rigid daily quota',()=>{let s={};s=D.signal(s,2,100);expect(D.suppression(s,100).suppressed).toBe(false);s=D.signal(s,2,101);expect(D.suppression(s,101).suppressed).toBe(true);});
+test('ignored expiry signals are gentler but repeated ignores suppress',()=>{let s={};s=D.signal(s,1,100);s=D.signal(s,1,101);expect(D.suppression(s,101).suppressed).toBe(false);s=D.signal(s,1,102);expect(D.suppression(s,102).suppressed).toBe(true);});
+test('suppression score decays and recovers with time',()=>{const s=D.signal({},4,100);expect(D.decayed(s,100+D.DECAY_MS*4)).toBe(0);expect(D.suppression(s,100+D.DECAY_MS*4).suppressed).toBe(false);});
+test('VIP and Level are absent from pair suppression authority',()=>{expect(Object.keys(D.signal({vip:true,level:10},2,5))).toEqual(['score','lastSignalAtMs','suppressedUntilMs','version']);});
+test.each(['short','bad id','!invalid',''])('invalid stable ID %p denied',value=>expect(D.id(value)).toBe(false));
+test('valid stable ID accepted',()=>expect(D.id('invite_12345678')).toBe(true));

@@ -71,10 +71,12 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
         ...call.participantIds.map((id) => connection.participants[id].lastSeenAtMs)) + A.CONNECTION_LEASE_MS;
     }
     if (connection) call = { ...call, connection };
-    const introSeconds=call.source==='quick_match'?(call.quickMatchIntroSeconds||20):0;
+    const introSeconds=call.source==='quick_match'?(call.quickMatchIntroSeconds||20)
+      :call.source==='sponsored_invite'?(call.sponsoredSeconds||30):0;
     const previewUsed=connection?Math.floor(connection.freeMs/1000):0;
     const freeUsed = connection ? Math.min(call.freeVideoRewardSeconds ?? call.freeVideoAllowanceSeconds ?? 0,
       Math.max(0,previewUsed-introSeconds)) : call.freeVideoConsumedSeconds || 0;
+    if(call.source==='sponsored_invite')call={...call,sponsoredConnectedSeconds:Math.min(introSeconds,previewUsed)};
     if (call.billingMode === 'preview' && previewUsed >= (call.freeVideoAllowanceSeconds || 0)) {
       call = D.validDisclosure(call)
         ? { ...call, billingMode: 'paid', paidStartedAtMs: now, paidStartedAt: FieldValue.serverTimestamp(), paymentDecisionDeadlineMs: null }
@@ -186,6 +188,9 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
           tx.update(quickRef,{status:'connection_failed',fundingStatus:'released',endedAt:FieldValue.serverTimestamp(),endReason:reason});
         }else if(quickSnap.data().fundingStatus==='consumed')tx.update(quickRef,{status:'completed',endedAt:FieldValue.serverTimestamp(),endReason:reason});
         tx.delete(db.doc(`quickMatchActive/${call.callerId}`));
+      }
+      if(call.source==='sponsored_invite'&&call.sponsoredInviteId){
+        tx.update(db.doc(`sponsoredCallInvites/${call.sponsoredInviteId}`),{status:duration>0?'completed':'connection_failed',endedAt:FieldValue.serverTimestamp(),endReason:reason,sponsoredConnectedSeconds:call.sponsoredConnectedSeconds||0,paidIncrements:call.settledIncrements||0});
       }
       lockSnaps.forEach((lock, i) => { if (lock.data()?.callId === callId) tx.delete(locks[i]); });
       const hostIndex = call.participantIds.indexOf(call.receiverId);

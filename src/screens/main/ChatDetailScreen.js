@@ -30,6 +30,7 @@ import { blockService } from '../../services/blockService';
 import { reportService } from '../../services/reportService';
 import ReportUserModal from '../../components/ReportUserModal';
 import GiftTray from '../../components/GiftTray';
+import {sponsoredInviteService} from '../../services/sponsoredInviteService';
 
 const toMillis = (value) => {
   if (!value) return 0;
@@ -111,6 +112,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
     return () => { alive = false; clearTimeout(timer); };
   }, [focused, receiverId, user?.role, accessVersion, blocked.blocked]);
   const hostActions = isConsumer(user) && recipient?.uid === receiverId && isApprovedHost(recipient) && !blocked.blocked;
+  const sponsoredAction=isApprovedHost(user)&&recipient?.uid===receiverId&&isConsumer(recipient)&&!blocked.blocked;
+  const invite=async()=>{try{const value=await sponsoredInviteService.send(receiverId,'messages');Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer must accept the disclosed terms.`);}catch(e){Alert.alert('Unable to invite',e.message);}};
 
   useEffect(() => {
     navigation.setOptions({
@@ -141,6 +144,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
           <TouchableOpacity accessibilityLabel="Video call" onPress={() => startVideoCall({ navigation, creator: recipient })}><Video color={COLORS.primary} /></TouchableOpacity>
           <TouchableOpacity accessibilityLabel="Gifts" onPress={() => setGiftOpen(true)}><Gift color={COLORS.primary} /></TouchableOpacity>
         </>}
+        {sponsoredAction&&<TouchableOpacity accessibilityLabel="Video Call Invite" onPress={invite}><Video color={COLORS.primary}/></TouchableOpacity>}
         <TouchableOpacity
           onPress={() =>
             Alert.alert(name, 'Choose an action.', [
@@ -164,7 +168,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         </TouchableOpacity></View>
       ),
     });
-  }, [navigation, name, receiverId, blocked, hostActions, recipient, identityError]);
+  }, [navigation, name, receiverId, blocked, hostActions, sponsoredAction, recipient, identityError]);
 
   useEffect(() => {
     if (!conversationId) return undefined;
