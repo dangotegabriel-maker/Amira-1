@@ -85,9 +85,18 @@ const invoke = (name, uid, data) => api[name]({ auth: uid ? { uid } : null, data
 const callData = (callId) => mockDocs.get(`calls/${callId}`);
 const balance = () => mockDocs.get('users/consumer').wallet.creditBalance;
 const ledger = () => [...mockDocs.keys()].filter((key) => key.startsWith('creditTransactions/'));
-const start = () => invoke('startVideoCall', 'consumer', { creatorId: 'host' });
+const start = async ({modern=false}={}) => { const result=await invoke('startVideoCall', 'consumer', { creatorId: 'host',termsVersion:'automatic-paid-v3' });
+  if(!modern){const call=callData(result.callId);call.accountingVersion=2;delete call.economicsSnapshot;}
+  return result; };
 const connect = async () => {
   const { callId } = await start();
+  await invoke('respondToVideoCall', 'host', { callId, action: 'accept' });
+  await invoke('acknowledgeVideoConnected', 'consumer', { callId });
+  await invoke('acknowledgeVideoConnected', 'host', { callId });
+  return callId;
+};
+const connectModern = async () => {
+  const { callId } = await start({modern:true});
   await invoke('respondToVideoCall', 'host', { callId, action: 'accept' });
   await invoke('acknowledgeVideoConnected', 'consumer', { callId });
   await invoke('acknowledgeVideoConnected', 'host', { callId });
@@ -100,7 +109,7 @@ const advanceTo = async (value) => {
   while(Date.now() < target) {
     jest.setSystemTime(Math.min(target, Date.now()+3000));
     for(const [path, call] of [...mockDocs.entries()]) {
-      if(path.startsWith('calls/') && call.accountingVersion===2 && call.connection?.state==='connected') {
+      if(path.startsWith('calls/') && [2,3].includes(call.accountingVersion) && call.connection?.state==='connected') {
         for(const uid of call.participantIds) {
           const current=callData(call.id);
           if(current.connection.state!=='connected')break;
@@ -274,7 +283,7 @@ test('preview belongs to consumer UTC day, not host; next UTC day restores eligi
   const first = await connect();
   await invoke('endVideoCall', 'consumer', { callId: first });
   mockDocs.set('users/other-host', clone(mockDocs.get('users/host')));
-  const second = await invoke('startVideoCall', 'consumer', { creatorId: 'other-host' });
+  const second = await invoke('startVideoCall', 'consumer', { creatorId: 'other-host',termsVersion:'automatic-paid-v3' });
   await invoke('respondToVideoCall', 'other-host', { callId: second.callId, action: 'accept' });
   await invoke('acknowledgeVideoConnected', 'consumer', { callId: second.callId });
   await invoke('acknowledgeVideoConnected', 'other-host', { callId: second.callId });
@@ -289,7 +298,7 @@ test('preview belongs to consumer UTC day, not host; next UTC day restores eligi
 
 test('non-consumer caller and changed/unapproved host cannot authorize paid interaction', async () => {
   mockDocs.set('users/other-host', clone(mockDocs.get('users/host')));
-  await expect(invoke('startVideoCall', 'host', { creatorId: 'other-host' })).rejects.toMatchObject({ code: 'permission-denied' });
+  await expect(invoke('startVideoCall', 'host', { creatorId: 'other-host',termsVersion:'automatic-paid-v3' })).rejects.toMatchObject({ code: 'permission-denied' });
   const callId = await connect(); await expirePreview(callId);
   mockDocs.get('users/host').hostStatus.isApproved = false;
   await expect(invoke('confirmPaidContinuation', 'consumer', { callId })).rejects.toMatchObject({ code: 'permission-denied' });
@@ -444,13 +453,13 @@ test('check-in earned during a call does not extend its captured allowance', asy
 });
 
 
-test('new call with exhausted preview and four Credits is rejected before call or lock creation', async () => {
+test('new call with exhausted preview and three Credits is rejected before call or lock creation', async () => {
   mockDocs.set('users/consumer/entitlements/dailyPreview', { dateKey: D.utcDateKey(), consumed: true });
-  mockDocs.get('users/consumer').wallet.creditBalance = 4;
-  await expect(start()).rejects.toMatchObject({ details: { reason: 'insufficient_call_credits', minimumCredits: 5 } });
+  mockDocs.get('users/consumer').wallet.creditBalance = 3;
+  await expect(start()).rejects.toMatchObject({ details: { reason: 'insufficient_call_credits', minimumCredits: 4 } });
   expect([...mockDocs.keys()].some((path) => path.startsWith('calls/') || path.startsWith('activeCallLocks/'))).toBe(false);
 });
-test('new call can start with one increment but keeps paid consent explicit', async () => {
+test('new call can start with one increment and charges nothing before connection', async () => {
   mockDocs.set('users/consumer/entitlements/dailyPreview', { dateKey: D.utcDateKey(), consumed: true });
   mockDocs.get('users/consumer').wallet.creditBalance = 5;
   const result = await start();
@@ -614,6 +623,51 @@ test('old submitted applicant can call as Consumer without changing connected ac
  mockDocs.get('users/consumer').role='host';mockDocs.get('users/consumer').hostStatus={isApproved:false,hasApplied:true,verificationStatus:'submitted',availability:'offline'};
  const callId=await connect();expect(callData(callId).accountingVersion).toBe(2);expect(callData(callId).connection.state).toBe('connected');
  await expirePreview(callId);await expect(invoke('confirmPaidContinuation','consumer',{callId})).resolves.toMatchObject({billingMode:'paid'});
+});
+
+describe('accounting version 3 automatic paid continuation',()=>{
+ test('snapshots disclosed terms before connection and automatically commits the first increment at free exhaustion',async()=>{
+  const {callId}=await start({modern:true}),before=callData(callId);
+  expect(before).toMatchObject({accountingVersion:3,economicsSnapshot:{baseRatePerMinute:25,consumerRatePerMinute:25,
+   billingIncrementSeconds:10,automaticPaidContinuation:true,disclosureAccepted:true,freeVideoSeconds:30}});
+  expect(balance()).toBe(100);expect(ledger()).toHaveLength(0);
+  await invoke('respondToVideoCall','host',{callId,action:'accept'});
+  await invoke('acknowledgeVideoConnected','consumer',{callId});await invoke('acknowledgeVideoConnected','host',{callId});
+  await advanceTo(callData(callId).connectedAtMs+30000);
+  expect(callData(callId)).toMatchObject({billingMode:'paid',settledIncrements:1,billedCredits:4});
+  expect(balance()).toBe(96);expect(ledger()).toHaveLength(1);
+ });
+ test('six distributed increments reconcile exactly to an awkward per-minute rate',async()=>{
+  const callId=await connectModern();await advanceTo(callData(callId).connectedAtMs+30000);await advanceTo(Date.now()+50000);
+  await invoke('settleVideoCallIncrement','consumer',{callId});
+  expect(callData(callId)).toMatchObject({settledIncrements:6,billedCredits:25});expect(balance()).toBe(75);
+  expect([...mockDocs.values()].filter(x=>x?.type==='video_call_increment'&&x.callId===callId).map(x=>x.credits)).toEqual([4,4,4,4,4,5]);
+ });
+ test('four paid seconds still has exactly the entry increment and reconnect does not duplicate it',async()=>{
+  const callId=await connectModern();await advanceTo(callData(callId).connectedAtMs+30000);await advanceTo(Date.now()+4000);
+  await connectionEvent(callId,'consumer','disconnected');jest.setSystemTime(Date.now()+5000);await recoverConnection(callId);
+  await invoke('settleVideoCallIncrement','host',{callId});expect(callData(callId).settledIncrements).toBe(1);expect(balance()).toBe(96);
+ });
+ test('insufficient first increment ends cleanly without debt or ledger',async()=>{
+  mockDocs.get('users/consumer').wallet.creditBalance=3;const callId=await connectModern();await advanceTo(callData(callId).connectedAtMs+30000);
+  expect(callData(callId)).toMatchObject({status:'ended',endReason:'insufficient_credits',billedCredits:0});expect(balance()).toBe(3);expect(ledger()).toHaveLength(0);
+ });
+ test('rate and VIP policy are snapshotted while Host basis remains protected',async()=>{
+  mockDocs.set('vipMemberships/consumer',{status:'active',startsAt:Date.now()-1000,expiresAt:Date.now()+86400000});
+  mockDocs.set('vipConfig/current',{callDiscount:{enabled:true,version:'test-call-v1',consumerDiscountBasisPoints:2000}});
+  const callId=await connectModern();mockDocs.get('users/host').hostProfile.videoRateCredits=6000;
+  await advanceTo(callData(callId).connectedAtMs+30000);await advanceTo(Date.now()+50000);await invoke('settleVideoCallIncrement','consumer',{callId});
+  expect(callData(callId).economicsSnapshot).toMatchObject({baseRatePerMinute:25,consumerRatePerMinute:20,hostEarningBasisPerMinute:25,vipPolicyVersion:'test-call-v1'});
+  expect(callData(callId)).toMatchObject({settledIncrements:6,billedCredits:20});expect(balance()).toBe(80);
+  expect(mockDocs.get('hostEarnings/host').pendingCreditsEquivalent).toBe(20);
+ });
+ test('generic call debit updates P/B/L/U without changing Level provenance',async()=>{
+  mockDocs.set('creditWallets/consumer',{ownerUid:'consumer',purchasedCredits:60,bonusCredits:40,legacyCredits:0,unallocatedSpentCredits:0,totalBalance:100,accountingVersion:1});
+  mockDocs.get('users/consumer').level=7;mockDocs.get('users/consumer').lifetimeQualifyingPurchasedCredits=900;
+  const callId=await connectModern();await advanceTo(callData(callId).connectedAtMs+30000);
+  expect(mockDocs.get('creditWallets/consumer')).toMatchObject({purchasedCredits:60,bonusCredits:40,unallocatedSpentCredits:4,totalBalance:96});
+  expect(mockDocs.get('users/consumer')).toMatchObject({level:7,lifetimeQualifyingPurchasedCredits:900});
+ });
 });
 
 

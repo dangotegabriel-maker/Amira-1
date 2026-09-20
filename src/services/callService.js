@@ -38,9 +38,9 @@ export const callService = Object.freeze({
     const callerId=auth.currentUser?.uid;
     if(!callerId)throw new Error('Sign in required.');
     if(demoHost?.isDemo){if(!DEV_FEATURES.enableCallSimulator)throw new Error('Calling this demo profile is unavailable.');validateCallEligibility({callerId,creator:demoHost,relationship:{},activeCalls:[]});return {callId:`demo-${Date.now()}`,creator:demoHost,simulated:true,previewEligible:true,ratePerMinute:demoHost.hostProfile?.videoRateCredits||25,status:'ringing',billingMode:'preview'};}
-    return {creatorId};
+    return {creatorId,termsVersion:'automatic-paid-v3'};
   },
-  request: async (prepared) => prepared.simulated ? prepared : invoke('startVideoCall',{creatorId:prepared.creatorId}),
+  request: async (prepared) => prepared.simulated ? prepared : invoke('startVideoCall',{creatorId:prepared.creatorId,termsVersion:prepared.termsVersion}),
   respond: async ({callId,action}) => invoke('respondToVideoCall',{callId,action}),
   getRtcCredentials: async (callId) => invoke('getVideoCallRtcCredentials',{callId}),
   acknowledgeConnected: async (callId) => invoke('acknowledgeVideoConnected',{callId}),

@@ -28,7 +28,7 @@ const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError, recovery }) =>
   // Shared by the participant callable and the scheduled reconciler. Re-read
   // inside the transaction so a stale query cannot end a newly paid call.
   const synchronize = async (callId, uid) => {
-    if(recovery && (await db.doc(`calls/${callId}`).get()).data()?.accountingVersion===2)return recovery.run(callId,uid);
+    if(recovery && [2,3].includes((await db.doc(`calls/${callId}`).get()).data()?.accountingVersion))return recovery.run(callId,uid);
     return db.runTransaction(async (tx) => {
     const ref = db.doc(`calls/${callId}`), snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'Call not found.');
@@ -89,8 +89,10 @@ const createCallPaymentLifecycle = ({ db, FieldValue, HttpsError, recovery }) =>
   };
 
   const confirm = async (callId, uid) => {
-    if(recovery && (await db.doc(`calls/${callId}`).get()).data()?.accountingVersion===2){
+    if(recovery && [2,3].includes((await db.doc(`calls/${callId}`).get()).data()?.accountingVersion)){
       await recovery.run(callId,uid);
+      const current=(await db.doc(`calls/${callId}`).get()).data();
+      if(current?.accountingVersion===3)return {...result(callId,current,Date.now()),automatic:true,idempotent:true};
       const value=await recovery.run(callId,uid,'confirm');
       if(value.billingMode==='ended')throw new HttpsError('failed-precondition','This call can no longer continue.');
       return {...value,incrementSeconds:D.BILLING_INCREMENT_SECONDS,incrementCredits:D.incrementCredits(value.ratePerMinute)};

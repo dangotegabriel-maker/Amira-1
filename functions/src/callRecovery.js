@@ -3,6 +3,7 @@ const {isConsumer,isApprovedHost}=require('./accountRole');
 const A = require('./connectionAccounting');
 const D = require('./callDomain');
 const E = require('./economyDomain');
+const C = require('./creditDomain');
 
 const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
   const result = (callId, call, now) => ({ callId, ...call, serverNowMs: now });
@@ -15,7 +16,7 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
     if (D.TERMINAL_STATUSES.has(call.status)) return { ...result(callId, call, now), idempotent: true };
     // Legacy sessions cannot prove connection segments. Retire them conservatively
     // when their old deadline expires; never retroactively invent connected usage.
-    const versioned = call.accountingVersion === 2;
+    const versioned = call.accountingVersion === 2 || call.accountingVersion === 3;
     let ending = action === 'end', reason = input.reason || 'participant_ended';
     const expiry = A.deadline(call, now);
     if (Number.isFinite(expiry) && now >= expiry) {
@@ -75,19 +76,23 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
     const freeUsed = connection ? Math.min(call.freeVideoRewardSeconds ?? call.freeVideoAllowanceSeconds ?? 0,
       Math.max(0,previewUsed-introSeconds)) : call.freeVideoConsumedSeconds || 0;
     if (call.billingMode === 'preview' && previewUsed >= (call.freeVideoAllowanceSeconds || 0)) {
-      call = { ...call, billingMode: 'awaiting_paid_confirmation', paymentDecisionDeadlineMs: now + D.PAID_DECISION_SECONDS * 1000 };
+      call = D.validDisclosure(call)
+        ? { ...call, billingMode: 'paid', paidStartedAtMs: now, paidStartedAt: FieldValue.serverTimestamp(), paymentDecisionDeadlineMs: null }
+        : { ...call, billingMode: 'awaiting_paid_confirmation', paymentDecisionDeadlineMs: now + D.PAID_DECISION_SECONDS * 1000 };
+    } else if (call.billingMode === 'awaiting_paid_confirmation' && D.validDisclosure(call)) {
+      call = { ...call, billingMode: 'paid', paidStartedAtMs: now, paidStartedAt: FieldValue.serverTimestamp(), paymentDecisionDeadlineMs: null };
     }
     if (call.billingMode === 'awaiting_paid_confirmation' && now >= call.paymentDecisionDeadlineMs) {
       ending = true; reason = 'payment_decision_timeout';
     }
     // Read all financial and cleanup records before the first write.
     const consumerRef = db.doc(`users/${call.callerId}`), hostRef = db.doc(`users/${call.receiverId}`);
-    const rewardRef = db.doc(`consumerRewards/${call.callerId}`), hostMoneyRef = db.doc(`hostEarnings/${call.receiverId}`);
+    const rewardRef = db.doc(`consumerRewards/${call.callerId}`), walletRef=db.doc(`creditWallets/${call.callerId}`), hostMoneyRef = db.doc(`hostEarnings/${call.receiverId}`);
     const platformRef = db.doc('platformRevenue/creditsEquivalent');
     const locks = call.participantIds.map((id) => db.doc(`activeCallLocks/${id}`));
-    const [consumer, host, reward, config, hostMoney, platform, ...lockSnaps] = await Promise.all([
-      tx.get(consumerRef), tx.get(hostRef), tx.get(rewardRef), tx.get(db.doc('economyConfig/current')),
-      tx.get(hostMoneyRef), tx.get(platformRef), ...locks.map((lock) => tx.get(lock)),
+    const [consumer, host, reward, walletSnap, config, hostMoney, platform, ...lockSnaps] = await Promise.all([
+      tx.get(consumerRef), tx.get(hostRef), tx.get(rewardRef), tx.get(walletRef),
+      tx.get(db.doc('economyConfig/current')), tx.get(hostMoneyRef), tx.get(platformRef), ...locks.map((lock) => tx.get(lock)),
     ]);
     const quickRef=call.source==='quick_match'?db.doc(`quickMatchRequests/${call.callerId}/requests/${call.quickMatchRequestId}`):null;
     const quickSnap=quickRef?await tx.get(quickRef):null;
@@ -104,33 +109,45 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
         paymentDecisionDeadlineMs: null, paidSessionStartIncrement: call.settledIncrements || 0 };
     }
     let count = call.settledIncrements || 0, balance = consumer.data()?.wallet?.creditBalance || 0;
-    const eligible = connection ? Math.floor(connection.paidMs / 10000) : count;
+    let wallet=C.readWallet(walletSnap.exists?walletSnap.data():null,call.callerId,balance);
+    const consumerRate=call.economicsSnapshot?.consumerRatePerMinute||call.ratePerMinute;
+    const hostRate=call.economicsSnapshot?.hostEarningBasisPerMinute||call.ratePerMinute;
+    const eligible = connection&&call.billingMode==='paid' ? (call.accountingVersion===3
+      ? D.connectedPaidIncrementCount(connection.paidMs) : Math.floor(connection.paidMs / 10000)) : count;
     // Heartbeats also drain a large backlog, keeping final settlement below
     // Firestore's transaction write limit even after a client billing failure.
-    const available = connection && (['settle','reconcile','end'].includes(action) || ending || eligible-count>=90) ? eligible : count;
-    const credit = D.incrementCredits(call.ratePerMinute), policy = E.economyPolicy(config.data());
+    const available = connection && (call.accountingVersion===3 || ['settle','reconcile','end'].includes(action) || ending || eligible-count>=90) ? eligible : count;
+    const policy = E.economyPolicy(config.data());
     const ledgers = [];
     // Bounded transaction size. Healthy clients checkpoint frequently. Any
     // untrusted/legacy tail is never used to generate new ledger entries.
     for (let n = count + 1; n <= available && ledgers.length < 100; n++) {
       const ledgerRef = db.doc(`creditTransactions/${D.settlementId(callId, n)}`);
-      const existing = await tx.get(ledgerRef);
-      if (existing.exists) throw new HttpsError('failed-precondition', 'Settlement counters are inconsistent.');
+      const walletLedgerRef=db.doc(`creditWallets/${call.callerId}/ledger/call_${callId}_${n}`);
+      const [existing,walletLedger]=await Promise.all([tx.get(ledgerRef),tx.get(walletLedgerRef)]);
+      if (existing.exists||walletLedger.exists) throw new HttpsError('failed-precondition', 'Settlement counters are inconsistent.');
+      const credit=call.accountingVersion===3?D.incrementCreditsAt(consumerRate,n):D.incrementCredits(consumerRate);
+      const hostBasis=call.accountingVersion===3?D.incrementCreditsAt(hostRate,n):D.incrementCredits(hostRate);
       if (balance < credit) {
-        if (!ending) {
-          call.billingMode = 'awaiting_paid_confirmation'; call.paymentDecisionDeadlineMs = now + D.PAID_DECISION_SECONDS * 1000;
-          // Unfunded tail is not debt and cannot be replayed on a later consent.
-          connection.paidMs = count * 10000;
-        }
+        if(call.accountingVersion===3)ending=true;
+        else if (!ending) { call.billingMode = 'awaiting_paid_confirmation'; call.paymentDecisionDeadlineMs = now + D.PAID_DECISION_SECONDS * 1000; connection.paidMs = count * 10000; }
         reason = 'insufficient_credits'; break;
       }
-      const allocation = E.buildInteractionAllocation({ grossCreditsSpent: credit, transactionType: 'video_call_increment',
+      const allocation = E.buildInteractionAllocation({ grossCreditsSpent: hostBasis, transactionType: 'video_call_increment',
         consumerUid: call.callerId, hostUid: call.receiverId, sourceId: callId, createdAt: FieldValue.serverTimestamp(),
         idempotencyKey: ledgerRef.id, policy });
-      ledgers.push([ledgerRef, { ...allocation, transactionId: ledgerRef.id, consumerId: call.callerId,
+      const cumulativeBase=D.cumulativeIncrementCredits(hostRate,n),previousBase=D.cumulativeIncrementCredits(hostRate,n-1);
+      const basePlatformFee=call.accountingVersion===3?Number(BigInt(cumulativeBase)*BigInt(policy.platformCommissionBasisPoints)/10000n
+        -BigInt(previousBase)*BigInt(policy.platformCommissionBasisPoints)/10000n):allocation.platformFeeCredits;
+      const hostShareCreditsEquivalent=hostBasis-basePlatformFee,platformFeeCredits=credit-hostShareCreditsEquivalent;
+      const ledgerValue={ ...allocation, transactionId: ledgerRef.id, consumerId: call.callerId,
         creatorId: call.receiverId, callId, type: 'video_call_increment', credits: credit, grossCredits: credit,
-        creatorNetCredits: allocation.hostShareCreditsEquivalent, commissionPolicy: allocation.commissionPolicyVersion,
-        billingIncrement: n }]); balance -= credit; count = n;
+        baseHostCredits:hostBasis,consumerRatePerMinute:consumerRate,baseRatePerMinute:hostRate,
+        platformFeeCredits,platformAbsorptionCredits:Math.max(0,hostBasis-credit),vipPolicyVersion:call.economicsSnapshot?.vipPolicyVersion||null,
+        hostShareCreditsEquivalent,creatorNetCredits:hostShareCreditsEquivalent,commissionPolicy: allocation.commissionPolicyVersion,
+        billingIncrement: n,connectedPaidBoundarySeconds:(n-1)*D.BILLING_INCREMENT_SECONDS };
+      if(credit>0)wallet=C.debitUnallocated(wallet,credit);balance=wallet.totalBalance;
+      ledgers.push([ledgerRef,ledgerValue,walletLedgerRef,{...wallet}]);count = n;
     }
     const deltaFree = Math.max(0, freeUsed - (call.freeVideoConsumedSeconds || 0));
     if (['consumer_rewards','quick_match_intro_plus_rewards'].includes(call.freeVideoSource) && deltaFree) {
@@ -140,14 +157,15 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
     }
     if (ledgers.length) {
       tx.update(consumerRef, { 'wallet.creditBalance': balance });
+      tx.set(walletRef,{...wallet,updatedAt:FieldValue.serverTimestamp()});
       tx.set(hostMoneyRef, { hostUid: call.receiverId, pendingCreditsEquivalent: (hostMoney.data()?.pendingCreditsEquivalent || 0)
         + ledgers.reduce((sum, [, item]) => sum + item.creatorNetCredits, 0), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       tx.set(platformRef, { accruedCreditsEquivalent: (platform.data()?.accruedCreditsEquivalent || 0)
         + ledgers.reduce((sum, [, item]) => sum + item.platformFeeCredits, 0), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-      ledgers.forEach(([ledgerRef, value]) => tx.create(ledgerRef, value));
+      ledgers.forEach(([ledgerRef,value,walletLedgerRef,walletAfter])=>{tx.create(ledgerRef,value);tx.create(walletLedgerRef,{ownerUid:call.callerId,type:'video_call_increment',direction:'debit',credits:value.credits,bucket:'unallocated',status:'succeeded',sourceReference:callId,idempotencyKey:value.idempotencyKey,billingIncrement:value.billingIncrement,balanceAfter:{total:walletAfter.totalBalance,purchased:walletAfter.purchasedCredits,bonus:walletAfter.bonusCredits,legacy:walletAfter.legacyCredits,unallocatedSpent:walletAfter.unallocatedSpentCredits},createdAt:FieldValue.serverTimestamp(),version:1});});
     }
     call = { ...call, freeVideoConsumedSeconds: Math.max(freeUsed, call.freeVideoConsumedSeconds || 0),
-      settledIncrements: count, billedCredits: (call.billedCredits || 0) + ledgers.length * credit,
+      settledIncrements: count, billedCredits: (call.billedCredits || 0) + ledgers.reduce((sum,[,item])=>sum+item.credits,0),
       accountedConnectedMs: connection?.connectedMs || 0 };
     if (ending) {
       const duration = connection ? Math.floor(connection.connectedMs / 1000) : Math.max(call.durationSeconds || 0,(call.settledIncrements || 0)*10);

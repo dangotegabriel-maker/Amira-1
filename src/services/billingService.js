@@ -1,13 +1,14 @@
 import { BILLING_INCREMENT_SECONDS } from '../config/callConfig';
 
-export const quoteIncrement = (ratePerMinute, seconds = BILLING_INCREMENT_SECONDS) => {
-  if (!Number.isInteger(ratePerMinute) || ratePerMinute < 0 || !Number.isInteger(seconds) || seconds < 0) throw new Error('Invalid call rate.');
-  return Math.ceil((ratePerMinute * seconds) / 60);
+export const quoteIncrementAt = (ratePerMinute, index = 1) => {
+  if (!Number.isSafeInteger(ratePerMinute) || ratePerMinute < 0 || !Number.isSafeInteger(index) || index < 1) throw new Error('Invalid call rate.');
+  return Math.floor(ratePerMinute * index / 6) - Math.floor(ratePerMinute * (index - 1) / 6);
 };
+export const quoteIncrement = (ratePerMinute) => quoteIncrementAt(ratePerMinute, 1);
 export const quotePaidDuration = (ratePerMinute, paidSeconds) => {
   if (!Number.isInteger(paidSeconds) || paidSeconds < 0) throw new Error('Invalid paid duration.');
   if (paidSeconds === 0) return 0;
-  return quoteIncrement(ratePerMinute) * Math.ceil(paidSeconds / BILLING_INCREMENT_SECONDS);
+  return Math.floor(ratePerMinute * Math.ceil(paidSeconds / BILLING_INCREMENT_SECONDS) / 6);
 };
 export const canContinuePaidCall = ({ balance, ratePerMinute }) => Number.isInteger(balance)
   && balance >= quoteIncrement(ratePerMinute);

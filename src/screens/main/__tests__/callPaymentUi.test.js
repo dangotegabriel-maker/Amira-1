@@ -64,15 +64,14 @@ beforeEach(() => {
 });
 afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
 
-test('consumer sees captured rate and consent, pauses media, and restores only after persisted paid state', async () => {
+test('consumer sees captured rate with no second confirmation and restores only after persisted automatic paid state', async () => {
   const call = pendingCall(), screen = await open(call);
-  expect(screen.getByText('Continue Paid')).toBeTruthy();
+  expect(screen.queryByText('Continue Paid')).toBeNull();
+  expect(screen.getByText('Starting paid continuation…')).toBeTruthy();
   expect(screen.queryByText(/9999/)).toBeNull();
   expect(mockRtc.setMicrophoneMuted).toHaveBeenLastCalledWith(true);
   expect(mockRtc.setCameraEnabled).toHaveBeenLastCalledWith(false);
-  fireEvent.press(screen.getByText('Continue Paid'));
-  await flush();
-  expect(mockCalls.confirmPaid).toHaveBeenCalledWith('call-1');
+  expect(mockCalls.confirmPaid).not.toHaveBeenCalled();
   expect(mockRtc.setCameraEnabled).toHaveBeenLastCalledWith(false);
   await act(async () => mockListener({ ...call, billingMode: 'paid', paidStartedAtMs: Date.now(), paymentDecisionDeadlineMs: null }));
   expect(mockRtc.setMicrophoneMuted).toHaveBeenLastCalledWith(false);
@@ -86,7 +85,7 @@ test('host sees neutral waiting state and retains safety and End Call without sp
   mockUser = { uid: 'host', role: 'host' };
   const screen = await open();
   expect(screen.queryByText('Continue Paid')).toBeNull();
-  expect(screen.getAllByText('Waiting for Alex to continue').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Checking automatic paid continuation').length).toBeGreaterThan(0);
   expect(screen.getByLabelText('Call safety')).toBeTruthy();
   fireEvent.press(screen.getByLabelText('End Call'));
   await flush();
@@ -95,14 +94,9 @@ test('host sees neutral waiting state and retains safety and End Call without sp
   screen.unmount();
 });
 
-test('insufficient-credit error keeps media paused and allows consumer to end', async () => {
-  mockCalls.confirmPaid.mockRejectedValue(Object.assign(new Error('Not enough credits to continue.'), {
-    details: { reason: 'insufficient_credits', requiredCredits: 5, availableCredits: 4 },
-  }));
+test('automatic continuation screen has no manual spending control and still allows consumer to end', async () => {
   const screen = await open();
-  fireEvent.press(screen.getByText('Continue Paid'));
-  await flush();
-  expect(Alert.alert).toHaveBeenCalledWith('Not enough credits to continue', 'Not enough credits to continue.');
+  expect(screen.queryByText('Continue Paid')).toBeNull();
   expect(mockRtc.setMicrophoneMuted).toHaveBeenLastCalledWith(true);
   expect(mockRtc.setCameraEnabled).toHaveBeenLastCalledWith(false);
   fireEvent.press(screen.getByLabelText('End Call'));
@@ -123,7 +117,7 @@ test('preview countdown projects the server deadline and requests authoritative 
   expect(mockCalls.syncPaymentState.mock.calls.length).toBeGreaterThan(1);
   expect(mockRtc.setCameraEnabled).toHaveBeenLastCalledWith(false);
   await act(async () => mockListener({ ...call, billingMode: 'awaiting_paid_confirmation' }));
-  expect(screen.getByText('Continue Paid')).toBeTruthy();
+  expect(screen.getByText('Starting paid continuation…')).toBeTruthy();
   screen.unmount();
 });
 

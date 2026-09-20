@@ -1,0 +1,49 @@
+Checkpoint 14 working-tree status
+Captured: 2026-09-20 UTC
+Branch: amira-v2
+HEAD: 7a044a1
+Upstream: origin/amira-v2
+Index/staged changes: none
+
+Modified tracked files:
+functions/src/__tests__/callPaymentLifecycle.test.js
+functions/src/__tests__/callPreflight.test.js
+functions/src/__tests__/callRecovery.emulator.cjs
+functions/src/callDomain.js
+functions/src/callPaymentLifecycle.js
+functions/src/callPreflight.js
+functions/src/callRecovery.js
+functions/src/index.js
+functions/src/quickMatchService.js
+src/screens/main/MatchScreen.js
+src/screens/main/VideoCallScreen.js
+src/screens/main/__tests__/callPaymentUi.test.js
+src/services/__tests__/billingService.test.js
+src/services/__tests__/callEntry.test.js
+src/services/__tests__/callRecoveryRules.emulator.cjs
+src/services/__tests__/quickMatchLifecycle.emulator.cjs
+src/services/billingService.js
+src/services/callNavigationService.js
+src/services/callService.js
+src/services/callUiState.js
+src/services/quickMatchService.js
+
+New untracked files:
+docs/authoritative-automatic-paid-call-billing-report.md
+docs/authoritative-automatic-paid-call-billing-git-status.txt
+
+Deleted files: none
+
+Validation:
+- Root Jest: 63 suites, 622 tests passed
+- Functions Jest: 15 suites, 355 tests passed
+- Focused client disclosure/billing: 3 suites, 17 tests passed
+- All 17 emulator scripts passed: 772 numbered checks plus follow-rules scenario assertions
+- Call rules/security: 36 checks passed
+- Real Firestore call transaction race: 11 assertions passed
+- Quick Match emulator/security: 56 checks passed
+- Babel/static parse: 253 files passed
+- git diff --check: passed
+
+This is intentionally an unstaged working-tree snapshot. Nothing was staged,
+committed, pushed, deployed, or written to production.

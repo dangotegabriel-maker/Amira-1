@@ -1,10 +1,10 @@
 'use strict';
-const { incrementCredits } = require('./callDomain');
+const { incrementCreditsAt } = require('./callDomain');
 const { selectFreeVideoAllowance } = require('./freeVideoEntitlement');
 
 const callPreflight = ({ caller, rate, dailyEligible, rewards, config }) => {
   const allowance = selectFreeVideoAllowance({ dailyEligible, rewards, config });
-  const minimumCredits = incrementCredits(rate);
+  const minimumCredits = incrementCreditsAt(rate,1);
   return { ...allowance, minimumCredits,
     allowed: allowance.freeVideoAllowanceSeconds > 0 || (caller?.wallet?.creditBalance || 0) >= minimumCredits };
 };

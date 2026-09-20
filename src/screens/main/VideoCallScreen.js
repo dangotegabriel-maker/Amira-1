@@ -25,7 +25,6 @@ const VideoCallScreen = ({ route, navigation }) => {
   const [muted, setMuted] = useState(false);
   const [remoteUid, setRemoteUid] = useState(null);
   const [rtcReady, setRtcReady] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [clockReady, setClockReady] = useState(initialCall?.simulated === true);
   const [nowMs, setNowMs] = useState(Date.now());
   const clockOffset = useRef(0), syncPending = useRef(false), lastSync = useRef(0);
@@ -33,7 +32,7 @@ const VideoCallScreen = ({ route, navigation }) => {
   const reportConnection = (state) => {
     eventQueue.current = eventQueue.current.catch(() => {}).then(async () => {
       const current = callRef.current;
-      if (endedRef.current || current?.accountingVersion !== 2 || !['connected','reconnecting'].includes(current.status)) return;
+      if (endedRef.current || ![2,3].includes(current?.accountingVersion) || !['connected','reconnecting'].includes(current.status)) return;
       if (state === 'connected' && !rtcEvidence.current) return;
       const sequence = ++eventSequence.current;
       const value = await callService.reportConnection(current.callId || current.id, { state, sequence, epoch: current.connection.epoch });
@@ -47,10 +46,10 @@ const VideoCallScreen = ({ route, navigation }) => {
   const mode = call?.billingMode;
   const isConsumer = call?.simulated ? user?.role === 'consumer' : user?.uid === call?.callerId;
   // Production calls always display and bill their server-captured snapshot.
-  const rate = call?.ratePerMinute;
+  const rate = call?.economicsSnapshot?.consumerRatePerMinute ?? call?.ratePerMinute;
   const payment = getCallPaymentPresentation(call, nowMs);
   const paymentPaused = phase === 'reconnecting' || payment.mediaPaused || (mode !== 'paid' && !clockReady);
-  const duration = call?.accountingVersion === 2 ? Math.floor(((call.connection?.connectedMs || 0) + (call.connection?.state === 'connected' ? Math.max(0, Math.min(nowMs, call.connection.leaseUntilMs) - call.connection.segmentStartedAtMs) : 0)) / 1000) : call?.connectedAtMs ? Math.max(0, Math.floor((nowMs - call.connectedAtMs) / 1000)) : 0;
+  const duration = [2,3].includes(call?.accountingVersion) ? Math.floor(((call.connection?.connectedMs || 0) + (call.connection?.state === 'connected' ? Math.max(0, Math.min(nowMs, call.connection.leaseUntilMs) - call.connection.segmentStartedAtMs) : 0)) / 1000) : call?.connectedAtMs ? Math.max(0, Math.floor((nowMs - call.connectedAtMs) / 1000)) : 0;
   const previewRemaining = payment.previewRemaining ?? DAILY_FREE_PREVIEW_SECONDS;
 
   const finish = async (reason = 'participant_ended') => {
@@ -181,7 +180,7 @@ const VideoCallScreen = ({ route, navigation }) => {
   }, []);
 
   useEffect(() => {
-    if (call?.accountingVersion !== 2 || !['connecting','connected','reconnecting'].includes(call?.status)) return undefined;
+    if (![2,3].includes(call?.accountingVersion) || !['connecting','connected','reconnecting'].includes(call?.status)) return undefined;
     const timer = setInterval(() => { if (rtcEvidence.current && !endedRef.current) { if (callRef.current.status === 'connecting') callService.acknowledgeConnected(callRef.current.callId || callRef.current.id).catch(() => {}); else reportConnection('connected'); } }, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [call?.accountingVersion, call?.status]);
@@ -195,7 +194,7 @@ const VideoCallScreen = ({ route, navigation }) => {
       setNowMs(now);
       const state = getCallPaymentPresentation(current, now);
       if (current.simulated && current.billingMode === 'preview' && state.previewRemaining === 0) {
-        setCall((value) => ({ ...value, billingMode: 'awaiting_paid_confirmation' }));
+        setCall((value) => ({ ...value, billingMode: coins >= quoteIncrement(rate) ? 'paid' : 'ended', paidStartedAtMs: Date.now() }));
       } else if (!current.simulated && current.billingMode !== 'paid'
           && (!clockReady || state.mediaPaused || current.freeVideoSource === 'consumer_rewards') && Date.now() - lastSync.current >= 2000) {
         syncRef.current();
@@ -229,30 +228,13 @@ const VideoCallScreen = ({ route, navigation }) => {
     return () => sub.remove();
   }, [phase]);
 
-  const continuePaid = async () => {
-    if (!isConsumer || confirming || mode !== 'awaiting_paid_confirmation' || payment.decisionExpired) return;
-    setConfirming(true);
-    try {
-      if (call?.simulated) {
-        if (coins < quoteIncrement(rate)) throw new Error('Not enough credits to continue.');
-        setCall((current) => ({ ...current, billingMode: 'paid', paidStartedAtMs: Date.now() }));
-      } else {
-        await callService.confirmPaid(call.callId || call.id);
-        // Only a persisted paid snapshot restores media.
-      }
-    } catch (error) {
-      const insufficient = error.details?.reason === 'insufficient_credits' || /enough credits/i.test(error.message);
-      Alert.alert(insufficient ? 'Not enough credits to continue' : 'Unable to continue', error.message);
-      syncRef.current();
-    } finally { setConfirming(false); }
-  };
   const safety = () => Alert.alert('Call safety', 'Choose an action.', [
     { text: 'Report', onPress: () => reportService.submit({ reportedUserId: remoteProfile.uid, contextType: 'call',
       contextId: call.callId, reason: 'other', details: 'Reported during video call' }).then(() => Alert.alert('Report received')) },
     { text: 'Block & end', style: 'destructive', onPress: () => blockService.block(remoteProfile.uid).then(() => finish('blocked')) },
     { text: 'Cancel', style: 'cancel' },
   ]);
-  const waitingText = 'Waiting for ' + (remoteProfile?.username || 'the consumer') + ' to continue';
+  const waitingText = 'Checking automatic paid continuation';
   const status = phase === 'connected'
     ? (mode === 'preview' ? (call?.freeVideoSource === 'consumer_rewards' ? 'FREE VIDEO TIME · ' : 'FREE PREVIEW · ') + formatTime(previewRemaining)
       : mode === 'paid' ? 'PAID · ' + rate + ' credits/min' : isConsumer ? 'Payment decision' : waitingText)
@@ -275,15 +257,10 @@ const VideoCallScreen = ({ route, navigation }) => {
     {paymentPaused && ['connected', 'reconnecting'].includes(phase) && <View style={styles.decision}>
       <Text style={styles.decisionTitle}>
         {payment.decisionExpired ? 'Payment decision expired' : isConsumer
-          ? (payment.awaiting ? 'Continue Paid?' : 'Confirming preview status…') : waitingText}
+          ? (payment.awaiting ? 'Starting paid continuation…' : 'Confirming free-time status…') : waitingText}
       </Text>
       <Text style={styles.decisionText}>Audio and video are paused.</Text>
-      {isConsumer && payment.awaiting && !payment.decisionExpired && <>
-        <Text style={styles.decisionText}>{rate} credits/min · {coins} credits available. Billing uses {BILLING_INCREMENT_SECONDS}-second increments.</Text>
-        <TouchableOpacity style={styles.continue} onPress={continuePaid} disabled={confirming}>
-          <Text style={styles.white}>{confirming ? 'Confirming…' : 'Continue Paid'}</Text>
-        </TouchableOpacity>
-      </>}
+      {isConsumer && payment.awaiting && !payment.decisionExpired && <Text style={styles.decisionText}>{rate} credits/min · Billing starts automatically in {BILLING_INCREMENT_SECONDS}-second increments when funding is available.</Text>}
       {payment.decisionExpired && <Text style={styles.decisionText}>This call can no longer continue.</Text>}
       <TouchableOpacity onPress={() => finish('preview_ended')}><Text style={styles.endText}>End Call</Text></TouchableOpacity>
     </View>}

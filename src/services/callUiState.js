@@ -4,7 +4,7 @@ export const paidContinuationChoice=({balance,incrementCredits})=>balance>=incre
 
 // Countdown is a projection of server deadlines, never a billing transition.
 export const getCallPaymentPresentation = (call, nowMs) => {
-  const segmentRemaining = call?.accountingVersion === 2 && call.billingMode === 'preview'
+  const segmentRemaining = [2,3].includes(call?.accountingVersion) && call.billingMode === 'preview'
     ? Math.max(0, Math.ceil(((call.freeVideoAllowanceSeconds || 0) * 1000 - (call.connection?.freeMs || 0) - (call.connection?.state === 'connected' ? Math.max(0, Math.min(nowMs,call.connection.leaseUntilMs) - call.connection.segmentStartedAtMs) : 0)) / 1000)) : null;
   const previewRemaining = segmentRemaining !== null ? segmentRemaining : Number.isFinite(call?.previewEndsAtMs)
     ? Math.max(0, Math.ceil((call.previewEndsAtMs - nowMs) / 1000)) : null;

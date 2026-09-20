@@ -29,6 +29,10 @@ async function main(){
       await denied(setDoc(doc(store,path),{participantIds:[uid,'h'],consumerId:uid,creatorId:'h',durationSeconds:999,creditBalance:999}));
   }
   await denied(updateDoc(doc(consumer,'users/h'),{'hostProfile.videoRateCredits':1}));
+  await setDoc(doc(admin,'calls/protected'),{participantIds:['c','h'],callerId:'c',receiverId:'h',status:'connected',accountingVersion:3,billingMode:'paid',economicsSnapshot:{consumerRatePerMinute:25},settledIncrements:1,paidDurationSeconds:0,freeVideoConsumedSeconds:0,connection:{epoch:0}});checks++;
+  for(const patch of [{billingMode:'paid'},{ratePerMinute:1},{'economicsSnapshot.consumerRatePerMinute':1},{settledIncrements:99},{paidDurationSeconds:999},{freeVideoConsumedSeconds:999},{accountingVersion:2},{'connection.epoch':99}])await denied(updateDoc(doc(consumer,'calls/protected'),patch));
+  await seed('hostEarnings/h',{pendingCreditsEquivalent:1});checks++;await denied(updateDoc(doc(host,'hostEarnings/h'),{pendingCreditsEquivalent:999}));
+  await denied(setDoc(doc(consumer,'creditWallets/c/ledger/call_forged'),{type:'video_call_increment',credits:999}));
   await updateDoc(doc(admin,'users/h'),{'hostProfile.videoRateCredits':50,'hostProfile.rateTier':'STANDARD'});checks++;
   assert.equal((await getDoc(doc(host,'users/h'))).data().hostProfile.videoRateCredits,50);checks++;
   await denied(updateDoc(doc(host,'users/h'),{hostProfile:{bio:'Cannot delete the trusted rate'}}));
