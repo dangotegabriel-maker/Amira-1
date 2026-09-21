@@ -1,10 +1,8 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Compass, HeartHandshake, Activity, MessageCircle, User } from 'lucide-react-native';
 import { useMessageActivity } from '../context/MessageActivityContext';
 import { unreadBadge } from '../utils/messageActivity';
-import { socketService } from '../services/socketService';
-import { useNavigation } from '@react-navigation/native';
 
 import HomeScreen from '../screens/main/HomeScreen';
 import MessageHomeScreen from '../screens/main/MessageHomeScreen';
@@ -19,22 +17,8 @@ const Tab = createBottomTabNavigator();
 
 const MainTabNavigator = () => {
   const { unread } = useMessageActivity();
-  const navigation = useNavigation();
   const { user } = useUser();
   const approvedHost = isApprovedHost(user);
-
-  useEffect(() => {
-    if (!approvedHost) return undefined;
-    const handleIncomingCall = (data) => {
-      navigation.navigate('VideoCall', {
-        name: data.callerName,
-        userId: data.callerId,
-        isIncoming: true
-      });
-    };
-    socketService.on('incoming_call', handleIncomingCall);
-    return () => socketService.off('incoming_call', handleIncomingCall);
-  }, [approvedHost, navigation]);
 
   return (
     <Tab.Navigator key={approvedHost ? "host" : "consumer"} initialRouteName={approvedHost ? "Connect" : "Home"}

@@ -137,7 +137,7 @@ export const normalizeUser = (uid, data = {}, authUser = null) => {
       recentCount: Number.isFinite(Number(data?.profileViewStats?.recentCount)) ? Number(data.profileViewStats.recentCount) : 0,
       updatedAt: data?.profileViewStats?.updatedAt || null,
     },
-    referralCode: data.referralCode || `AMIRA-${String(uid || '').slice(0, 8).toUpperCase()}`,
+    referralCode: typeof data.referralCode === 'string' ? data.referralCode : '',
     referredBy: data.referredBy || null,
     referralStats: {
       qualifiedCount: Number.isFinite(Number(data?.referralStats?.qualifiedCount)) ? Number(data.referralStats.qualifiedCount) : 0,

@@ -56,7 +56,7 @@ const MyProfileScreen = ({ navigation }) => {
 
     <View style={styles.opportunity}><View style={styles.opportunityIcon}><Sparkles color="white" size={25}/></View><Text style={styles.opportunityTitle}>{approvedHost ? 'Creator Connect' : creatorCopy.title}</Text><Text style={styles.opportunityText}>{creatorCopy.description}</Text><TouchableOpacity style={styles.opportunityButton} disabled={creatorState==='pending'} onPress={()=>approvedHost?navigation.navigate('Connect'):navigation.navigate('HostApplication')}><Text style={styles.opportunityButtonText}>{approvedHost ? 'Open Connect' : creatorCopy.cta}</Text><ChevronRight color="white" size={18}/></TouchableOpacity></View>
 
-    <View style={styles.invite}><Gift color={COLORS.primary} size={27}/><View style={styles.inviteBody}><Text style={styles.inviteTitle}>Invite & Earn</Text><Text style={styles.inviteText}>Invite friends to Amira and earn rewards when they qualify.</Text></View><TouchableOpacity onPress={()=>navigation.navigate('InviteEarn')}><Text style={styles.inviteCta}>Invite Friends</Text></TouchableOpacity></View>
+    <View style={styles.invite}><Gift color={COLORS.primary} size={27}/><View style={styles.inviteBody}><Text style={styles.inviteTitle}>Invite & Earn</Text><Text style={styles.inviteText}>Referral rewards are not available yet.</Text></View><TouchableOpacity accessibilityLabel="View Invite and Earn availability" onPress={()=>navigation.navigate('InviteEarn')}><Text style={styles.inviteCta}>Learn More</Text></TouchableOpacity></View>
 
     <Section title="ACCOUNT & SUPPORT">
       <Row icon={Settings} label="Settings" onPress={() => navigation.navigate('Settings')} />
