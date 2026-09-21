@@ -685,6 +685,14 @@ describe('accounting version 3 automatic paid continuation',()=>{
   expect(mockDocs.get('creditWallets/consumer')).toMatchObject({purchasedCredits:60,bonusCredits:40,unallocatedSpentCredits:4,totalBalance:96});
   expect(mockDocs.get('users/consumer')).toMatchObject({level:7,lifetimeQualifyingPurchasedCredits:900});
  });
+ test('authoritative live Gift racing the first paid increment preserves wallet provenance and independent earnings',async()=>{
+  mockDocs.set('creditWallets/consumer',{ownerUid:'consumer',purchasedCredits:60,bonusCredits:40,legacyCredits:0,unallocatedSpentCredits:0,totalBalance:100,accountingVersion:1});
+  mockDocs.set('giftConfig/current',{enabled:true,version:'test-catalog',economics:{version:'test-gift-economics',hostShareBasisPoints:2500},gifts:[{giftId:'test_rose',name:'Test Rose',priceCredits:10,asset:{kind:'emoji',key:'fixture'},enabled:true,displayOrder:1,economicsVersion:'test-gift-economics'}]});
+  const callId=await connectModern(),due=callData(callId).connectedAtMs+30000;await advanceTo(due);jest.setSystemTime(Date.now()+10000);
+  await Promise.all([invoke('sendGift','consumer',{hostUid:'host',giftId:'test_rose',source:'video_call',callId,requestId:'race-gift-1'}),invoke('settleVideoCallIncrement','consumer',{callId})]);
+  expect(mockDocs.get('creditWallets/consumer')).toMatchObject({purchasedCredits:50,bonusCredits:40,legacyCredits:0,unallocatedSpentCredits:8,totalBalance:82});
+  expect(50+40-8).toBe(82);expect(callData(callId)).toMatchObject({status:'connected',settledIncrements:2,billedCredits:8});expect([...mockDocs.values()].filter(x=>x?.type==='gift_send')).toHaveLength(1);expect([...mockDocs.values()].filter(x=>x?.transactionType==='video_call_increment')).toHaveLength(2);expect(mockDocs.get('hostEarnings/host')).toMatchObject({giftPendingCreditsEquivalent:2,pendingCreditsEquivalent:9});
+ });
 });
 
 describe('sponsored invite authority',()=>{

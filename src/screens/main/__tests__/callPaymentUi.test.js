@@ -31,16 +31,18 @@ jest.mock('../../../services/reportService', () => ({ reportService: { submit: j
 jest.mock('../../../services/firebaseService', () => ({ dbService: {} }));
 jest.mock('../../../services/hapticService', () => ({ hapticService: { lightImpact: jest.fn() } }));
 jest.mock('../../../components/RtcVideoView', () => ({ LocalRtcVideoView: () => null, RemoteRtcVideoView: () => null }));
+jest.mock('../../../components/GiftTray',()=>({visible,hostUid,source,callId,onGiftSent})=>{if(!visible)return null;const React=require('react'),{Text,TouchableOpacity}=require('react-native');return <TouchableOpacity accessibilityLabel="Authoritative Gift Tray" onPress={()=>onGiftSent({giftId:'fixture',name:'Fixture Gift',asset:{kind:'emoji',key:'🎁'}},{transactionId:'t'})}><Text>{`${hostUid}:${source}:${callId}`}</Text></TouchableOpacity>;});
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('lucide-react-native', () => ({
   Flag: () => null, Mic: () => null, MicOff: () => null, PhoneOff: () => null, RefreshCw: () => null,
+  Gift:()=>null,MessageCircle:()=>null,
   Star: () => null, UserPlus: () => null, Home: () => null, Check: () => null,
 }));
 
 const VideoCallScreen = require('../VideoCallScreen').default;
 const CallSummaryScreen = require('../CallSummaryScreen').default;
 const { getCallPaymentPresentation } = require('../../../services/callUiState');
-const navigation = { replace: jest.fn(), goBack: jest.fn(), reset: jest.fn() };
+const navigation = { replace: jest.fn(), goBack: jest.fn(), reset: jest.fn(), navigate: jest.fn() };
 const pendingCall = () => ({ callId: 'call-1', callerId: 'consumer', receiverId: 'host', participantIds: ['consumer', 'host'],
   status: 'connected', billingMode: 'awaiting_paid_confirmation', ratePerMinute: 25,
   connectedAtMs: Date.now() - 30000, previewEndsAtMs: Date.now(), paymentDecisionDeadlineMs: Date.now() + 60000 });
@@ -87,12 +89,21 @@ test('host sees neutral waiting state and retains safety and End Call without sp
   expect(screen.queryByText('Continue Paid')).toBeNull();
   expect(screen.getAllByText('Checking automatic paid continuation').length).toBeGreaterThan(0);
   expect(screen.getByLabelText('Call safety')).toBeTruthy();
+  expect(screen.queryByLabelText('Send Gift')).toBeNull();
   fireEvent.press(screen.getByLabelText('End Call'));
   await flush();
   expect(mockCalls.confirmPaid).not.toHaveBeenCalled();
   expect(navigation.replace).toHaveBeenCalledWith('CallSummary', expect.objectContaining({ isConsumer: false }));
   screen.unmount();
 });
+
+test('connected Consumer opens the unified authoritative tray without remounting RTC and sees timed server-success acknowledgement',async()=>{
+ const call={...pendingCall(),billingMode:'paid',paidStartedAtMs:Date.now()},screen=await open(call);expect(screen.getByLabelText('Send Gift')).toBeTruthy();const joins=mockRtc.joinSession.mock.calls.length;
+ fireEvent.press(screen.getByLabelText('Send Gift'));expect(screen.getByText('host:video_call:call-1')).toBeTruthy();expect(mockRtc.joinSession).toHaveBeenCalledTimes(joins);expect(mockRtc.leaveSession).not.toHaveBeenCalled();
+ fireEvent.press(screen.getByLabelText('Authoritative Gift Tray'));expect(screen.getByText('Fixture Gift sent')).toBeTruthy();await act(async()=>jest.advanceTimersByTime(2500));expect(screen.queryByText('Fixture Gift sent')).toBeNull();expect(mockCalls.settleIncrement).not.toHaveBeenCalled();screen.unmount();
+});
+
+test('Gift control is absent while reconnecting and call Chat uses the existing conversation route',async()=>{const call={...pendingCall(),status:'reconnecting'},screen=await open(call);expect(screen.queryByLabelText('Send Gift')).toBeNull();expect(screen.getByLabelText('Open Call Chat')).toBeDisabled();await act(async()=>mockListener({...call,status:'connected'}));fireEvent.press(screen.getByLabelText('Open Call Chat'));expect(navigation.navigate).toHaveBeenCalledWith('ChatDetail',{userId:'host',name:'Host'});screen.unmount();});
 
 test('automatic continuation screen has no manual spending control and still allows consumer to end', async () => {
   const screen = await open();

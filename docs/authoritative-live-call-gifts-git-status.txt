@@ -1,0 +1,29 @@
+AMIRA CHECKPOINT 20 — GIT STATUS
+
+Branch: amira-v2
+Required/actual HEAD: aba3b33d649d83626a3b283644a68e8336c2b019
+Starting tree: clean
+
+Changed product/test files:
+ M functions/src/__tests__/callPaymentLifecycle.test.js
+ M functions/src/giftService.js
+ M src/components/GiftTray.js
+ M src/components/__tests__/giftTray.test.js
+ M src/screens/main/VideoCallScreen.js
+ M src/screens/main/__tests__/callPaymentUi.test.js
+ M src/services/__tests__/giftFoundation.emulator.cjs
+ M src/services/giftService.js
+?? docs/authoritative-live-call-gifts-report.md
+?? docs/authoritative-live-call-gifts-git-status.txt
+
+Validation:
+- Root Jest: 65 suites / 674 tests passed.
+- Standalone Functions Jest: 17 suites / 401 tests passed.
+- Focused Functions Gift/call/Credit: 3 suites / 125 tests passed before the added race; focused race suite then passed 79 tests.
+- Focused Gift/Video Call UI: 2 suites / 18 tests passed.
+- Firestore emulator matrix: all 19 scripts passed (16 on 8289; 3 on 8189).
+- Babel static parse: all 327 repository JS/JSX/CJS files passed (328 including the temporary validator, deleted afterward).
+- JSON parse: all 274 project JSON files passed.
+- Final diff and Git integrity verification passed.
+
+No staging, commit, push, deployment, production mutation, Storage operation, or Paystack call.
