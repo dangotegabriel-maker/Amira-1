@@ -626,6 +626,22 @@ test('old submitted applicant can call as Consumer without changing connected ac
  await expirePreview(callId);await expect(invoke('confirmPaidContinuation','consumer',{callId})).resolves.toMatchObject({billingMode:'paid'});
 });
 
+test.each(['users/consumer/blocked/host','users/host/blocked/consumer'])('block during ringing prevents accept without changing call or locks: %s',async path=>{
+ const {callId}=await start();mockDocs.set(path,{});
+ await expect(invoke('respondToVideoCall','host',{callId,action:'accept'})).rejects.toMatchObject({code:'permission-denied'});
+ expect(callData(callId).status).toBe('ringing');expect(mockDocs.get('activeCallLocks/consumer').callId).toBe(callId);expect(mockDocs.get('activeCallLocks/host').callId).toBe(callId);
+});
+
+test('caller role change during ringing prevents accept',async()=>{
+ let started=await start();mockDocs.get('users/consumer').role='host';mockDocs.get('users/consumer').hostStatus={isApproved:true,availability:'online'};
+ await expect(invoke('respondToVideoCall','host',{callId:started.callId,action:'accept'})).rejects.toMatchObject({code:'permission-denied'});expect(callData(started.callId).status).toBe('ringing');
+});
+
+test('missing or replaced participant lock during ringing prevents accept',async()=>{
+ const {callId}=await start();mockDocs.set('activeCallLocks/consumer',{callId:'other'});
+ await expect(invoke('respondToVideoCall','host',{callId,action:'accept'})).rejects.toMatchObject({code:'already-exists'});expect(callData(callId).status).toBe('ringing');
+});
+
 describe('accounting version 3 automatic paid continuation',()=>{
  test('snapshots disclosed terms before connection and automatically commits the first increment at free exhaustion',async()=>{
   const {callId}=await start({modern:true}),before=callData(callId);

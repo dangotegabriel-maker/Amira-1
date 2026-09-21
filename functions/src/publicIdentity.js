@@ -39,8 +39,8 @@ const createPublicIdentity = ({db, HttpsError}) => {
   };
   const call = async (uid, callId) => {
     if (!id(callId)) fail('invalid-argument','Invalid call identifier.');
-    let snap=await db.doc(`calls/${callId}`).get();
-    if (!snap.exists) snap=await db.doc(`callHistory/${callId}`).get();
+    let snap=await db.doc(`calls/${callId}`).get(), live=snap.exists;
+    if (!live) snap=await db.doc(`callHistory/${callId}`).get();
     const c=snap.data(), participants=c?.participantIds;
     if (!snap.exists || !id(c.callerId) || !id(c.receiverId) || c.callerId===c.receiverId || !Array.isArray(participants) || participants.length!==2 || !participants.includes(c.callerId) || !participants.includes(c.receiverId) || !participants.includes(uid)) fail('permission-denied','Call identity is participant-only.');
     const targetUid=c.callerId===uid?c.receiverId:c.callerId;
@@ -48,8 +48,15 @@ const createPublicIdentity = ({db, HttpsError}) => {
     if (!a || !b) return {callId,identity:null,canInteract:false};
     // Historical participants may retain tiny identity after role changes/block.
     // A block always disables navigation into a new interaction.
-    const vip=isApprovedHost(a)&&isConsumer(b)?await db.doc(`vipMemberships/${targetUid}`).get():null;
-    return {callId,identity:{...identity(targetUid,b),...(vip?{vipActive:require('./vipDomain').active(vip.data(),b,Date.now())}:{})},canInteract:!(await blocked(uid,targetUid))};
+    const isBlocked=await blocked(uid,targetUid);
+    const normalIncoming = live && c.status === 'ringing' && c.receiverId === uid
+      && !c.source && !isBlocked && isApprovedHost(a) && isConsumer(b);
+    let presentation={};
+    if(normalIncoming){
+      const [vip,account,config]=await Promise.all([db.doc(`vipMemberships/${targetUid}`).get(),db.doc(`consumerLevels/${targetUid}`).get(),db.doc('levelConfig/current').get()]);
+      presentation={vipActive:require('./vipDomain').active(vip.data(),b,Date.now()),level:require('./levelDomain').deriveLevel(account.data(),config.data()||require('./levelDomain').DEFAULT_LEVEL_CONFIG)};
+    }
+    return {callId,identity:{...identity(targetUid,b),...presentation},canInteract:!isBlocked};
   };
   const calls = async (uid,input={}) => {
     validate(uid,input,['callIds']);

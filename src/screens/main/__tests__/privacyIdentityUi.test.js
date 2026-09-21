@@ -27,6 +27,16 @@ test('incoming card requests call-authorized identity and leaves response action
  expect(screen.getByText('Real caller')).toBeTruthy();expect(mockIdentity.calls).toHaveBeenCalledWith(['call']);
  expect(mockCall.respond).not.toHaveBeenCalled();screen.unmount();
 });
+test('incoming card shows only authoritative Level and active VIP presentation',async()=>{
+ mockIdentity.calls.mockResolvedValue([{callId:'call',identity:{uid:'caller',username:'Real caller',profilePic:'',level:4,vipActive:true}}]);
+ const screen=render(<Incoming call={call} navigation={navigation}/>);await act(async()=>{});
+ expect(screen.getByLabelText('Amira Level 4')).toBeTruthy();expect(screen.getByLabelText('VIP caller')).toBeTruthy();expect(screen.queryByText(/Friends|Credits|spender/i)).toBeNull();screen.unmount();
+});
+test('missing or malformed incoming Level and inactive VIP display no badges',async()=>{
+ mockIdentity.calls.mockResolvedValue([{callId:'call',identity:{uid:'caller',username:'Real caller',profilePic:'',level:99,vipActive:false}}]);
+ const screen=render(<Incoming call={call} navigation={navigation}/>);await act(async()=>{});
+ expect(screen.queryByLabelText(/Amira Level/)).toBeNull();expect(screen.queryByLabelText('VIP caller')).toBeNull();screen.unmount();
+});
 test('incoming identity failure displays retry and no invented person',async()=>{
  mockIdentity.calls.mockRejectedValueOnce(new Error('Offline'));
  const screen=render(<Incoming call={call} navigation={navigation}/>);await act(async()=>{});

@@ -12,6 +12,7 @@ import { COLORS } from '../theme/COLORS';
 import { callService } from '../services/callService';
 import { publicIdentityService } from '../services/publicIdentityService';
 import { useUser } from '../context/UserContext';
+import { AmiraLevelBadge } from './AmiraLevelBadge';
 
 const IncomingCallCard = ({ call, navigation, onDismiss }) => {
   const {user} = useUser();
@@ -138,7 +139,10 @@ const IncomingCallCard = ({ call, navigation, onDismiss }) => {
           {identityError && <Text onPress={()=>setIdentityVersion(n=>n+1)}> Retry</Text>}
         </Text>
 
-        {caller?.vipActive===true?<Text style={{color:'#B7791F',fontWeight:'900'}}>VIP</Text>:null}
+        <View style={styles.identityBadges}>
+          {Number.isInteger(caller?.level)&&caller.level>=0&&caller.level<=10?<AmiraLevelBadge level={caller.level}/>:null}
+          {caller?.vipActive===true?<Text accessibilityLabel="VIP caller" style={styles.vip}>VIP</Text>:null}
+        </View>
         {caller?.countryName ? (
           <Text style={styles.country}>
             {caller.countryName}
@@ -212,6 +216,8 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 3,
   },
+  identityBadges: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  vip: { color: '#B7791F', backgroundColor: '#FEF3C7', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, fontWeight: '900' },
   actions: {
     flexDirection: 'row',
     gap: 12,
