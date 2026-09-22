@@ -6,10 +6,11 @@ import {isApprovedHost} from '../../models/userModel';
 import {hostActivityService} from '../../services/hostActivityService';
 import {COLORS} from '../../theme/COLORS';
 import {sponsoredInviteService} from '../../services/sponsoredInviteService';
+import {formatCallDuration,formatCallHistoryTime} from '../../utils/callHistory';
 const {ACTIVITY_TABS}=require('../../../functions/src/hostActivityDomain');
 const EMPTY={All:'No activity yet.',Visitors:'No profile visitors yet.',Likes:'No likes yet.',Followers:'No followers yet.',Gifts:'No gift activity yet.',Calls:'No calls yet.'};
-export const activityRelativeTime=(timestamp,now)=>{const minutes=Math.max(0,Math.floor((now-timestamp)/60000));return minutes===0?'Just now':minutes<60?`${minutes}m ago`:minutes<1440?`${Math.floor(minutes/60)}h ago`:`${Math.floor(minutes/1440)}d ago`;};
-const description=event=>event.type==='Visitors'?'Viewed your profile':event.type==='Likes'?'Liked your profile':event.type==='Followers'?'Followed you':event.type==='Gifts'?`${event.giftName} · ${event.earningCreditsEquivalent} pending credit equivalent`:`Video call \u00b7 ${Math.floor(event.durationSeconds/60)}:${String(event.durationSeconds%60).padStart(2,'0')}`;
+export const activityRelativeTime=(timestamp,now)=>formatCallHistoryTime(timestamp,now)||'';
+const description=event=>event.type==='Visitors'?'Viewed your profile':event.type==='Likes'?'Liked your profile':event.type==='Followers'?'Followed you':event.type==='Gifts'?`${event.giftName} · ${event.earningCreditsEquivalent} pending credit equivalent`:`Video call \u00b7 ${formatCallDuration(event.durationSeconds)}`;
 const ActivityRow=({event,now,navigation})=>{
  const [failed,setFailed]=useState(false);
  const [inviting,setInviting]=useState(false);

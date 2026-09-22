@@ -1,0 +1,14 @@
+import {callHistoryStatusLabel,connectedDurationSeconds,formatCallDuration,formatCallHistoryTime,normalizeCallHistoryRecords} from '../callHistory';
+
+const now=Date.UTC(2026,8,21,12);
+const ts=ms=>({toDate:()=>new Date(ms)});
+const record=(patch={})=>({id:'call',callId:'call',callerId:'me',receiverId:'host',participantIds:['me','host'],status:'ended',connectedAt:ts(now-222000),endedAt:ts(now),createdAt:ts(now-300000),durationSeconds:222,...patch});
+
+test.each([[0,'0:00'],[42,'0:42'],[222,'3:42'],[725,'12:05'],[3802,'1:03:22']])('formats connected duration %s', (seconds,expected)=>expect(formatCallDuration(seconds)).toBe(expected));
+test.each([undefined,null,-1,1.5,NaN])('rejects invalid duration %p',value=>expect(formatCallDuration(value)).toBeNull());
+test('connected proof permits genuine zero but never ringing, declined, missed, or failed duration',()=>{expect(connectedDurationSeconds(record({durationSeconds:0}))).toBe(0);for(const status of ['ringing','rejected','missed','failed'])expect(connectedDurationSeconds(record({status,durationSeconds:42}))).toBeNull();expect(connectedDurationSeconds(record({connectedAt:null}))).toBeNull();});
+test('maps only proven declined and missed outcomes; technical ambiguity stays neutral',()=>{expect(callHistoryStatusLabel(record({status:'rejected',endReason:'declined'}))).toBe('Declined video call');expect(callHistoryStatusLabel(record({status:'missed',endReason:'ring_timeout'}))).toBe('Missed video call');expect(callHistoryStatusLabel(record({status:'failed',endReason:'connecting_timeout'}))).toBe('Video call');});
+test.each([[now-18*60000,'18m ago'],[now-2*3600000,'2h ago'],[now-25*3600000,'Yesterday'],[now-3*86400000,'3d ago']])('formats relative time deterministically', (value,expected)=>expect(formatCallHistoryTime(value,now)).toBe(expected));
+test('normalizes Firestore timestamps, older local date, and missing time safely',()=>{expect(formatCallHistoryTime(ts(now-60000),now)).toBe('1m ago');expect(formatCallHistoryTime(null,now)).toBeNull();expect(formatCallHistoryTime(Date.UTC(2025,0,2),now)).toMatch(/2025/);});
+test('deduplicates by authoritative call id, filters unrelated/malformed rows, and sorts newest first with stable ties',()=>{const rows=normalizeCallHistoryRecords([record({id:'b',callId:'b',endedAt:ts(now-1000)}),record({id:'a',callId:'a',endedAt:ts(now-1000)}),record({id:'old',callId:'old',endedAt:ts(now-2000)}),record({id:'b',callId:'b'}),record({id:'other',callId:'other',participantIds:['x','host']}),null],'me');expect(rows.map(row=>row.callId)).toEqual(['a','b','old']);expect(rows[0]).not.toHaveProperty('billedCredits');});
+test.each(['direct','quick_match','sponsored_invite'])('normalizes %s without changing presentation or economics',source=>{const [row]=normalizeCallHistoryRecords([record({source,billedCredits:99})],'me');expect(row).toMatchObject({source,label:'Video call',duration:'3:42'});expect(row).not.toHaveProperty('billedCredits');});

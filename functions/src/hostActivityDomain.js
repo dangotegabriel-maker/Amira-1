@@ -13,9 +13,9 @@ const publicConsumerProfile=(uid,profile,now)=>({...publicIdentity(uid,profile),
 const sortEvents=events=>[...events].sort((a,b)=>b.timestampMs-a.timestampMs||a.id.localeCompare(b.id));
 const completedCall=(history,call,callId,hostUid,now)=>{
  const time=validTime(history?.endedAt,now),seconds=history?.durationSeconds;
- if(!history||!call||history.callId!==callId||history.receiverId!==hostUid||!validId(history.callerId)||history.status!=='ended'||time===null||(validTime(history.connectedAt,now)===null||validTime(history.connectedAt,now)>time)||!Number.isSafeInteger(seconds)||seconds<=0)return null;
+ if(!history||!call||history.callId!==callId||history.receiverId!==hostUid||!validId(history.callerId)||history.status!=='ended'||time===null||(validTime(history.connectedAt,now)===null||validTime(history.connectedAt,now)>time)||!Number.isSafeInteger(seconds)||seconds<0)return null;
  if(history.participantIds?.length!==2||!history.participantIds.includes(hostUid)||!history.participantIds.includes(history.callerId)||history.callerId===hostUid)return null;
- if(call.accountingVersion!==2||call.status!=='ended'||call.receiverId!==hostUid||call.callerId!==history.callerId||call.participantIds?.length!==2||!call.participantIds.includes(hostUid)||!call.participantIds.includes(history.callerId)||call.connection?.state!=='ended'||!Number.isSafeInteger(call.connection.connectedMs)||call.connection.connectedMs<0||Math.floor(call.connection.connectedMs/1000)!==seconds||call.durationSeconds!==seconds)return null;
+ if(![2,3].includes(call.accountingVersion)||call.status!=='ended'||call.receiverId!==hostUid||call.callerId!==history.callerId||call.participantIds?.length!==2||!call.participantIds.includes(hostUid)||!call.participantIds.includes(history.callerId)||call.connection?.state!=='ended'||!Number.isSafeInteger(call.connection.connectedMs)||call.connection.connectedMs<0||Math.floor(call.connection.connectedMs/1000)!==seconds||call.durationSeconds!==seconds)return null;
  return {actorUid:history.callerId,timestampMs:time,durationSeconds:seconds};
 };
 module.exports={ACTIVITY_TABS,SOURCE_LIMIT,VIEW_LIMIT,VIEW_DEDUP_MS,validId,timestampMs,validTime,viewDirection,verifiedView,publicIdentity,publicConsumerProfile,sortEvents,completedCall};

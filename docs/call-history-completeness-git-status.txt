@@ -1,0 +1,17 @@
+Branch: amira-v2
+HEAD: 882fdeb616b9154d879866ea4202fc8cf249d77f
+Index: empty
+Working tree: intentional Checkpoint 23 changes only
+
+git status --short:
+ M functions/src/__tests__/hostActivityDomain.test.js
+ M functions/src/hostActivityDomain.js
+ M src/screens/host/HostActivityScreen.js
+ M src/screens/main/MessageHomeScreen.js
+ M src/screens/main/__tests__/privacyIdentityUi.test.js
+ M src/services/callHistoryService.js
+?? docs/call-history-completeness-git-status.txt
+?? docs/call-history-completeness-report.md
+?? src/services/__tests__/callHistoryService.test.js
+?? src/utils/__tests__/callHistory.test.js
+?? src/utils/callHistory.js
