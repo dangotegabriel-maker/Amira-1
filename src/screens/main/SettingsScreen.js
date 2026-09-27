@@ -2,8 +2,7 @@ import React from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
-import { socketService } from '../../services/socketService';
-import { authService } from '../../services/firebaseService';
+import { useUser } from '../../context/UserContext';
 
 const UnavailableRow = ({ label }) => (
   <View style={[styles.item, styles.disabled]} accessibilityLabel={`${label}, not available yet`} accessibilityState={{ disabled: true }}>
@@ -12,9 +11,11 @@ const UnavailableRow = ({ label }) => (
 );
 
 const SettingsScreen = ({ navigation }) => {
+  const { terminateSession } = useUser();
+  const logout = () => terminateSession().catch(() => Alert.alert('Unable to log out', 'Your account is still signed in. Please try again.'));
   const handleLogout = () => Alert.alert('Logout', 'Are you sure you want to logout?', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Logout', onPress: async () => { await authService.signOut(); socketService.disconnect(); navigation.reset({ index: 0, routes: [{ name: 'Login' }] }); } },
+    { text: 'Logout', onPress: logout },
   ]);
 
   return <ScrollView style={styles.container}>

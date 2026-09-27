@@ -4,15 +4,20 @@ import path from 'path';
 import { Alert } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
-const mockSignOut = jest.fn(async () => undefined);
-const mockDisconnect = jest.fn();
-jest.mock('lucide-react-native', () => ({ Images: () => null, Users: () => null, ChevronRight: () => null }));
-jest.mock('../../../services/firebaseService', () => ({ authService: { signOut: (...args) => mockSignOut(...args) } }));
-jest.mock('../../../services/socketService', () => ({ socketService: { disconnect: (...args) => mockDisconnect(...args) } }));
+const mockTerminateSession = jest.fn(async () => undefined);
+jest.mock('lucide-react-native', () => Object.fromEntries(
+  ['Images', 'Users', 'ChevronRight', 'Coins', 'Crown', 'Eye', 'Gift', 'Headphones', 'LogOut', 'Settings', 'ShieldCheck', 'Sparkles'].map(name => [name, () => null]),
+));
+jest.mock('../../../context/UserContext', () => ({ useUser: () => ({ terminateSession: mockTerminateSession }) }));
+jest.mock('@react-navigation/native', () => ({ useIsFocused: () => false }));
+jest.mock('../../../components/AmiraIdentity', () => ({ AmiraIdentity: () => null }));
+jest.mock('../../../services/profileViewService', () => ({ profileViewService: {} }));
+jest.mock('../../../services/hostApplicationService', () => ({ hostApplicationService: {} }));
 
 const Moments = require('../MomentsScreen').default;
 const InviteEarn = require('../InviteEarnScreen').default;
 const Settings = require('../SettingsScreen').default;
+const MyProfile = require('../MyProfileScreen').default;
 const { translationService } = require('../../../services/translationService');
 const source = file => fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8');
 
@@ -70,11 +75,45 @@ describe('truthful Settings', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, actions) => actions.find(action => action.text === 'Logout').onPress());
     const screen = render(<Settings navigation={navigation} />);
     await act(async () => fireEvent.press(screen.getByLabelText('Logout')));
-    expect(mockSignOut).toHaveBeenCalledTimes(1);
-    expect(mockDisconnect).toHaveBeenCalledTimes(1);
-    expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Login' }] });
+    expect(mockTerminateSession).toHaveBeenCalledTimes(1);
+    expect(navigation.reset).not.toHaveBeenCalled();
     alert.mockRestore();
   });
+
+  test('reports Firebase logout failure without presenting a signed-out transition', async () => {
+    const failure = new Error('auth sign-out failed');
+    mockTerminateSession.mockRejectedValueOnce(failure);
+    const navigation = { navigate: jest.fn(), reset: jest.fn() };
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((title, _message, actions) => {
+      if (title === 'Logout') return actions.find(action => action.text === 'Logout').onPress();
+      return undefined;
+    });
+    const screen = render(<Settings navigation={navigation} />);
+    await act(async () => fireEvent.press(screen.getByLabelText('Logout')));
+    await act(async () => Promise.resolve());
+    expect(Alert.alert).toHaveBeenCalledWith('Unable to log out', 'Your account is still signed in. Please try again.');
+    expect(navigation.reset).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+});
+
+test('My Profile catches shared termination failure without navigating or signing out independently', async () => {
+  mockTerminateSession.mockRejectedValueOnce(new Error('auth sign-out failed'));
+  const navigation = { navigate: jest.fn(), reset: jest.fn(), replace: jest.fn(), dispatch: jest.fn() };
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation((title, _message, actions) => {
+    if (title === 'Log out') return actions.find(action => action.text === 'Log out').onPress();
+    return undefined;
+  });
+  try {
+    const screen = render(<MyProfile navigation={navigation} />);
+    await act(async () => fireEvent.press(screen.getByText('Log out')));
+    expect(mockTerminateSession).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith('Unable to log out', 'Your account is still signed in. Please try again.');
+    for (const action of Object.values(navigation)) expect(action).not.toHaveBeenCalled();
+    expect(source('MyProfileScreen.js')).not.toMatch(/authService\.signOut|firebaseSignOut|socketService\.disconnect/);
+  } finally {
+    alert.mockRestore();
+  }
 });
 
 describe('translation safety', () => {

@@ -26,7 +26,6 @@ import EditProfileScreen from '../screens/main/EditProfileScreen';
 import RechargeHubScreen from '../screens/main/RechargeHubScreen';
 import LeaderboardScreen from '../screens/main/LeaderboardScreen';
 import GiftLedgerScreen from '../screens/main/GiftLedgerScreen';
-import WithdrawalScreen from '../screens/main/WithdrawalScreen';
 import CallSummaryScreen from '../screens/main/CallSummaryScreen';
 import HelpSupportScreen from '../screens/main/HelpSupportScreen';
 import PaymentScreen from '../screens/main/PaymentScreen';
@@ -99,7 +98,6 @@ const RootNavigator = () => {
           <Stack.Screen name="Moments" component={MomentsScreen} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
           {!approvedHost && <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />}
-          {!approvedHost && <Stack.Screen name="Withdrawal" component={WithdrawalScreen} />}
           <Stack.Screen name="CallSummary" component={CallSummaryScreen} />
           <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ headerShown: true, title: 'Help & Support' }} />
           {!approvedHost && <Stack.Screen name="HostApplication" component={HostApplicationScreen} />}

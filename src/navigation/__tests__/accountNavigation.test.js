@@ -41,7 +41,6 @@ jest.mock('../../screens/main/VideoCallScreen',()=>()=>null);
 jest.mock('../../screens/main/VipInfoScreen',()=>()=>null);
 jest.mock('../../screens/main/WalletScreen',()=>()=>null);
 jest.mock('../../screens/main/WhoViewedMeScreen',()=>()=>null);
-jest.mock('../../screens/main/WithdrawalScreen',()=>()=>null);
 jest.mock('../../screens/onboarding/BirthdaySetupScreen',()=>()=>null);
 jest.mock('../../screens/onboarding/CountrySetupScreen',()=>()=>null);
 jest.mock('../../screens/onboarding/GenderSetupScreen',()=>()=>null);
@@ -67,4 +66,7 @@ test('approved Host stack excludes Consumer purchase/rewards/visitors and legacy
 test('pending applicant retains Consumer routes but cannot open earnings/Host visitors',()=>{
  mockUser.role='host';mockUser.hostStatus.verificationStatus='pending';const screen=render(<Root/>);
  for(const text of ['MyLevel','Rewards','WhoViewedMe','VipInfo','HostApplication','FollowingList'])expect(screen.getByText(text)).toBeTruthy();for(const text of ['HostEarnings','HostVisitors','RoleSelection'])expect(screen.queryByText(text)).toBeNull();screen.unmount();
+});
+test('Consumer stack excludes the removed local withdrawal route',()=>{
+ const screen=render(<Root/>);expect(screen.queryByText('Withdrawal')).toBeNull();screen.unmount();
 });

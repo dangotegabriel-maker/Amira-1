@@ -5,8 +5,6 @@ import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import { ChevronRight, Coins, Crown, Eye, Gift, Headphones, LogOut, Settings, ShieldCheck, Sparkles, Users } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
-import { authService } from '../../services/firebaseService';
-import { socketService } from '../../services/socketService';
 import { getCountryByCode } from '../../data/countries';
 import { isApprovedHost, isConsumer } from '../../models/userModel';
 import { profileViewService } from '../../services/profileViewService';
@@ -23,7 +21,7 @@ const Row = ({ icon: Icon, label, detail, onPress, destructive = false }) => (
 
 const MyProfileScreen = ({ navigation }) => {
   const focused = useIsFocused();
-  const { user } = useUser();
+  const { user, terminateSession } = useUser();
   const [profileViewCount, setProfileViewCount] = useState(null);
   const [applicationStatus, setApplicationStatus] = useState('');
   const country = getCountryByCode(user?.countryCode);
@@ -33,9 +31,10 @@ const MyProfileScreen = ({ navigation }) => {
   useEffect(() => { if (focused && user?.uid && !approvedHost) profileViewService.getAggregateCount(user.uid).then(setProfileViewCount).catch(() => setProfileViewCount(null)); }, [user?.uid, focused, approvedHost]);
   useEffect(() => { if (focused && user?.uid && !approvedHost) hostApplicationService.getApplication().then((application)=>setApplicationStatus(application?.status||'')).catch(()=>{}); }, [user?.uid, focused, approvedHost]);
 
+  const terminateWithFeedback = () => terminateSession().catch(() => Alert.alert('Unable to log out', 'Your account is still signed in. Please try again.'));
   const logout = () => Alert.alert('Log out', 'Are you sure you want to log out?', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Log out', style: 'destructive', onPress: async () => { socketService.disconnect(); await authService.signOut(); } },
+    { text: 'Log out', style: 'destructive', onPress: terminateWithFeedback },
   ]);
 
   return <ScrollView style={styles.container} contentContainerStyle={styles.content}>

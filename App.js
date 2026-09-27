@@ -3,7 +3,6 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import RootNavigator from './src/navigation/RootNavigator';
-import { GiftingProvider } from './src/context/GiftingContext';
 import { UserProvider, useUser } from './src/context/UserContext';
 import { presenceService } from './src/services/presenceService';
 import FreeNowBanner from './src/components/FreeNowBanner';
@@ -32,11 +31,9 @@ export default function App() {
   console.log('BOOT: App rendered');
   return (
     <UserProvider>
-      <GiftingProvider>
-        <NavigationContainer>
-           <AppContent />
-        </NavigationContainer>
-      </GiftingProvider>
+      <NavigationContainer>
+         <AppContent />
+      </NavigationContainer>
     </UserProvider>
   );
 }

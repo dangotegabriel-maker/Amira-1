@@ -1,0 +1,21 @@
+ M App.js
+ D src/components/CallWaitingOverlay.js
+ D src/components/GiftingOverlay.js
+ D src/components/GlowAvatar.js
+ D src/context/GiftingContext.js
+ M src/context/UserContext.js
+ M src/hooks/useDiscoveryFilters.js
+ M src/navigation/RootNavigator.js
+ M src/navigation/__tests__/accountNavigation.test.js
+ M src/screens/main/MyProfileScreen.js
+ M src/screens/main/SettingsScreen.js
+ D src/screens/main/WithdrawalScreen.js
+ M src/screens/main/__tests__/truthfulUi.test.js
+ D src/services/giftingService.js
+ D src/services/ledgerService.js
+?? docs/client-financial-authority-session-cleanup-git-status.txt
+?? docs/client-financial-authority-session-cleanup-report.md
+?? src/services/__tests__/clientAuthorityCleanup.test.js
+?? src/services/applicationStorageService.js
+?? src/services/discoveryFilterStore.js
+?? src/services/sessionTerminationService.js

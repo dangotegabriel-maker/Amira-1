@@ -1,5 +1,5 @@
 import {amiraIdentityService} from '../services/amiraIdentityService';
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   auth,
   dbService,
@@ -7,8 +7,11 @@ import {
   getWalletBalance,
   onAuthStateChanged,
 } from '../services/firebaseService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isApprovedHost, isConsumer } from '../models/userModel';
+import { socketService } from '../services/socketService';
+import { applicationStorageService } from '../services/applicationStorageService';
+import { clearSessionDiscoveryFilters } from '../services/discoveryFilterStore';
+import { runSessionTermination } from '../services/sessionTerminationService';
 
 const UserContext = createContext();
 
@@ -16,6 +19,7 @@ export const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [coins, setCoins] = useState(0);
   const [loading, setLoading] = useState(true);
+  const terminationPromise = useRef(null);
 
   const fetchUserCoins = async () => {
     try {
@@ -80,15 +84,25 @@ export const UserProvider = ({ children }) => {
     };
   }, []);
 
-  const handleForceLogout = async () => {
-    try {
-      await AsyncStorage.clear();
-      await firebaseSignOut(auth);
-      setUser(null);
-      setCoins(0);
-    } catch (e) {
-      console.error("Force logout failed:", e);
-    }
+  const terminateSession = () => {
+    if (terminationPromise.current) return terminationPromise.current;
+    const uid = auth.currentUser?.uid || user?.uid;
+    const task = runSessionTermination({
+      disconnect: () => socketService.disconnect(),
+      clearFilters: () => clearSessionDiscoveryFilters(uid),
+      clearStorage: () => applicationStorageService.clearAccountSession(),
+      signOut: () => firebaseSignOut(auth),
+      resetState: () => {
+        setUser(null);
+        setCoins(0);
+      },
+      onCleanupError: (label, error) => console.error(`${label} cleanup failed:`, error),
+    });
+    terminationPromise.current = task;
+    task.finally(() => {
+      if (terminationPromise.current === task) terminationPromise.current = null;
+    }).catch(() => {});
+    return task;
   };
 
   const refreshUser = async () => {
@@ -110,7 +124,8 @@ export const UserProvider = ({ children }) => {
       isConsumer: isConsumer(user),
       isApprovedHost: isApprovedHost(user),
       refreshUser,
-      forceLogout: handleForceLogout,
+      terminateSession,
+      forceLogout: terminateSession,
     }}>
       {children}
     </UserContext.Provider>
