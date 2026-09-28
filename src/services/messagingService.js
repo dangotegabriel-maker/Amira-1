@@ -97,8 +97,12 @@ export const messagingService = {
     );
   },
 
-  subscribeMessages: (conversationId, onValue, onError) =>
-    onSnapshot(
+  subscribeMessages: (conversationId, onValue, onError) => {
+    const session = auth.currentUser;
+    if (!session) return () => {};
+    let active = true;
+    const current = () => active && auth.currentUser === session;
+    const stop = onSnapshot(
       query(
         collection(
           db,
@@ -106,18 +110,24 @@ export const messagingService = {
           conversationId,
           'messages'
         ),
-        orderBy('createdAt', 'asc'),
+        orderBy('createdAt', 'desc'),
         limit(250)
       ),
-      (snapshot) =>
+      (snapshot) => {
+        if (!current()) return;
+        // Select the newest bounded window, then render oldest to newest.
+        // Reverse the full query order, including Firestore's document-ID tie break.
         onValue(
           snapshot.docs.map((entry) => ({
             id: entry.id,
             ...entry.data(),
-          }))
-        ),
-      onError
-    ),
+          })).reverse()
+        );
+      },
+      (error) => { if (current()) onError?.(error); }
+    );
+    return () => { active = false; stop(); };
+  },
 
   subscribeConversation: (conversationId, onValue, onError) =>
   onSnapshot(

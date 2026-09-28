@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, AppState } from 'react-native';
+import { Alert, AppState, FlatList } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 let mockMessages=[], mockConversation=null, mockRole='consumer', mockTargetRole='host';
 const mockMessaging={getConversationId:()=> 'c__h',prepareConversation:jest.fn(async()=>({exists:true})),
@@ -25,6 +25,26 @@ const navigation={setOptions:jest.fn(),navigate:jest.fn()};
 const open=async()=>{const screen=render(<Chat route={{params:{userId:'h',name:'Ken'}}} navigation={navigation}/>);await act(async()=>{});return screen;};
 beforeEach(()=>{mockRole='consumer';mockTargetRole='host';AppState.currentState='active';jest.clearAllMocks();mockMessages=[];mockConversation=null;jest.spyOn(Alert,'alert').mockImplementation(()=>{});});
 afterEach(()=>jest.restoreAllMocks());
+
+test('chat preserves chronological snapshot order and unsubscribes on conversation change/unmount',async()=>{
+ const stopOld=jest.fn(),stopNew=jest.fn();
+ jest.spyOn(mockMessaging,'getConversationId').mockImplementation((uid,target)=>`${uid}__${target}`);
+ mockMessaging.subscribeMessages.mockImplementationOnce((id,cb)=>{
+   cb([{id:'older',senderId:'h',text:'Older'},{id:'newer',senderId:'h',text:'Newer'}]);
+   return stopOld;
+ }).mockImplementationOnce((id,cb)=>{cb([]);return stopNew;});
+ const screen=await open();
+ const list=screen.UNSAFE_getByType(FlatList);
+ expect(list.props.data.map(item=>item.id)).toEqual(['older','newer']);
+ expect(list.props.inverted).not.toBe(true);
+ expect(list.props.onEndReached).toBeUndefined();
+ screen.rerender(<Chat route={{params:{userId:'other'}}} navigation={navigation}/>);
+ await act(async()=>{});
+ expect(stopOld).toHaveBeenCalledTimes(1);
+ expect(mockMessaging.subscribeMessages.mock.calls.map(args=>args[0])).toEqual(['c__h','c__other']);
+ screen.unmount();
+ expect(stopNew).toHaveBeenCalledTimes(1);
+});
 test('out-of-messages state retains draft and offers existing Rewards route',async()=>{
  mockMessaging.sendText.mockRejectedValue({details:{reason:'insufficient_chat_passes'}});
  const screen=await open();fireEvent.changeText(screen.getByPlaceholderText('Type a message...'),'Hello');
