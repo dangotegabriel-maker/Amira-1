@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
-import { auth, dbService } from '../../services/firebaseService';
+import { auth } from '../../services/firebaseService';
 import { validateUsername } from '../../utils/usernameValidation';
 
 const NameSetupScreen = ({ navigation }) => {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
-  const { setUser } = useUser();
+  const { updateProfile } = useUser();
 
   const saveName = async () => {
     setLoading(true);
@@ -20,24 +20,11 @@ const NameSetupScreen = ({ navigation }) => {
     const enteredName = validation.value;
 
     try {
-      const user = auth.currentUser;
-
-      console.log("USER:", auth.currentUser);
-      console.log("UID:", auth.currentUser?.uid);
-      console.log("NAME:", enteredName);
-
-      if (!user?.uid) {
-        alert("User not authenticated");
-        return;
-      }
-
-      await dbService.updateUserProfile(user.uid, {
+      await updateProfile({
         username: enteredName,
-        phone: user.phoneNumber,
+        phone: auth.currentUser?.phoneNumber,
         updatedAt: new Date()
       });
-
-      setUser((currentUser) => ({ ...currentUser, username: enteredName, name: enteredName }));
     } catch (error) {
       console.log("SAVE ERROR:", error.code, error.message);
       alert(error.code + " - " + error.message);

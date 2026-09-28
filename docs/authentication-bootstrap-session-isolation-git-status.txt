@@ -1,0 +1,11 @@
+ M src/context/UserContext.js
+ M src/navigation/RootNavigator.js
+ M src/navigation/__tests__/accountNavigation.test.js
+ M src/screens/onboarding/BirthdaySetupScreen.js
+ M src/screens/onboarding/CountrySetupScreen.js
+ M src/screens/onboarding/GenderSetupScreen.js
+ M src/screens/onboarding/NameSetupScreen.js
+ M src/services/__tests__/clientAuthorityCleanup.test.js
+?? docs/authentication-bootstrap-session-isolation-git-status.txt
+?? docs/authentication-bootstrap-session-isolation-report.md
+?? src/context/__tests__/userSessionIsolation.test.js

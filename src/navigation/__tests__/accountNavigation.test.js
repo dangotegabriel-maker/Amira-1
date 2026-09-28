@@ -1,8 +1,9 @@
 jest.mock('../../screens/main/MyLevelScreen',()=>()=>null);
 import React from 'react';
-import {render} from '@testing-library/react-native';
-let mockUser;
-jest.mock('../../context/UserContext',()=>({useUser:()=>({user:mockUser,loading:false})}));
+import {fireEvent, render} from '@testing-library/react-native';
+let mockUser, mockStatus;
+const mockRetry = jest.fn();
+jest.mock('../../context/UserContext',()=>({useUser:()=>({user:mockUser,loading:['auth_loading','profile_loading'].includes(mockStatus),bootstrapStatus:mockStatus,retryProfile:mockRetry})}));
 jest.mock('../../context/MessageActivityContext',()=>({useMessageActivity:()=>({unread:0}),MessageActivityProvider:({children})=>children}));
 jest.mock('../../services/socketService',()=>({socketService:{on:jest.fn(),off:jest.fn()}}));
 jest.mock('@react-navigation/native',()=>({useNavigation:()=>({navigate:jest.fn()})}));
@@ -49,7 +50,7 @@ jest.mock('../../screens/onboarding/NameSetupScreen',()=>()=>null);
 jest.mock('../../screens/onboarding/OTPScreen',()=>()=>null);
 jest.mock('../../screens/onboarding/PhoneLoginScreen',()=>()=>null);
 const Main=require('../MainTabNavigator').default,Root=require('../RootNavigator').default;
-beforeEach(()=>{mockUser={uid:'p',username:'Person',dob:'1990-01-01',gender:'other',countryCode:'GH',role:'consumer',hostStatus:{isApproved:false}};});
+beforeEach(()=>{mockStatus='ready';mockRetry.mockClear();mockUser={uid:'p',username:'Person',dob:'1990-01-01',gender:'other',countryCode:'GH',role:'consumer',hostStatus:{isApproved:false}};});
 test.each(['draft','submitted','pending','under_review'])('%s stays in Consumer tabs without Host privileges',status=>{
  mockUser.role='host';mockUser.hostStatus.verificationStatus=status;
  const screen=render(<Main/>);for(const text of ['Home','Match','Messages','Profile'])expect(screen.getByText(text)).toBeTruthy();for(const text of ['Connect','Activity','RoleSelection'])expect(screen.queryByText(text)).toBeNull();expect(screen.getByTestId('tabs').props.accessibilityLabel).toBe('Home');screen.unmount();
@@ -69,4 +70,23 @@ test('pending applicant retains Consumer routes but cannot open earnings/Host vi
 });
 test('Consumer stack excludes the removed local withdrawal route',()=>{
  const screen=render(<Root/>);expect(screen.queryByText('Withdrawal')).toBeNull();screen.unmount();
+});
+
+test('profile failure blocks every stack and provides retry before authoritative routing resumes',()=>{
+ mockStatus='profile_error';mockUser=null;const screen=render(<Root/>);
+ expect(screen.getByText("We couldn't load your profile. Please try again.")).toBeTruthy();
+ for(const route of ['Login','NameSetup','BirthdaySetup','CountrySetup','MainTabs','HostApplication'])expect(screen.queryByText(route)).toBeNull();
+ fireEvent.press(screen.getByText('Try again'));expect(mockRetry).toHaveBeenCalledTimes(1);
+ mockStatus='ready';mockUser={uid:'h',username:'Host',dob:'1990-01-01',gender:'female',countryCode:'GH',hostStatus:{isApproved:true}};
+ screen.rerender(<Root/>);expect(screen.getByText('HostEarnings')).toBeTruthy();expect(screen.queryByText('NameSetup')).toBeNull();
+});
+
+test.each(['auth_loading','profile_loading'])('%s does not route into a stack',status=>{
+ mockStatus=status;mockUser=null;const screen=render(<Root/>);expect(screen.toJSON()).toBeNull();
+});
+
+test('signed out routes to Login; only a loaded incomplete profile routes to onboarding',()=>{
+ mockStatus='signed_out';mockUser=null;const screen=render(<Root/>);expect(screen.getByText('Login')).toBeTruthy();
+ mockStatus='ready';mockUser={uid:'a',username:'Alice'};screen.rerender(<Root/>);
+ expect(screen.getByText('BirthdaySetup')).toBeTruthy();expect(screen.queryByText('Login')).toBeNull();
 });

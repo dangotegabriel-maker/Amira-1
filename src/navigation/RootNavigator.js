@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MessageActivityProvider } from '../context/MessageActivityContext';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -46,9 +47,17 @@ import { getRequiredProfileStep, isProfileActuallyComplete, isApprovedHost } fro
 const Stack = createNativeStackNavigator();
 
 const RootNavigator = () => {
-  const { user, loading } = useUser();
+  const { user, loading, bootstrapStatus, retryProfile } = useUser();
 
   if (loading) return null;
+  if (bootstrapStatus === 'profile_error') return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <Text accessibilityRole="alert">We couldn't load your profile. Please try again.</Text>
+      <TouchableOpacity accessibilityRole="button" onPress={retryProfile} style={{ padding: 16 }}>
+        <Text>Try again</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   const approvedHost = isApprovedHost(user);
   const nextProfileScreen = getRequiredProfileStep(user);

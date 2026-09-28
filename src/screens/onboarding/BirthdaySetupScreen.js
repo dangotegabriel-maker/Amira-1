@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from "react
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
-import { dbService } from '../../services/firebaseService';
 
 const BirthdaySetupScreen = ({ navigation }) => {
   const today = new Date();
@@ -11,7 +10,7 @@ const BirthdaySetupScreen = ({ navigation }) => {
   const minimumDate = new Date(today.getFullYear() - 120, today.getMonth(), today.getDate());
   const [date, setDate] = useState(maximumDate);
   const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
-  const { user, setUser } = useUser();
+  const { user, updateProfile } = useUser();
 
   const calculateAge = (birthDate) => {
     const today = new Date();
@@ -39,8 +38,7 @@ const BirthdaySetupScreen = ({ navigation }) => {
     try {
       if (user?.uid) {
         const dob = date.toISOString().slice(0, 10);
-        await dbService.updateUserProfile(user.uid, { dob, age });
-        setUser({ ...user, dob, age });
+        await updateProfile({ dob, age });
       }
     } catch (error) {
       Alert.alert("Error", "Failed to save birthdate. Please try again.");

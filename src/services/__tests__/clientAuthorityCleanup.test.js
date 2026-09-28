@@ -119,8 +119,8 @@ describe('account-scoped session cleanup', () => {
     expect(context).toMatch(/forceLogout:\s*terminateSession/);
     expect(context).toMatch(/applicationStorageService\.clearAccountSession/);
     expect(context).toMatch(/clearSessionDiscoveryFilters/);
-    expect(context).toMatch(/setUser\(null\)/);
-    expect(context).toMatch(/setCoins\(0\)/);
+    expect(context).toMatch(/user: null, coins: 0/);
+    expect(context).toMatch(/emptyState\('signed_out'\)/);
     expect(context).toMatch(/terminationPromise\.current/);
     expect(context).not.toMatch(/AsyncStorage\.clear/);
   });

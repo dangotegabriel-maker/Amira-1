@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
-import { dbService } from '../../services/firebaseService';
 import { useUser } from '../../context/UserContext';
 
 const GenderSetupScreen = () => {
   const [gender, setGender] = useState(null);
   const [loading, setLoading] = useState(false);
-  const { user, refreshUser } = useUser();
+  const { user, updateProfile } = useUser();
 
   const handleContinue = async () => {
     // Safety check: Valid selection must exist
@@ -26,11 +25,9 @@ const GenderSetupScreen = () => {
       const genderValues = { Woman: 'female', Man: 'male', Other: 'other' };
       const g = genderValues[gender];
 
-      await dbService.updateUserProfile(user.uid, {
+      await updateProfile({
         gender: g,
       });
-
-      await refreshUser();
 
       // Close the loop: RootNavigator will now grant access to Home
     } catch (e) {

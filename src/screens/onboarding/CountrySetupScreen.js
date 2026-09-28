@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../../data/countries';
 import { useUser } from '../../context/UserContext';
-import { dbService } from '../../services/firebaseService';
 import { COLORS } from '../../theme/COLORS';
 import CountrySelectorModal from '../../components/CountrySelectorModal';
 
 const CountrySetupScreen = () => {
-  const { user, refreshUser } = useUser();
+  const { user, updateProfile } = useUser();
   const [selectedCountry, setSelectedCountry] = useState(
     COUNTRIES.find((country) => country.cca2 === user?.countryCode) || DEFAULT_COUNTRY,
   );
@@ -18,12 +17,11 @@ const CountrySetupScreen = () => {
     if (!user?.uid || !selectedCountry) return;
     setSaving(true);
     try {
-      await dbService.updateUserProfile(user.uid, {
+      await updateProfile({
         countryCode: selectedCountry.cca2,
         countryName: selectedCountry.name,
         updatedAt: new Date(),
       });
-      await refreshUser();
     } catch (error) {
       Alert.alert('Update Failed', 'Could not save your country. Please try again.');
     } finally {
