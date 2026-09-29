@@ -1,10 +1,11 @@
+const mockAuthenticatedSession = { isCurrent: () => true };
 import React from 'react';
 import {act,fireEvent,render} from '@testing-library/react-native';
 jest.setTimeout(30000);
 let mockUser;
 const mockActivity={list:jest.fn()},mockViews={getAggregateCount:jest.fn(),list:jest.fn(),result:jest.fn()};
 const mockInvite={send:jest.fn()};
-jest.mock('../../../context/UserContext',()=>({useUser:()=>({user:mockUser})}));
+jest.mock('../../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:mockUser})}));
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true,useFocusEffect:callback=>require('react').useEffect(callback,[callback])}));
 jest.mock('../../../services/hostActivityService',()=>({hostActivityService:mockActivity}));
 jest.mock('../../../services/profileViewService',()=>({profileViewService:mockViews}));
@@ -12,6 +13,12 @@ jest.mock('../../../services/sponsoredInviteService',()=>({sponsoredInviteServic
 const Activity=require('../HostActivityScreen').default,Visitors=require('../HostVisitorsScreen').default,Who=require('../../main/WhoViewedMeScreen').default;
 const event=(type='Visitors',canInteract=true)=>({id:`${type}:c`,type,actor:{uid:'c',username:'Real Consumer',profilePic:''},timestampMs:Date.now()-60000,canInteract,canOpenProfile:canInteract,...(type==='Calls'?{durationSeconds:222}:{})});
 const flush=async()=>act(async()=>{for(let i=0;i<12;i++)await Promise.resolve();});
+
+test('Activity invite result cannot alert after its row unmounts',async()=>{
+ const alert=jest.spyOn(require('react-native').Alert,'alert').mockImplementation(()=>{});let resolve;mockInvite.send.mockReturnValueOnce(new Promise(done=>{resolve=done;}));
+ const screen=render(<Activity navigation={{}}/>);await flush();fireEvent.press(screen.getByLabelText('Invite Real Consumer'));screen.unmount();
+ await act(async()=>resolve({sponsoredSeconds:30}));expect(alert).not.toHaveBeenCalled();alert.mockRestore();
+});
 beforeEach(()=>{jest.clearAllMocks();mockUser={uid:'h',role:'host',hostStatus:{isApproved:true}};mockActivity.list.mockResolvedValue({events:[event()]});mockViews.getAggregateCount.mockResolvedValue(2);mockViews.result.mockResolvedValue({count:2,reveal:false,views:[]});mockInvite.send.mockResolvedValue({sponsoredSeconds:30});});
 test('exact tabs, compact real identity, existing profile/message actions and authoritative Invite',async()=>{const navigation={navigate:jest.fn()},screen=render(<Activity navigation={navigation}/>);await flush();expect(screen.getAllByRole('tab').map(node=>node.findByType(require('react-native').Text).props.children)).toEqual(['All','Visitors','Likes','Followers','Gifts','Calls']);expect(screen.getByText('Real Consumer')).toBeTruthy();expect(screen.getByText('Viewed your profile')).toBeTruthy();for(const value of [/Amira Level/,/VIP/,/Friends/])expect(screen.queryByText(value)).toBeNull();fireEvent.press(screen.getByLabelText('Open Real Consumer profile'));expect(navigation.navigate).toHaveBeenCalledWith('UserProfile',{userId:'c'});fireEvent.press(screen.getByLabelText('Message Real Consumer'));expect(navigation.navigate).toHaveBeenCalledWith('ChatDetail',{userId:'c',name:'Real Consumer'});fireEvent.press(screen.getByLabelText('Invite Real Consumer'));await flush();expect(mockInvite.send).toHaveBeenCalledWith('c','activity');screen.unmount();});
 test.each([{uid:'c',role:'consumer'},{uid:'p',role:'host',hostStatus:{isApproved:false}}])('Consumer/pending cannot load Activity: %p',async profile=>{mockUser=profile;const screen=render(<Activity navigation={{}}/>);await flush();expect(screen.toJSON()).toBeNull();expect(mockActivity.list).not.toHaveBeenCalled();screen.unmount();});

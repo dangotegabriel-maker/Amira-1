@@ -1,3 +1,4 @@
+jest.mock('../QuickMatchListener',()=>()=>null);
 import React from 'react';
 jest.setTimeout(30000);
 import { AppState, Alert, Text } from 'react-native';

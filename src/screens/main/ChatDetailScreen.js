@@ -24,6 +24,7 @@ import { publicIdentityService } from '../../services/publicIdentityService';
 import { isApprovedHost, isConsumer } from '../../models/userModel';
 import { startVideoCall } from '../../services/callNavigationService';
 import { COLORS } from '../../theme/COLORS';
+import { useSessionGuard } from '../../hooks/useSessionGuard';
 import { useUser } from '../../context/UserContext';
 import { messagingService } from '../../services/messagingService';
 import { blockService } from '../../services/blockService';
@@ -53,6 +54,9 @@ const toMillis = (value) => {
 const ChatDetailScreen = ({ route, navigation }) => {
   const { user } = useUser();
   const focused = useIsFocused();
+  const targetCurrent = useSessionGuard(route.params?.userId);
+  const current = useSessionGuard(route.params?.userId, focused);
+  const sendLock = useRef(false);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   useEffect(() => { const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active')); return () => sub.remove(); }, []);
   const activity = useMessageActivity();
@@ -78,7 +82,9 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [conversation, setConversation] = useState(null);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
-  const [conversationExists, setConversationExists] = useState(false);
+  const [prepared, setPrepared] = useState(null);
+  const conversationExists = prepared?.id === conversationId && prepared?.scope === current && prepared.exists;
+  const setConversationExists = exists => setPrepared({ id: conversationId, scope: current, exists });
   const [sending, setSending] = useState(false);
 
   const [blocked, setBlocked] = useState({
@@ -91,29 +97,36 @@ const ChatDetailScreen = ({ route, navigation }) => {
 
   const list = useRef(null);
   const pendingSend = useRef(null);
+  useEffect(() => {
+    setMessages([]); setConversation(null); setConversationExists(false); setAccess(null);
+    setSending(false); sendLock.current = false;
+    setBlocked({ blocked: true, blockedByMe: false }); setLoading(true);
+  }, [conversationId, current]);
+  useEffect(() => { setText(''); pendingSend.current = null; }, [conversationId, targetCurrent]);
 
   useEffect(() => {
     setRecipient(null); setIdentityError(false);
-    if (!focused || !receiverId) return undefined;
+    if (!current() || !focused || !receiverId) return undefined;
     let alive = true;
-    publicIdentityService.message(receiverId).then((profile) => { if (alive) setRecipient(profile); }).catch(() => {if(alive) setIdentityError(true);});
+    publicIdentityService.message(receiverId).then((profile) => { if (alive && current()) setRecipient(profile); }).catch(() => {if(alive && current()) setIdentityError(true);});
     activity.setActiveConversation(conversationId);
-    const stop = followService.subscribeRelationship(receiverId, (value) => { setBlocked(value); setAccessVersion((n) => n + 1); }, () => {});
+    const stop = followService.subscribeRelationship(receiverId, (value) => { if (!alive || !current()) return; setBlocked(value); setAccessVersion((n) => n + 1); }, () => { if (alive && current()) { setBlocked({blocked:true}); setAccess(null); } }, current);
     return () => { alive = false; activity.setActiveConversation(null); stop(); };
-  }, [focused, receiverId, conversationId, identityVersion, user?.hostStatus?.isApproved, blocked.blocked]);
+  }, [focused, receiverId, conversationId, identityVersion, user?.hostStatus?.isApproved, blocked.blocked, current]);
   useEffect(() => {
-    if (!focused || !isConsumer(user) || !receiverId || blocked.blocked) return undefined;
+    setAccess(null);
+    if (!current() || !focused || !isConsumer(user) || !receiverId || blocked.blocked) return undefined;
     let alive = true, timer;
     chatPassService.getAccess(receiverId).then((value) => {
-      if (!alive) return;
+      if (!alive || !current()) return;
       setAccess(value);
-      if (value.expiresAtMs > value.serverNowMs) timer = setTimeout(() => setAccessVersion((n) => n + 1), Math.min(2147483647, value.expiresAtMs - value.serverNowMs + 100));
-    }).catch(() => { if (alive) setAccess(null); });
+      if (value.expiresAtMs > value.serverNowMs) timer = setTimeout(() => { if (alive && current()) setAccessVersion((n) => n + 1); }, Math.min(2147483647, value.expiresAtMs - value.serverNowMs + 100));
+    }).catch(() => { if (alive && current()) setAccess(null); });
     return () => { alive = false; clearTimeout(timer); };
-  }, [focused, receiverId, user?.role, accessVersion, blocked.blocked]);
+  }, [focused, receiverId, user?.role, accessVersion, blocked.blocked, current]);
   const hostActions = isConsumer(user) && recipient?.uid === receiverId && isApprovedHost(recipient) && !blocked.blocked;
   const sponsoredAction=isApprovedHost(user)&&recipient?.uid===receiverId&&isConsumer(recipient)&&!blocked.blocked;
-  const invite=async()=>{try{const value=await sponsoredInviteService.send(receiverId,'messages');Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer must accept the disclosed terms.`);}catch(e){Alert.alert('Unable to invite',e.message);}};
+  const invite=async()=>{if(!current())return;try{const value=await sponsoredInviteService.send(receiverId,'messages');if(!current())return;Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer must accept the disclosed terms.`);}catch(e){if(current())Alert.alert('Unable to invite',e.message);}};
 
   useEffect(() => {
     navigation.setOptions({
@@ -141,7 +154,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
         {hostActions && <>
-          <TouchableOpacity accessibilityLabel="Video call" onPress={() => startVideoCall({ navigation, creator: recipient })}><Video color={COLORS.primary} /></TouchableOpacity>
+          <TouchableOpacity accessibilityLabel="Video call" onPress={() => startVideoCall({ navigation, isCurrent: current, creator: recipient })}><Video color={COLORS.primary} /></TouchableOpacity>
           <TouchableOpacity accessibilityLabel="Gifts" onPress={() => setGiftOpen(true)}><Gift color={COLORS.primary} /></TouchableOpacity>
         </>}
         {sponsoredAction&&<TouchableOpacity accessibilityLabel="Video Call Invite" onPress={invite}><Video color={COLORS.primary}/></TouchableOpacity>}
@@ -168,28 +181,28 @@ const ChatDetailScreen = ({ route, navigation }) => {
         </TouchableOpacity></View>
       ),
     });
-  }, [navigation, name, receiverId, blocked, hostActions, sponsoredAction, recipient, identityError]);
+  }, [navigation, name, receiverId, blocked, hostActions, sponsoredAction, recipient, identityError, current]);
 
   useEffect(() => {
-    if (!conversationId) return undefined;
+    if (!conversationId || !current()) return undefined;
 
     let active = true;
 
     blockService
       .getRelationship(receiverId)
-      .then(setBlocked)
+      .then(value => { if (active && current()) setBlocked(value); })
       .catch(() => {});
 
     messagingService
-      .prepareConversation(receiverId)
+      .prepareConversation(receiverId, current)
       .then((result) => {
-        if (!active) return;
+        if (!active || !current()) return;
 
         setConversationExists(result.exists);
         setLoading(false);
       })
       .catch((error) => {
-        if (!active) return;
+        if (!active || !current()) return;
 
         setLoading(false);
 
@@ -202,7 +215,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
     return () => {
       active = false;
     };
-  }, [conversationId, receiverId]);
+  }, [conversationId, receiverId, current]);
 
   useEffect(() => {
     if (!conversationId || !conversationExists || !focused || !appActive) {
@@ -212,6 +225,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
     return messagingService.subscribeMessages(
       conversationId,
       (items) => {
+        if (!current()) return;
         setMessages(items);
         setLoading(false);
 
@@ -219,26 +233,27 @@ const ChatDetailScreen = ({ route, navigation }) => {
           .markRead(conversationId)
           .catch(() => {});
       },
-      () => setLoading(false)
+      () => { if (current()) setLoading(false); }
     );
-  }, [conversationId, conversationExists, focused, appActive]);
+  }, [conversationId, conversationExists, focused, appActive, current]);
 
   useEffect(() => {
-    if (!conversationId || !conversationExists) {
+    if (!current() || !focused || !conversationId || !conversationExists) {
       return undefined;
     }
 
     return messagingService.subscribeConversation(
       conversationId,
       (value) => {
-        setConversation(value);
+        if (current()) setConversation(value);
       },
       () => {}
     );
-  }, [conversationId, conversationExists]);
+  }, [conversationId, conversationExists, focused, current]);
 
   const send = async () => {
-    if (sending || !text.trim()) return;
+    if (!current() || sendLock.current || !text.trim()) return;
+    sendLock.current = true;
 
     setSending(true);
     if (!pendingSend.current || pendingSend.current.text !== text || pendingSend.current.receiverId !== receiverId) {
@@ -253,21 +268,23 @@ const ChatDetailScreen = ({ route, navigation }) => {
         pendingSend.current.id
       );
 
+      if (!current()) return;
       setAccessVersion((n) => n + 1);
       setConversationExists(true);
       pendingSend.current = null;
       setText('');
     } catch (error) {
+      if (!current()) return;
       if (['insufficient_messages', 'insufficient_chat_passes'].includes(error.details?.reason)) {
         Alert.alert('You need a Chat Pass to continue this conversation.', CHAT_PASS_COPY, [
-          { text: 'View Rewards', onPress: () => navigation.navigate('Rewards') },
+          { text: 'View Rewards', onPress: () => current() && navigation.navigate('Rewards') },
           { text: 'Cancel', style: 'cancel' },
         ]);
         return;
       }
       if (error.details?.reason === 'insufficient_credits') {
         Alert.alert('Not enough Credits', 'This message was not sent. Recharge is not available yet.', [
-          { text: 'View Recharge', onPress: () => navigation.navigate('RechargeHub') },
+          { text: 'View Recharge', onPress: () => current() && navigation.navigate('RechargeHub') },
           { text: 'Cancel', style: 'cancel' },
         ]);
         return;
@@ -281,14 +298,16 @@ const ChatDetailScreen = ({ route, navigation }) => {
         error.message
       );
     } finally {
-      setSending(false);
+      if (current()) { sendLock.current = false; setSending(false); }
     }
   };
 
   const toggleBlock = async () => {
+    if (!current()) return;
     try {
       if (blocked.blockedByMe) {
         await blockService.unblock(receiverId);
+        if (!current()) return;
 
         setBlocked({
           blocked: false,
@@ -297,6 +316,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         });
       } else {
         await blockService.block(receiverId);
+        if (!current()) return;
 
         setBlocked({
           ...blocked,
@@ -305,6 +325,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         });
       }
     } catch (error) {
+      if (!current()) return;
       Alert.alert(
         'Unable to update block',
         error.message
@@ -476,18 +497,21 @@ const ChatDetailScreen = ({ route, navigation }) => {
           reason,
           details
         ) => {
-          await reportService.submit({
+          if (!current()) return;
+          try { await reportService.submit({
             reportedUserId: receiverId,
             contextType: 'conversation',
             contextId: conversationId,
             reason,
             details,
           });
+          if (!current()) return;
 
           Alert.alert(
             'Report received',
             'Thank you. Our moderation team will review it.'
           );
+          } catch (_) { if (current()) Alert.alert('Report not sent', 'Please try again.'); }
         }}
       />
     </KeyboardAvoidingView></View>

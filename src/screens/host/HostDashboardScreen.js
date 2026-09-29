@@ -1,3 +1,4 @@
+import { useSessionGuard } from '../../hooks/useSessionGuard';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
@@ -8,8 +9,6 @@ import { useUser } from '../../context/UserContext';
 import { isApprovedHost } from '../../models/userModel';
 import { discoveryService } from '../../services/discoveryService';
 import { getCountryByCode } from '../../data/countries';
-import QuickMatchOfferCard from '../../components/QuickMatchOfferCard';
-import {quickMatchService} from '../../services/quickMatchService';
 
 const ConsumerCard=({consumer,navigation})=>{
   const [failed,setFailed]=useState(false);
@@ -35,7 +34,6 @@ const ConsumerCard=({consumer,navigation})=>{
 const HostDashboardScreen = ({ navigation }) => {
   const { user } = useUser();
   const [updating, setUpdating] = useState(false);
-  const [quickOffer,setQuickOffer]=useState(null);
   const [consumers, setConsumers] = useState([]);
   const [loadingConsumers, setLoadingConsumers] = useState(true);
   const [consumerError, setConsumerError] = useState('');
@@ -45,6 +43,8 @@ const HostDashboardScreen = ({ navigation }) => {
   const toggleLock=useRef(false), statusVersion=useRef(0);
   const uploadsEnabled=process.env.EXPO_PUBLIC_ENABLE_MEDIA_UPLOADS==='true';
   const isFocused = useIsFocused();
+  const current = useSessionGuard('', isFocused);
+  useEffect(() => { setUpdating(false); }, [current]);
   const approvedHost = isApprovedHost(user);
 
   useEffect(() => {
@@ -56,33 +56,32 @@ const HostDashboardScreen = ({ navigation }) => {
     const loadConsumers = discoveryTab === 'Following'
       ? discoveryService.getFollowingConsumers : discoveryService.getConsumersForHosts;
     loadConsumers(user.uid)
-      .then((profiles) => { if (!cancelled) setConsumers(profiles); })
+      .then((profiles) => { if (!cancelled && current()) setConsumers(profiles); })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && current()) {
           setConsumers([]);
           setConsumerError('Could not load people right now. Please try again.');
         }
       })
-      .finally(() => { if (!cancelled) setLoadingConsumers(false); });
+      .finally(() => { if (!cancelled && current()) setLoadingConsumers(false); });
     return () => { cancelled = true; };
-  }, [user?.uid, approvedHost, refreshVersion, discoveryTab, isFocused]);
+  }, [user?.uid, approvedHost, refreshVersion, discoveryTab, isFocused, current]);
 
   useEffect(()=>{
     if(!approvedHost||!isFocused)return undefined;
     const request=++statusVersion.current;let active=true;setStatus(null);setStatusError(false);setToday(null);setTodayError(false);
-    hostConnectService.availability().then(value=>{if(request===statusVersion.current)setStatus(value);}).catch(()=>{if(request===statusVersion.current)setStatusError(true);});
-    hostConnectService.today().then(value=>{if(active)setToday(value);}).catch(()=>{if(active)setTodayError(true);});
+    hostConnectService.availability().then(value=>{if(current()&&request===statusVersion.current)setStatus(value);}).catch(()=>{if(current()&&request===statusVersion.current)setStatusError(true);});
+    hostConnectService.today().then(value=>{if(active && current())setToday(value);}).catch(()=>{if(active && current())setTodayError(true);});
     return()=>{active=false;statusVersion.current++;};
-  },[user?.uid,approvedHost,isFocused,refreshVersion,user?.hostStatus?.availability]);
+  }, [user?.uid,approvedHost,isFocused,refreshVersion,user?.hostStatus?.availability, current]);
   const availability=user?.hostStatus?.availability==='busy'?'busy':status?.availability;
-  useEffect(()=>{if(!approvedHost||!isFocused||availability!=='online'){setQuickOffer(null);return undefined;}let active=true;const load=()=>quickMatchService.offer().then(value=>{if(active)setQuickOffer(value.offer||null)}).catch(()=>{});load();const timer=setInterval(load,5000);return()=>{active=false;clearInterval(timer)}},[approvedHost,isFocused,availability,user?.uid]);
 
   const updateOnlineStatus=async online=>{
-    if(!approvedHost||toggleLock.current||!status?.canToggle||availability==='busy')return;
+    if(!current()||!approvedHost||toggleLock.current||!status?.canToggle||availability==='busy')return;
     toggleLock.current=true;setUpdating(true);const request=++statusVersion.current;
-    try{const value=await hostConnectService.setAvailability(online?'online':'offline');if(request===statusVersion.current)setStatus(value);}
-    catch(error){if(request===statusVersion.current){setStatus(null);setStatusError(false);}Alert.alert('Update failed',error.message||'Could not change availability.');try{const value=await hostConnectService.availability();if(request===statusVersion.current)setStatus(value);}catch(e){if(request===statusVersion.current)setStatusError(true);}}
-    finally{toggleLock.current=false;setUpdating(false);}
+    try{const value=await hostConnectService.setAvailability(online?'online':'offline');if(current()&&request===statusVersion.current)setStatus(value);}
+    catch(error){if(current()&&request===statusVersion.current){setStatus(null);setStatusError(false);}if(!current())return;Alert.alert('Update failed',error.message||'Could not change availability.');try{const value=await hostConnectService.availability();if(current()&&request===statusVersion.current)setStatus(value);}catch(e){if(current()&&request===statusVersion.current)setStatusError(true);}}
+    finally{toggleLock.current=false;if(current())setUpdating(false);}
   };
   if(!approvedHost)return null;
   const refresh = () => setRefreshVersion((value) => value + 1);
@@ -119,7 +118,6 @@ const HostDashboardScreen = ({ navigation }) => {
       </View>}
 
     />
-    {quickOffer&&<QuickMatchOfferCard offer={quickOffer} navigation={navigation} onDismiss={()=>setQuickOffer(null)}/>}
   </View>;
 };
 

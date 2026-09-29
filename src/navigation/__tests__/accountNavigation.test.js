@@ -1,13 +1,14 @@
+const mockAuthenticatedSession = { isCurrent: () => true };
 jest.mock('../../components/IncomingCallListener',()=>({children})=>children);
 jest.mock('../../screens/main/MyLevelScreen',()=>()=>null);
 import React from 'react';
 import {fireEvent, render} from '@testing-library/react-native';
 let mockUser, mockStatus;
 const mockRetry = jest.fn();
-jest.mock('../../context/UserContext',()=>({useUser:()=>({user:mockUser,loading:['auth_loading','profile_loading'].includes(mockStatus),bootstrapStatus:mockStatus,retryProfile:mockRetry})}));
+jest.mock('../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:mockUser,loading:['auth_loading','profile_loading'].includes(mockStatus),bootstrapStatus:mockStatus,retryProfile:mockRetry})}));
 jest.mock('../../context/MessageActivityContext',()=>({useMessageActivity:()=>({unread:0}),MessageActivityProvider:({children})=>children}));
 jest.mock('../../services/socketService',()=>({socketService:{on:jest.fn(),off:jest.fn()}}));
-jest.mock('@react-navigation/native',()=>({useNavigation:()=>({navigate:jest.fn()})}));
+jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true,useNavigation:()=>({navigate:jest.fn()})}));
 jest.mock('react-native-safe-area-context',()=>({SafeAreaProvider:({children})=>children}));
 jest.mock('lucide-react-native',()=>Object.fromEntries(['Compass','HeartHandshake','Activity','MessageCircle','User'].map(key=>[key,()=>null])));
 jest.mock('@react-navigation/bottom-tabs',()=>({createBottomTabNavigator:()=>({Navigator:({children,initialRouteName})=>{const {View}=require('react-native');return <View testID="tabs" accessibilityLabel={initialRouteName}>{children}</View>},Screen:({name})=>{const {Text}=require('react-native');return <Text>{name}</Text>}})}));

@@ -1,18 +1,21 @@
+let mockAuthenticatedSession;
+const mockNewSession=()=>{const token={isCurrent:()=>mockAuthenticatedSession===token};mockAuthenticatedSession=token;};
 import React from 'react';
 import { Alert, AppState, FlatList } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 let mockMessages=[], mockConversation=null, mockRole='consumer', mockTargetRole='host';
+let mockFocused=true;
 const mockMessaging={getConversationId:()=> 'c__h',prepareConversation:jest.fn(async()=>({exists:true})),
  subscribeMessages:jest.fn((id,cb)=>{cb(mockMessages);return()=>{};}),subscribeConversation:jest.fn((id,cb)=>{cb(mockConversation);return()=>{};}),
  markRead:jest.fn(async()=>{}),createMessageId:jest.fn(()=> 'stable-id'),sendText:jest.fn()};
-jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true}));
+jest.mock('@react-navigation/native',()=>({useIsFocused:()=>mockFocused}));
 jest.mock('../../../context/MessageActivityContext',()=>({useMessageActivity:()=>({setActiveConversation:()=>{}})}));
 jest.mock('../../../services/chatPassService',()=>({CHAT_PASS_COPY:'1 Chat Pass unlocks a conversation for 24 hours.',chatAccessLabel:()=>'',chatPassService:{getAccess:async()=>({balance:3})}}));
 jest.mock('../../../services/publicIdentityService',()=>({publicIdentityService:{message:async()=>({uid:'h',username:'Ken',role:mockTargetRole==='host'?'host':'consumer',hostStatus:{isApproved:mockTargetRole==='host'}})}}));
 jest.mock('../../../services/followService',()=>({followService:{subscribeRelationship:()=>()=>{}}}));
 jest.mock('../../../services/callNavigationService',()=>({startVideoCall:jest.fn()}));
 jest.mock('../../../services/sponsoredInviteService',()=>({sponsoredInviteService:{send:jest.fn()}}));
-jest.mock('../../../context/UserContext',()=>({useUser:()=>({user:{uid:'c',role:mockRole,hostStatus:{isApproved:mockRole==='host'}}})}));
+jest.mock('../../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:{uid:'c',role:mockRole,hostStatus:{isApproved:mockRole==='host'}}})}));
 jest.mock('react-native-safe-area-context',()=>({useSafeAreaInsets:()=>({bottom:24})}));
 jest.mock('../../../services/messagingService',()=>({messagingService:mockMessaging}));
 jest.mock('../../../services/blockService',()=>({blockService:{getRelationship:async()=>({blocked:false})}}));
@@ -23,8 +26,17 @@ jest.mock('lucide-react-native',()=>({MoreVertical:()=>null,Send:()=>null,Video:
 const Chat=require('../ChatDetailScreen').default;
 const navigation={setOptions:jest.fn(),navigate:jest.fn()};
 const open=async()=>{const screen=render(<Chat route={{params:{userId:'h',name:'Ken'}}} navigation={navigation}/>);await act(async()=>{});return screen;};
-beforeEach(()=>{mockRole='consumer';mockTargetRole='host';AppState.currentState='active';jest.clearAllMocks();mockMessages=[];mockConversation=null;jest.spyOn(Alert,'alert').mockImplementation(()=>{});});
+beforeEach(()=>{mockFocused=true;mockNewSession();mockRole='consumer';mockTargetRole='host';AppState.currentState='active';jest.clearAllMocks();mockMessages=[];mockConversation=null;jest.spyOn(Alert,'alert').mockImplementation(()=>{});});
 afterEach(()=>jest.restoreAllMocks());
+
+test('temporary blur keeps draft but invalidates old callbacks; recipient change clears draft',async()=>{
+ const screen=await open();fireEvent.changeText(screen.getByPlaceholderText('Type a message...'),'Unsent draft');
+ mockFocused=false;screen.rerender(<Chat route={{params:{userId:'h'}}} navigation={navigation}/>);
+ mockFocused=true;screen.rerender(<Chat route={{params:{userId:'h'}}} navigation={navigation}/>);await act(async()=>{});
+ expect(screen.getByDisplayValue('Unsent draft')).toBeTruthy();
+ screen.rerender(<Chat route={{params:{userId:'other'}}} navigation={navigation}/>);await act(async()=>{});
+ expect(screen.queryByDisplayValue('Unsent draft')).toBeNull();
+});
 
 test('chat preserves chronological snapshot order and unsubscribes on conversation change/unmount',async()=>{
  const stopOld=jest.fn(),stopNew=jest.fn();
@@ -81,4 +93,19 @@ test.each([['consumer','host',true],['host','consumer',false],['consumer','consu
  expect(Boolean(header.queryByLabelText('Gifts'))).toBe(shown);
  if(shown){fireEvent.press(header.getByLabelText('Gifts'));expect(screen.getByText('Authoritative Gift Tray')).toBeTruthy();expect(mockMessaging.sendText).not.toHaveBeenCalled();}
  header.unmount();screen.unmount();
+});
+
+
+test('obsolete conversation snapshots/errors cannot overwrite the new conversation or mark the old one read',async()=>{
+ const callbacks=[];mockMessaging.subscribeMessages.mockImplementation((id,value,error)=>{callbacks.push({id,value,error,stop:jest.fn()});return callbacks.at(-1).stop;});
+ jest.spyOn(mockMessaging,'getConversationId').mockImplementation((uid,target)=>`${uid}__${target}`);
+ const screen=await open();act(()=>callbacks[0].value([{id:'a',senderId:'h',text:'Old history'}]));
+ screen.rerender(<Chat route={{params:{userId:'other'}}} navigation={navigation}/>);await act(async()=>{});
+ mockMessaging.markRead.mockClear();act(()=>{callbacks[0].value([{id:'stale',text:'Stale private text'}]);callbacks[0].error(new Error('old'));});
+ expect(screen.queryByText('Old history')).toBeNull();expect(screen.queryByText('Stale private text')).toBeNull();expect(mockMessaging.markRead).not.toHaveBeenCalled();expect(callbacks[0].stop).toHaveBeenCalledTimes(1);
+});
+test.each(['same UID','unmount','recipient'])('send failure after %s cannot alert or navigate',async kind=>{
+ let reject;mockMessaging.sendText.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;}));const screen=await open();fireEvent.changeText(screen.getByPlaceholderText('Type a message...'),'Hello');act(()=>{fireEvent.press(screen.getByLabelText('Send message'));});
+ if(kind==='same UID')mockNewSession();else if(kind==='unmount')screen.unmount();else{screen.rerender(<Chat route={{params:{userId:'other'}}} navigation={navigation}/>);await act(async()=>{});}
+ await act(async()=>reject({details:{reason:'insufficient_credits'}}));expect(Alert.alert).not.toHaveBeenCalled();expect(navigation.navigate).not.toHaveBeenCalled();
 });

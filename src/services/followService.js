@@ -24,14 +24,20 @@ export const followingSnapshotToIds = (snapshot) => snapshot.docs.map((entry) =>
 export const resolveFollowLabel = ({ following, followedBy, blocked = false, valid = true }) =>
   blocked || !valid ? 'Follow' : following && followedBy ? 'Friends' : following ? 'Following' : 'Follow';
 
-const follow = async (targetId) => {
+const follow = async (targetId, isCurrent = () => true) => {
+  const authUser = auth.currentUser;
+  const check = () => { if (!isCurrent() || auth.currentUser !== authUser) throw new Error('Session changed.'); };
+  check();
   const source = await requireSource();
+  check();
   const capability = await publicIdentityService.relationship(targetId);
+  check();
   if (!capability.valid) throw new Error('This follow relationship is not supported.');
   const reference = doc(db, 'users', source.uid, 'following', targetId);
   // A transaction makes repeated follows idempotent without resetting createdAt.
   await runTransaction(db, async (transaction) => {
     if ((await transaction.get(reference)).exists()) return;
+    check();
     transaction.set(reference, isConsumer(source) ? {
       consumerId: source.uid, hostId: targetId, createdAt: serverTimestamp(),
     } : {
@@ -41,21 +47,25 @@ const follow = async (targetId) => {
   return true;
 };
 
-const unfollow = async (targetId) => {
+const unfollow = async (targetId, isCurrent = () => true) => {
+  const authUser = auth.currentUser;
   const source = await requireSource();
+  if (!isCurrent() || auth.currentUser !== authUser) throw new Error('Session changed.');
   // Allow removal even when the target's role or approval has since changed.
   await deleteDoc(doc(db, 'users', source.uid, 'following', targetId));
   return false;
 };
 
 export const followService = {
-  subscribeRelationship: (targetId, onValue, onError) => {
+  subscribeRelationship: (targetId, onValue, onError, isCurrent = () => true) => {
+    const authUser = auth.currentUser;
+    const current = () => active && auth.currentUser === authUser && isCurrent();
     const uid = auth.currentUser?.uid;
     if (!uid || !targetId || uid === targetId) return () => {};
     const state = {}, ready = new Set();
     let active = true, synced = false, version = 0;
     const emit = () => {
-      if (!active || ready.size !== 5 || auth.currentUser?.uid !== uid) return;
+      if (!current() || ready.size !== 5) return;
       const value = {following:state.following, followedBy:state.followedBy, blocked:state.blockedByMe || state.blockedMe,
         blockedByMe:state.blockedByMe, blockedMe:state.blockedMe, valid:state.valid === true};
       value.label = resolveFollowLabel(value);
@@ -63,17 +73,18 @@ export const followService = {
       if (value.label !== 'Friends') synced = false;
       if (value.label === 'Friends' && !synced) {
         synced = true;
-        Promise.resolve().then(() => require('./socialBackend').invokeSocial('syncFriendship', {targetUid:targetId}))
-          .catch(error => {synced=false; if(active) onError?.(error);});
+        Promise.resolve().then(() => current() ? require('./socialBackend').invokeSocial('syncFriendship', {targetUid:targetId}) : undefined)
+          .catch(error => {synced=false; if(current()) onError?.(error);});
       }
     };
     const refresh = () => {
-      const current=++version;
+      if (!current()) return;
+      const request=++version;
       emit();
       publicIdentityService.relationship(targetId).then(value => {
-        if (!active || current!==version) return;
+        if (!isCurrent() || !active || auth.currentUser !== authUser || request!==version) return;
         state.valid=value.valid; emit();
-      }).catch(error => {if(active && current===version) {state.valid=false;emit();onError?.(error);}});
+      }).catch(error => {if(isCurrent() && active && auth.currentUser === authUser && request===version) {state.valid=false;emit();onError?.(error);}});
     };
     const paths = {
       source: ['users', uid],
@@ -81,14 +92,14 @@ export const followService = {
       blockedByMe: ['users', uid, 'blocked', targetId], blockedMe: ['users', targetId, 'blocked', uid],
     };
     const stops = Object.entries(paths).map(([key, path]) => onSnapshot(doc(db, ...path), { includeMetadataChanges: true }, (snapshot) => {
-      if (snapshot.metadata?.hasPendingWrites) return;
+      if (!current() || snapshot.metadata?.hasPendingWrites) return;
       const previous=state[key];
       state[key] = key === 'source' ? { ...snapshot.data(), uid } : snapshot.exists();
       ready.add(key);
       if (key==='source' && isApprovedHost(previous)!==isApprovedHost(state.source)) state.valid=false;
       emit();
       if (ready.size===5 && (previous!==state[key] || state.valid===undefined)) refresh();
-    }, onError));
+    }, error => { if (current()) { state.valid = false; onValue({ valid: false, blocked: true, label: 'Follow' }); onError?.(error); } }));
     return () => { active = false; stops.forEach((stop) => stop()); };
   },
   follow,

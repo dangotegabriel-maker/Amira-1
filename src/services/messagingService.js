@@ -19,7 +19,7 @@ import { getDirectConversationId } from '../utils/socialDomain';
 export const messagingService = {
   getConversationId: getDirectConversationId,
 
-  prepareConversation: async (receiverId) => {
+  prepareConversation: async (receiverId, isCurrent = () => true) => {
     const sender = auth.currentUser;
 
     if (!sender?.uid || !receiverId || receiverId === sender.uid) {
@@ -32,7 +32,9 @@ export const messagingService = {
       );
     }
 
+    if (auth.currentUser !== sender || !isCurrent()) throw new Error('Session changed.');
     const receiverProfile = await publicIdentityService.message(receiverId);
+    if (auth.currentUser !== sender || !isCurrent()) throw new Error('Session changed.');
 
     if (!receiverProfile) {
       throw new Error('Recipient profile is unavailable.');
@@ -129,17 +131,15 @@ export const messagingService = {
     return () => { active = false; stop(); };
   },
 
-  subscribeConversation: (conversationId, onValue, onError) =>
-  onSnapshot(
-    doc(db, 'conversations', conversationId),
-    (snapshot) =>
-      onValue(
-        snapshot.exists()
-          ? { id: snapshot.id, ...snapshot.data() }
-          : null
-      ),
-    onError
-  ),
+  subscribeConversation: (conversationId, onValue, onError) => {
+    let active = true;
+    const authUser = auth.currentUser;
+    const current = () => active && auth.currentUser === authUser;
+    const stop = onSnapshot(doc(db, 'conversations', conversationId), snapshot => {
+      if (current()) onValue(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null);
+    }, error => { if (current()) onError?.(error); });
+    return () => { active = false; stop(); };
+  },
 
   createMessageId: () => doc(collection(db, 'messageRequests')).id,
 

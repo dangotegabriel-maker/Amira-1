@@ -13,6 +13,7 @@ const emptyState = status => ({ user: null, coins: 0, status });
 export const UserProvider = ({ children }) => {
   const [state, setState] = useState(() => emptyState('auth_loading'));
   const owner = useRef(null);
+  const sessionVersion = useRef(0);
   const terminationPromise = useRef(null);
 
   // Token identity distinguishes even two authentication sessions for one UID.
@@ -23,6 +24,7 @@ export const UserProvider = ({ children }) => {
     const previous = owner.current;
     owner.current = null;
     previous?.stop();
+    if (previous?.authUser?.uid) clearSessionDiscoveryFilters(previous.authUser.uid);
   };
   const commitProfile = (token, profile) => {
     if (!current(token)) return;
@@ -43,7 +45,7 @@ export const UserProvider = ({ children }) => {
       return;
     }
     const token = { authUser, lifecycle, stop: () => {} };
-    token.publicSession = { isCurrent: () => current(token) };
+    token.publicSession = { key: ++sessionVersion.current, isCurrent: () => current(token) };
     owner.current = token;
     setState(emptyState('profile_loading'));
     try {
@@ -116,6 +118,7 @@ export const UserProvider = ({ children }) => {
     }
   };
   const terminateSession = () => {
+    if (!current(session)) return Promise.resolve();
     if (terminationPromise.current) return terminationPromise.current;
     const terminatingOwner = owner.current;
     const authUser = auth.currentUser;

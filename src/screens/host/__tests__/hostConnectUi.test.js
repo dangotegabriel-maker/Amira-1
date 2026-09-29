@@ -1,10 +1,11 @@
+const mockAuthenticatedSession = { isCurrent: () => true };
 import React from 'react';
 import {Alert,Image} from 'react-native';
 import {act,fireEvent,render} from '@testing-library/react-native';
 jest.setTimeout(30000);
 let mockUser;
 const mockConnect={availability:jest.fn(),setAvailability:jest.fn(),today:jest.fn()},mockDiscovery={getConsumersForHosts:jest.fn(),getFollowingConsumers:jest.fn()},mockTrack=jest.fn();
-jest.mock('../../../context/UserContext',()=>({useUser:()=>({user:mockUser})}));
+jest.mock('../../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:mockUser})}));
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true}));
 jest.mock('../../../services/hostConnectService',()=>({hostConnectService:mockConnect}));
 jest.mock('../../../services/discoveryService',()=>({discoveryService:mockDiscovery}));
@@ -15,6 +16,12 @@ jest.mock('../../../services/quickMatchService',()=>({quickMatchService:{offer:a
 jest.mock('../../../components/QuickMatchOfferCard',()=>()=>null);
 const Connect=require('../HostDashboardScreen').default;
 const flush=async()=>act(async()=>{for(let i=0;i<12;i++)await Promise.resolve();});
+
+test('availability failure after Connect unmount cannot alert or start reconciliation',async()=>{
+ const alert=jest.spyOn(Alert,'alert').mockImplementation(()=>{});let reject;mockConnect.setAvailability.mockReturnValueOnce(new Promise((_resolve,fail)=>{reject=fail;}));
+ const screen=render(<Connect navigation={{}}/>);await flush();fireEvent(screen.getByLabelText('Host availability'),'valueChange',true);screen.unmount();mockConnect.availability.mockClear();
+ await act(async()=>reject(new Error('old')));expect(alert).not.toHaveBeenCalled();expect(mockConnect.availability).not.toHaveBeenCalled();alert.mockRestore();
+});
 beforeEach(()=>{jest.clearAllMocks();mockUser={uid:'h',username:'Actual Host',hostStatus:{isApproved:true,availability:'offline'}};mockConnect.availability.mockResolvedValue({availability:'offline',canToggle:true});mockConnect.today.mockResolvedValue({visitors:0});mockConnect.setAvailability.mockResolvedValue({availability:'online',canToggle:true});mockDiscovery.getConsumersForHosts.mockResolvedValue([{uid:'c',username:'Actual Consumer',profilePic:'https://example.test/real.jpg',countryCode:'GH',age:null}]);mockDiscovery.getFollowingConsumers.mockResolvedValue([]);});
 test('exact discovery tabs, real compact cards, existing full profile route; no impression tracking or commercial badges',async()=>{const navigation={navigate:jest.fn()},screen=render(<Connect navigation={navigation}/>);await flush();expect(screen.getAllByRole('tab')).toHaveLength(2);for(const tab of ['For You','Following'])expect(screen.getByText(tab)).toBeTruthy();for(const text of ['Visitors','Search','Earnings','VIP','Friends','Amira Level'])expect(screen.queryByText(text)).toBeNull();fireEvent.press(screen.getByText('Actual Consumer'));expect(navigation.navigate).toHaveBeenCalledWith('UserProfile',{userId:'c'});expect(mockTrack).not.toHaveBeenCalled();const image=screen.UNSAFE_getByType(Image);fireEvent(image,'error');expect(screen.getByText('A')).toBeTruthy();screen.unmount();});
 test.each([{uid:'c',hostStatus:{isApproved:false}},{uid:'p',role:'host',hostStatus:{isApproved:false}}])('nonapproved role cannot load Connect %p',async user=>{mockUser=user;const screen=render(<Connect navigation={{}}/>);await flush();expect(screen.toJSON()).toBeNull();expect(mockConnect.availability).not.toHaveBeenCalled();expect(mockDiscovery.getConsumersForHosts).not.toHaveBeenCalled();screen.unmount();});

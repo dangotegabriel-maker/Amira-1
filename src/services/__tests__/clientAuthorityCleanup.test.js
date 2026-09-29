@@ -5,13 +5,20 @@ import { act, render, waitFor } from '@testing-library/react-native';
 
 const mockFirebaseSignOut = jest.fn();
 const mockDisconnect = jest.fn();
+const mockAuth = { currentUser: { uid: 'account-a' } };
+let mockAuthCallback;
 jest.mock('../firebaseService', () => ({
-  auth: { currentUser: { uid: 'account-a' } },
-  onAuthStateChanged: jest.fn(() => () => {}),
+  auth: mockAuth,
+  onAuthStateChanged: jest.fn((_auth, callback) => { mockAuthCallback = callback; return () => {}; }),
+  dbService: {
+    ensureUserProfile: async user => ({ uid: user.uid }),
+    subscribeToUserProfile: () => () => {},
+  },
+  getWalletBalance: () => 0,
   firebaseSignOut: (...args) => mockFirebaseSignOut(...args),
 }));
 jest.mock('../socketService', () => ({ socketService: { disconnect: () => mockDisconnect() } }));
-jest.mock('../amiraIdentityService', () => ({ amiraIdentityService: {} }));
+jest.mock('../amiraIdentityService', () => ({ amiraIdentityService: { ensure: async () => ({}) } }));
 
 const mockMultiRemove = jest.fn(async () => undefined);
 const mockClear = jest.fn(async () => undefined);
@@ -60,6 +67,7 @@ describe('account-scoped session cleanup', () => {
     let session;
     const Probe = () => { session = useUser(); return null; };
     render(<UserProvider><Probe /></UserProvider>);
+    await act(async () => { mockAuthCallback(mockAuth.currentUser); });
     let completeSignOut;
     mockFirebaseSignOut.mockImplementationOnce(() => new Promise(resolve => { completeSignOut = resolve; }));
 
@@ -74,6 +82,8 @@ describe('account-scoped session cleanup', () => {
       await expect(Promise.all([first, second])).resolves.toEqual([undefined, undefined]);
     });
 
+    // A later logout belongs to a newly authenticated session, not signed-out UI.
+    await act(async () => { mockAuth.currentUser = { uid: 'account-a' }; mockAuthCallback(mockAuth.currentUser); });
     await act(async () => {
       const later = session.terminateSession();
       expect(later).not.toBe(first);

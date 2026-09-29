@@ -139,3 +139,19 @@ test('unsubscribed relationship cannot display a late capability response',async
  const calls=value.mock.calls.length;stop();resolve({valid:true});await Promise.resolve();
  expect(value).toHaveBeenCalledTimes(calls);
 });
+
+
+test.each(['unsubscribe','replacement','same-UID capability'])('relationship %s suppresses queued values/errors and sync actions',async kind=>{
+ auth.currentUser={uid:consumer.uid};let valid=true;const callbacks=[];
+ publicIdentityService.relationship.mockResolvedValue({valid:true});
+ onSnapshot.mockImplementation((_path,_options,value,error)=>{callbacks.push({value,error});return jest.fn();});
+ const value=jest.fn(),error=jest.fn(),stop=followService.subscribeRelationship(host.uid,value,error,()=>valid);
+ if(kind==='unsubscribe')stop();else if(kind==='replacement')auth.currentUser={uid:'b'};else valid=false;
+ for(const cb of callbacks){cb.value({exists:()=>true,data:()=>consumer,metadata:{}});cb.error(new Error('old'));}
+ await Promise.resolve();expect(value).not.toHaveBeenCalled();expect(error).not.toHaveBeenCalled();expect(publicIdentityService.relationship).not.toHaveBeenCalled();expect(require('../socialBackend').invokeSocial).not.toHaveBeenCalled();
+});
+test('follow stops before capability/write when session expires during source resolution',async()=>{
+ const tx=prepareFollow(consumer,host);let resolve;dbService.getUserProfile.mockReturnValueOnce(new Promise(done=>{resolve=done;}));let valid=true;
+ const action=followService.follow(host.uid,()=>valid);valid=false;resolve(consumer);
+ await expect(action).rejects.toThrow('Session changed');expect(publicIdentityService.relationship).not.toHaveBeenCalled();expect(tx.set).not.toHaveBeenCalled();
+});

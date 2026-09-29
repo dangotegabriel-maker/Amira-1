@@ -9,6 +9,7 @@ import { quoteIncrement } from '../../services/billingService';
 import { getCallPaymentPresentation } from '../../services/callUiState';
 import { blockService } from '../../services/blockService';
 import { reportService } from '../../services/reportService';
+import { useSessionGuard } from '../../hooks/useSessionGuard';
 import { useUser } from '../../context/UserContext';
 import { LocalRtcVideoView, RemoteRtcVideoView } from '../../components/RtcVideoView';
 import GiftTray from '../../components/GiftTray';
@@ -19,6 +20,7 @@ const friendlyEnd = { rejected: 'Call declined', missed: 'Call not answered', fa
 
 const VideoCallScreen = ({ route, navigation }) => {
   const initialCall = route.params?.call;
+  const sessionCurrent = useSessionGuard(initialCall?.callId || initialCall?.id);
   const remoteProfile = route.params?.creator || initialCall?.creator;
   const { user, coins } = useUser();
   const [call, setCall] = useState(initialCall);
@@ -33,12 +35,13 @@ const VideoCallScreen = ({ route, navigation }) => {
   const rtcEvidence = useRef(false), eventSequence = useRef(0), eventQueue = useRef(Promise.resolve());
   const reportConnection = (state) => {
     eventQueue.current = eventQueue.current.catch(() => {}).then(async () => {
+      if (!sessionCurrent()) return;
       const current = callRef.current;
       if (endedRef.current || ![2,3].includes(current?.accountingVersion) || !['connected','reconnecting'].includes(current.status)) return;
       if (state === 'connected' && !rtcEvidence.current) return;
       const sequence = ++eventSequence.current;
       const value = await callService.reportConnection(current.callId || current.id, { state, sequence, epoch: current.connection.epoch });
-      if (!endedRef.current && (value.lifecycleRevision || 0) >= (callRef.current?.lifecycleRevision || 0)) { callRef.current = value; setCall(value); setPhase(value.status); }
+      if (sessionCurrent() && !endedRef.current && (value.lifecycleRevision || 0) >= (callRef.current?.lifecycleRevision || 0)) { callRef.current = value; setCall(value); setPhase(value.status); }
     }).catch(() => {});
     return eventQueue.current;
   };
@@ -55,17 +58,19 @@ const VideoCallScreen = ({ route, navigation }) => {
   const previewRemaining = payment.previewRemaining ?? DAILY_FREE_PREVIEW_SECONDS;
   const giftTimer=useRef();
   useEffect(()=>()=>clearTimeout(giftTimer.current),[]);
-  useEffect(()=>{if(phase!=='connected')setGiftOpen(false);},[phase]);
-  const acknowledgeGift=(gift)=>{setGiftNotice(gift);clearTimeout(giftTimer.current);giftTimer.current=setTimeout(()=>setGiftNotice(null),2500);};
+  useEffect(()=>{if(phase!=='connected')setGiftOpen(false);},[phase, sessionCurrent]);
+  const acknowledgeGift=(gift)=>{if(!sessionCurrent())return;setGiftNotice(gift);clearTimeout(giftTimer.current);giftTimer.current=setTimeout(()=>{if(sessionCurrent())setGiftNotice(null);},2500);};
 
   const finish = async (reason = 'participant_ended') => {
-    if (endedRef.current) return;
+    if (!sessionCurrent() || endedRef.current) return;
     endedRef.current = true;
     clearTimeout(reconnectRef.current);
     await rtcService.leaveSession().catch(() => {});
+    if (!sessionCurrent()) return;
     const current = callRef.current;
     let result = { durationSeconds: current?.durationSeconds ?? duration, billedCredits: current?.billedCredits || 0 };
     if (!current?.simulated) result = await callService.end(current.callId || current.id, reason).catch(() => result);
+    if (!sessionCurrent()) return;
     navigation.replace('CallSummary', {
       callId: current?.simulated ? undefined : current?.callId || current?.id,
       duration: result.durationSeconds ?? duration, coinsSpent: result.billedCredits ?? 0,
@@ -76,28 +81,36 @@ const VideoCallScreen = ({ route, navigation }) => {
   finishRef.current = finish;
   syncRef.current = async () => {
     const current = callRef.current;
-    if (current?.simulated || syncPending.current || endedRef.current) return;
+    if (!sessionCurrent() || current?.simulated || syncPending.current || endedRef.current) return;
     syncPending.current = true;
     lastSync.current = Date.now();
     try {
       const state = await callService.syncPaymentState(current.callId || current.id);
-      if (endedRef.current) return;
+      if (!sessionCurrent() || endedRef.current) return;
       clockOffset.current = state.serverNowMs - Date.now();
       setClockReady(true);
       setNowMs(state.serverNowMs);
       // Firestore remains the mode authority; an older callable response must
       // never overwrite a newer paid/ended snapshot.
     } catch (_) {
+      if (!sessionCurrent()) return;
       // Retry while the call remains mounted. Expired previews stay muted.
       if (getCallPaymentPresentation(callRef.current, Date.now() + clockOffset.current).decisionExpired) {
         finishRef.current('payment_decision_timeout');
       }
-    } finally { syncPending.current = false; }
+    } finally { if (sessionCurrent()) syncPending.current = false; }
   };
 
   useEffect(() => {
+    if (!sessionCurrent()) return undefined;
+    endedRef.current = false; joinedRef.current = false;
+    rtcEvidence.current = false; eventSequence.current = 0; eventQueue.current = Promise.resolve();
+    syncPending.current = false; lastSync.current = 0; clockOffset.current = 0; reconnectRef.current = null;
+    setRtcReady(false); setRemoteUid(null); setClockReady(initialCall?.simulated === true);
+    setGiftOpen(false); setGiftNotice(null); clearTimeout(giftTimer.current);
+    callRef.current = initialCall; setCall(initialCall); setPhase(initialCall?.status || 'ringing');
     if (!initialCall?.callId && !initialCall?.id) {
-      Alert.alert('Video call unavailable', 'Please start the call again.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      Alert.alert('Video call unavailable', 'Please start the call again.', [{ text: 'OK', onPress: () => sessionCurrent() && navigation.goBack() }]);
       return undefined;
     }
     let unsubscribe = () => {}, simTimer, active = true;
@@ -107,10 +120,10 @@ const VideoCallScreen = ({ route, navigation }) => {
       setPhase('reconnecting');
       if (reconnectRef.current) return;
       clearTimeout(reconnectRef.current);
-      reconnectRef.current = setTimeout(() => finishRef.current(reason), RTC_RECONNECT_GRACE_SECONDS * 1000);
+      reconnectRef.current = setTimeout(() => { if(sessionCurrent())finishRef.current(reason); }, RTC_RECONNECT_GRACE_SECONDS * 1000);
     };
     const off = rtcService.subscribe(async (event) => {
-      if (!active || endedRef.current) return;
+      if (!active || !sessionCurrent() || endedRef.current) return;
       if (event.type === 'remoteJoined') {
         clearTimeout(reconnectRef.current); reconnectRef.current = null;
         rtcEvidence.current = true;
@@ -118,7 +131,7 @@ const VideoCallScreen = ({ route, navigation }) => {
         if (!callRef.current?.simulated) {
           if (callRef.current?.connection) await reportConnection('connected');
           else await callService.acknowledgeConnected(callRef.current.callId || callRef.current.id).catch(() => {});
-          if (callRef.current?.status === 'connected') setPhase('connected');
+          if (active && sessionCurrent() && callRef.current?.status === 'connected') setPhase('connected');
         } else {
           const connectedAtMs = Date.now();
           setCall((current) => ({ ...current, status: 'connected', billingMode: 'preview', connectedAtMs,
@@ -136,16 +149,18 @@ const VideoCallScreen = ({ route, navigation }) => {
         try {
           setPhase('connecting');
           await rtcService.requestPermissions();
-          await rtcService.joinSession({ simulated: true });
+          if (!active || !sessionCurrent()) return;
+          await rtcService.joinSession({ simulated: true }, sessionCurrent);
           joinedRef.current = true;
-          if (active) setRtcReady(true);
+          if (active && sessionCurrent()) setRtcReady(true);
         } catch (error) {
-          Alert.alert('Video call unavailable', error.message, [{ text: 'OK', onPress: () => finishRef.current('permission_denied') }]);
+          if (!active || !sessionCurrent()) return;
+          Alert.alert('Video call unavailable', error.message, [{ text: 'OK', onPress: () => sessionCurrent() && finishRef.current('permission_denied') }]);
         }
       }, 900);
     } else {
       unsubscribe = callService.subscribe(initialCall.callId || initialCall.id, (next) => {
-        if (!active || endedRef.current) return;
+        if (!active || !sessionCurrent() || endedRef.current) return;
         if (next.accountingVersion === 2 && (next.lifecycleRevision || 0) < (callRef.current?.lifecycleRevision || 0)) return;
         callRef.current = next;
         eventSequence.current = Math.max(eventSequence.current, next.connection?.participants?.[user?.uid]?.sequence || 0);
@@ -156,46 +171,52 @@ const VideoCallScreen = ({ route, navigation }) => {
           (async () => {
             try {
               await rtcService.requestPermissions();
-              if (!active || endedRef.current) return;
+              if (!active || !sessionCurrent() || endedRef.current) return;
               const credentials = await callService.getRtcCredentials(next.callId || next.id);
-              if (!active || endedRef.current) return;
-              await rtcService.joinSession(credentials);
-              if (active && !endedRef.current) setRtcReady(true);
-              else await rtcService.leaveSession();
+              if (!active || !sessionCurrent() || endedRef.current) return;
+              await rtcService.joinSession(credentials, () => active && sessionCurrent() && !endedRef.current);
+              if (active && sessionCurrent() && !endedRef.current) setRtcReady(true);
+
             } catch (error) {
-              Alert.alert('Unable to connect', error.message, [{ text: 'End Call', onPress: () => finishRef.current('rtc_failure') }]);
+              if (!active || !sessionCurrent()) return;
+              Alert.alert('Unable to connect', error.message, [{ text: 'End Call', onPress: () => sessionCurrent() && finishRef.current('rtc_failure') }]);
             }
           })();
         }
         if (friendlyEnd[next.status]) {
           endedRef.current = true;
           rtcService.leaveSession().catch(() => {});
-          Alert.alert(friendlyEnd[next.status], 'The video call has ended.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+          Alert.alert(friendlyEnd[next.status], 'The video call has ended.', [{ text: 'OK', onPress: () => sessionCurrent() && navigation.goBack() }]);
         }
         if (next.status === 'ended') finishRef.current(next.endReason || 'remote_ended');
+      }, () => {
+        if (!active || !sessionCurrent() || endedRef.current) return;
+        Alert.alert('Call updates unavailable', 'Unable to read current call status. You can end the call.',
+          [{ text: 'End Call', onPress: () => sessionCurrent() && finishRef.current('connection_lost') }]);
       });
     }
     return () => {
       active = false;
+      endedRef.current = true;
       clearTimeout(simTimer);
       clearTimeout(reconnectRef.current);
       unsubscribe();
       off();
       rtcService.leaveSession().catch(() => {});
     };
-  }, []);
+  }, [sessionCurrent]);
 
   useEffect(() => {
     if (![2,3].includes(call?.accountingVersion) || !['connecting','connected','reconnecting'].includes(call?.status)) return undefined;
-    const timer = setInterval(() => { if (rtcEvidence.current && !endedRef.current) { if (callRef.current.status === 'connecting') callService.acknowledgeConnected(callRef.current.callId || callRef.current.id).catch(() => {}); else reportConnection('connected'); } }, HEARTBEAT_INTERVAL_MS);
+    const timer = setInterval(() => { if (sessionCurrent() && rtcEvidence.current && !endedRef.current) { if (callRef.current.status === 'connecting') callService.acknowledgeConnected(callRef.current.callId || callRef.current.id).catch(() => {}); else reportConnection('connected'); } }, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [call?.accountingVersion, call?.status]);
+  }, [call?.accountingVersion, call?.status, sessionCurrent]);
 
   useEffect(() => {
     if (call?.status !== 'connected') return undefined;
     if (!call.simulated && mode !== 'paid') syncRef.current();
     const timer = setInterval(() => {
-      if (endedRef.current) return;
+      if (!sessionCurrent() || endedRef.current) return;
       const current = callRef.current, now = Date.now() + clockOffset.current;
       setNowMs(now);
       const state = getCallPaymentPresentation(current, now);
@@ -207,37 +228,37 @@ const VideoCallScreen = ({ route, navigation }) => {
       }
     }, 250);
     return () => clearInterval(timer);
-  }, [call?.status, call?.simulated, mode, clockReady]);
+  }, [call?.status, call?.simulated, mode, clockReady, sessionCurrent]);
 
   useEffect(() => {
-    if (!rtcReady || endedRef.current) return;
+    if (!sessionCurrent() || !rtcReady || endedRef.current) return;
     // Existing Agora mute methods preserve channel membership and camera choice.
     Promise.all([
       rtcService.setMicrophoneMuted(paymentPaused || muted),
       rtcService.setCameraEnabled(!paymentPaused),
-    ]).catch(() => finishRef.current('media_pause_failed'));
-  }, [rtcReady, paymentPaused, muted]);
+    ]).catch(() => {if(sessionCurrent())finishRef.current('media_pause_failed');});
+  }, [rtcReady, paymentPaused, muted, sessionCurrent]);
 
   useEffect(() => {
     if (phase !== 'connected' || mode !== 'paid' || call?.simulated) return undefined;
     const timer = setInterval(() => {
-      if (!endedRef.current) callService.settleIncrement(call.callId || call.id).catch(() => {});
+      if (sessionCurrent() && !endedRef.current) callService.settleIncrement(call.callId || call.id).catch(() => {});
       // Insufficient-credit mode/deadline arrive through the call snapshot.
     }, BILLING_INCREMENT_SECONDS * 1000);
     return () => clearInterval(timer);
-  }, [phase, mode, call?.callId, call?.id, call?.simulated]);
+  }, [phase, mode, call?.callId, call?.id, call?.simulated, sessionCurrent]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active' && ['connected', 'reconnecting'].includes(phase)) finishRef.current('app_backgrounded');
+      if (sessionCurrent() && state !== 'active' && ['connected', 'reconnecting'].includes(phase)) finishRef.current('app_backgrounded');
     });
     return () => sub.remove();
-  }, [phase]);
+  }, [phase, sessionCurrent]);
 
   const safety = () => Alert.alert('Call safety', 'Choose an action.', [
-    { text: 'Report', onPress: () => reportService.submit({ reportedUserId: remoteProfile.uid, contextType: 'call',
-      contextId: call.callId, reason: 'other', details: 'Reported during video call' }).then(() => Alert.alert('Report received')) },
-    { text: 'Block & end', style: 'destructive', onPress: () => blockService.block(remoteProfile.uid).then(() => finish('blocked')) },
+    { text: 'Report', onPress: () => sessionCurrent() && reportService.submit({ reportedUserId: remoteProfile.uid, contextType: 'call',
+      contextId: call.callId, reason: 'other', details: 'Reported during video call' }).then(() => { if (sessionCurrent()) Alert.alert('Report received'); }) },
+    { text: 'Block & end', style: 'destructive', onPress: () => sessionCurrent() && blockService.block(remoteProfile.uid).then(() => finish('blocked')) },
     { text: 'Cancel', style: 'cancel' },
   ]);
   const waitingText = 'Checking automatic paid continuation';

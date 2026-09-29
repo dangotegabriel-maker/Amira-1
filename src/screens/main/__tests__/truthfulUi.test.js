@@ -1,3 +1,4 @@
+const mockAuthenticatedSession = { isCurrent: () => true };
 import React from 'react';
 import fs from 'fs';
 import path from 'path';
@@ -8,7 +9,7 @@ const mockTerminateSession = jest.fn(async () => undefined);
 jest.mock('lucide-react-native', () => Object.fromEntries(
   ['Images', 'Users', 'ChevronRight', 'Coins', 'Crown', 'Eye', 'Gift', 'Headphones', 'LogOut', 'Settings', 'ShieldCheck', 'Sparkles'].map(name => [name, () => null]),
 ));
-jest.mock('../../../context/UserContext', () => ({ useUser: () => ({ terminateSession: mockTerminateSession }) }));
+jest.mock('../../../context/UserContext', () => ({ useUser: () => ({authenticatedSession:mockAuthenticatedSession, terminateSession: mockTerminateSession }) }));
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => false }));
 jest.mock('../../../components/AmiraIdentity', () => ({ AmiraIdentity: () => null }));
 jest.mock('../../../services/profileViewService', () => ({ profileViewService: {} }));

@@ -1,10 +1,11 @@
+const mockAuthenticatedSession = { isCurrent: () => true };
 jest.mock('react-native-safe-area-context',()=>({useSafeAreaInsets:()=>({bottom:24})}));
 import React from 'react';
 import {act,render} from '@testing-library/react-native';
 jest.setTimeout(30000);
 let mockUser,mockTarget;
 const mockLevel={getConsumer:jest.fn()};
-jest.mock('../../../context/UserContext',()=>({useUser:()=>({user:mockUser})}));
+jest.mock('../../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:mockUser})}));
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true}));
 jest.mock('../../../services/hostActivityService',()=>({hostActivityService:{getConsumer:async()=>mockTarget}}));
 jest.mock('../../../services/hostProfileService',()=>({hostProfileService:{get:jest.fn()}}));

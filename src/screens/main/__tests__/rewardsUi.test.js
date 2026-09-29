@@ -1,3 +1,5 @@
+let mockAuthenticatedSession;
+const mockNewSession=()=>{const token={isCurrent:()=>mockAuthenticatedSession===token};mockAuthenticatedSession=token;};
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
@@ -7,7 +9,7 @@ const mockIdentityEnsure=jest.fn();
 const mockRewards = { getDashboard: jest.fn(), claimDailyCheckIn: jest.fn(),
   getTasks: jest.fn(), claimTask: jest.fn(),
   subscribe: jest.fn((listener) => { mockRewardsListener = listener; return () => {}; }) };
-jest.mock('../../../context/UserContext', () => ({ useUser: () => ({ user: mockUser }) }));
+jest.mock('../../../context/UserContext', () => ({ useUser: () => ({authenticatedSession:mockAuthenticatedSession, user: mockUser }) }));
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
 jest.mock('../../../services/amiraIdentityService',()=>({amiraIdentityService:{ensure:mockIdentityEnsure}}));
 jest.mock('../../../services/rewardsService', () => ({ rewardsService: mockRewards }));
@@ -23,7 +25,7 @@ const dashboard = () => ({ balances, dateKey: '2026-09-08', serverNowMs: Date.pa
   nextDay: 1, checkIn: { totalClaims: 0, lastClaimDate: null }, alreadyClaimed: false, earnedVideoEnabled: false,
   schedule: Array.from({ length: 7 }, (_, index) => ({ freeMessages: index + 7 })), developmentDefaults: true });
 const flush = async () => { await act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); }); };
-beforeEach(() => {
+beforeEach(() => {mockNewSession();
   mockIdentityEnsure.mockResolvedValue({amiraId:null});
   jest.clearAllMocks(); jest.useFakeTimers(); mockUser = { uid: 'c', role: 'consumer' };
   mockRewards.getDashboard.mockResolvedValue(dashboard());
@@ -107,3 +109,15 @@ test('Rewards shows no obsolete Gift tile or claim copy and explains UTC resets'
 test('task sections fail closed without config and claim only server-claimable definitions',async()=>{mockRewards.getTasks.mockResolvedValue({configAvailable:true,gettingStarted:[{id:'bio',scope:'getting_started',title:'Add a bio',description:'Tell Hosts about yourself.',progress:1,target:1,claimable:true,claimed:false,reward:{type:'FREE_MESSAGES',amount:2,description:'2 Chat Passes'}}],daily:[]});mockRewards.claimTask.mockResolvedValue({claimed:true,idempotent:false});const screen=render(<RewardsScreen/>);await flush();expect(screen.getByText('Getting Started')).toBeTruthy();expect(screen.getByText('Daily Tasks')).toBeTruthy();expect(screen.getAllByText(/2 Chat Passes/).length).toBeGreaterThan(0);fireEvent.press(screen.getByText('Claim'));await flush();expect(mockRewards.claimTask).toHaveBeenCalledWith('getting_started','bio');screen.unmount();});
 
 test.each([false,true])('own Consumer/Host full account profile displays ensured public identity, never UID: %p',async approved=>{mockUser={uid:'internal-private-uid',username:'Actual account',hostStatus:{isApproved:approved}};mockIdentityEnsure.mockResolvedValue({amiraId:'AMR-583921'});const screen=render(<MyProfileScreen navigation={{}}/>);await flush();expect(screen.getByText('AMR-583921')).toBeTruthy();expect(screen.getByLabelText('Copy Amira ID')).toBeTruthy();expect(screen.queryByText('internal-private-uid')).toBeNull();screen.unmount();});
+
+
+test('obsolete check-in completion cannot show success or alter replacement session',async()=>{
+ let resolve;mockRewards.claimDailyCheckIn.mockReturnValueOnce(new Promise(done=>{resolve=done;}));const screen=render(<RewardsScreen/>);await flush();act(()=>{fireEvent.press(screen.getByText('Claim daily reward'));});mockNewSession();screen.rerender(<RewardsScreen/>);
+ await act(async()=>resolve({...dashboard(),claimed:true,reward:{freeMessages:99},balances:{...balances,freeMessages:99}}));expect(Alert.alert).not.toHaveBeenCalled();expect(screen.queryByText('99')).toBeNull();
+});
+
+
+test('My Profile count ignores old-session completion',async()=>{
+ const service=require('../../../services/profileViewService').profileViewService;let resolve;const spy=jest.spyOn(service,'getAggregateCount').mockReturnValueOnce(new Promise(done=>{resolve=done;})).mockResolvedValue(2);
+ const screen=render(<MyProfileScreen navigation={{}}/>);mockNewSession();screen.rerender(<MyProfileScreen navigation={{}}/>);await flush();await act(async()=>resolve(999));expect(screen.queryByText('999 recent profile viewers')).toBeNull();expect(screen.getByText('2 recent profile viewers')).toBeTruthy();spy.mockRestore();
+});

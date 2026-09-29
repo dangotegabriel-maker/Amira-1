@@ -1,3 +1,4 @@
+import {useSessionGuard} from '../../hooks/useSessionGuard';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
@@ -13,6 +14,7 @@ import { mediaService } from '../../services/mediaService';
 
 const EditProfileScreen = ({ navigation }) => {
   const { user, refreshUser } = useUser();
+  const current=useSessionGuard();
   const [name, setName] = useState(user?.username || user?.name || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [showCountries, setShowCountries] = useState(false);
@@ -23,21 +25,29 @@ const EditProfileScreen = ({ navigation }) => {
   const [profilePic, setProfilePic] = useState(user?.profilePic || '');
 
   const updatePhoto = async () => {
+    if(!current())return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if(!current())return;
     if (!permission.granted) return Alert.alert('Permission required', 'Media library access is required.');
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+    if(!current())return;
     if (result.canceled) return;
     setLoading(true);
     try {
       const media = await mediaService.uploadUserMedia({ asset: result.assets[0], category: 'profile', kind: 'image' });
+      if(!current())return;
       await dbService.updateUserProfile(user.uid, { profilePic: media.url, updatedAt: new Date() });
+      if(!current())return;
       setProfilePic(media.url);
+      if(!current())return;
       await refreshUser();
-    } catch (error) { Alert.alert('Upload failed', error.message || 'Please try again.'); }
-    finally { setLoading(false); }
+      if(!current())return;
+    } catch (error) { if(current())Alert.alert('Upload failed', error.message || 'Please try again.'); }
+    finally { if(current())setLoading(false); }
   };
 
   const handleSave = async () => {
+    if(!current())return;
     const validation = validateUsername(name);
     if (!validation.isValid) {
       Alert.alert('Check your name', validation.error);
@@ -55,6 +65,7 @@ const EditProfileScreen = ({ navigation }) => {
 
       console.log('UID:', currentAuthUser.uid);
       await authService.updateUserProfile({ displayName: validation.value });
+      if(!current())return;
       await dbService.updateUserProfile(currentAuthUser.uid, {
         username: validation.value,
         bio,
@@ -63,14 +74,17 @@ const EditProfileScreen = ({ navigation }) => {
         phoneCode: `+${country.callingCode}`,
         updatedAt: new Date(),
       });
+      if(!current())return;
       await refreshUser();
+      if(!current())return;
       Alert.alert("Success", "Profile updated successfully!");
       navigation.goBack();
     } catch (e) {
+      if(!current())return;
       console.log('FIRESTORE ERROR:', e);
       Alert.alert("Error", "Failed to update profile.");
     } finally {
-      setLoading(false);
+      if(current())setLoading(false);
     }
   };
 

@@ -1,3 +1,4 @@
+import { useSessionGuard } from '../../hooks/useSessionGuard';
 import {AmiraIdentity} from '../../components/AmiraIdentity';
 import { AmiraLevelBadge } from '../../components/AmiraLevelBadge';
 import { levelService } from '../../services/levelService';
@@ -37,11 +38,12 @@ const UserProfileScreen = ({ route, navigation }) => {
   const focused = useIsFocused();
   const [relationshipLabel, setRelationshipLabel] = useState('Follow');
   const userId = route.params?.userId;
+  const current = useSessionGuard(userId, focused);
   const [reputation, setReputation] = useState(null);
   useEffect(() => {
-    if (!userId || route.params?.demoHost) return undefined;
-    return callReviewService.subscribeReputation(userId, setReputation, () => setReputation(null));
-  }, [userId, route.params?.demoHost]);
+    if (!focused || !userId || route.params?.demoHost) return undefined;
+    return callReviewService.subscribeReputation(userId, value => { if(current())setReputation(value); }, () => { if(current())setReputation(null); });
+  }, [userId, route.params?.demoHost, current]);
   const [host, setHost] = useState(null);
   const [liked,setLiked]=useState(false),[likeBusy,setLikeBusy]=useState(false),[social,setSocial]=useState(null),[socialError,setSocialError]=useState(false);
   const [consumerLevel, setConsumerLevel] = useState(null);
@@ -49,9 +51,9 @@ const UserProfileScreen = ({ route, navigation }) => {
     setConsumerLevel(null);
     if (!focused || !isApprovedHost(user) || !isConsumer(host) || host?.isDemo) return undefined;
     let active = true;
-    levelService.getConsumer(userId).then(value => { if (active) setConsumerLevel(value.level); }).catch(() => {});
+    levelService.getConsumer(userId).then(value => { if (active && current()) setConsumerLevel(value.level); }).catch(() => {});
     return () => { active = false; };
-  }, [focused, user?.uid, user?.hostStatus?.isApproved, host?.uid, host?.hostStatus?.isApproved, userId]);
+  }, [focused, user?.uid, user?.hostStatus?.isApproved, host?.uid, host?.hostStatus?.isApproved, userId, current]);
   const [loading, setLoading] = useState(true);
   const [following, setFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
@@ -59,53 +61,55 @@ const UserProfileScreen = ({ route, navigation }) => {
   const [giftOpen,setGiftOpen]=useState(false),[publicGifts,setPublicGifts]=useState([]);
   const [blockState, setBlockState] = useState({ blockedByMe: false, blocked: false });
   const [inviteBusy,setInviteBusy]=useState(false);
+  useEffect(()=>{setLikeBusy(false);setFollowBusy(false);setInviteBusy(false);setReputation(null);setPublicGifts([]);},[current]);
 
   useEffect(() => {
     if(!userId){setLoading(false);return undefined;}
     if(!focused)return undefined;
     let active=true;setLoading(true);setHost(null);setSocial(null);setSocialError(false);setHeroFailed(false);
     const read=isConsumer(user)?hostProfileService.get(userId):hostActivityService.getConsumer(userId);
-    Promise.resolve(read).then(async profile=>{if(!active)return;setHost(profile);if(profile.social){setSocial(profile.social);setLiked(profile.social.liked);setFollowing(profile.social.following);}else {const value=await followService.isFollowing(userId);if(active)setFollowing(value);}})
-    .catch(()=>{if(active)setHost(null);}).finally(()=>{if(active)setLoading(false);});
+    Promise.resolve(read).then(async profile=>{if(!active || !current())return;setHost(profile);if(profile.social){setSocial(profile.social);setLiked(profile.social.liked);setFollowing(profile.social.following);}else {const value=await followService.isFollowing(userId);if(active && current())setFollowing(value);}})
+    .catch(()=>{if(active && current())setHost(null);}).finally(()=>{if(active && current())setLoading(false);});
     return()=>{active=false;};
-  },[userId,focused,user?.uid,user?.hostStatus?.isApproved]);
-  const refreshSocial=async()=>{try{const profile=await hostProfileService.get(userId);setSocial(profile.social);setLiked(profile.social.liked);setSocialError(false);}catch(e){setSocialError(true);}};
-  const toggleLike=async()=>{if(likeBusy||blockState.blocked||!isConsumer(user)||!isApprovedHost(host))return;setLikeBusy(true);try{const value=await hostProfileService.setLiked(userId,!liked);setLiked(value.liked);await refreshSocial();}catch(e){Alert.alert('Unable to update Like',e.message);}finally{setLikeBusy(false);}};
-  const hideHost=async()=>{try{await hostProfileService.hide(userId);navigation.goBack();}catch(e){Alert.alert('Unable to update discovery',e.message);}};
+  }, [userId,focused,user?.uid,user?.hostStatus?.isApproved, current]);
+  const refreshSocial=async()=>{if(!current())return;try{const profile=await hostProfileService.get(userId);if(!current())return;setSocial(profile.social);setLiked(profile.social.liked);setSocialError(false);}catch(e){if(current())setSocialError(true);}};
+  const toggleLike=async()=>{if(!current()||likeBusy||blockState.blocked||!isConsumer(user)||!isApprovedHost(host))return;setLikeBusy(true);try{const value=await hostProfileService.setLiked(userId,!liked);if(!current())return;setLiked(value.liked);await refreshSocial();}catch(e){if(current())Alert.alert('Unable to update Like',e.message);}finally{if(current())setLikeBusy(false);}};
+  const hideHost=async()=>{if(!current())return;try{await hostProfileService.hide(userId);if(!current())return;navigation.goBack();}catch(e){if(current())Alert.alert('Unable to update discovery',e.message);}};
   const more=()=>setShowMore(true);
 
   useEffect(()=>{
     if(!focused||loading||!host||host.uid!==userId||host.isDemo||blockState.blocked||user?.uid===userId)return undefined;
     if(!((isConsumer(user)&&isApprovedHost(host))||(isApprovedHost(user)&&isConsumer(host))))return undefined;
     profileViewService.track(userId).catch(()=>console.warn('Profile view could not be recorded.'));
-  },[focused,loading,host?.uid,userId,user?.uid,user?.hostStatus?.isApproved,host?.hostStatus?.isApproved,blockState.blocked]);
+  }, [focused,loading,host?.uid,userId,user?.uid,user?.hostStatus?.isApproved,host?.hostStatus?.isApproved,blockState.blocked, current]);
 
 
   useEffect(() => {
     if (!focused || route.params?.demoHost) return undefined;
     return followService.subscribeRelationship(userId, (value) => {
+      if(!current())return;
       setFollowing(value.following); setRelationshipLabel(value.label); setBlockState(value);
-    }, () => setRelationshipLabel('Follow'));
-  }, [userId, focused, route.params?.demoHost]);
+    }, () => {if(current()){setBlockState({blocked:true});setRelationshipLabel('Follow');}}, current);
+  }, [userId, focused, route.params?.demoHost, current]);
 
   const toggleFollow = async () => {
-    if (!canFollowProfile(user, host) || blockState.blocked || followBusy) return;
+    if (!current() || !canFollowProfile(user, host) || blockState.blocked || followBusy) return;
     if (host?.isDemo) return;
     setFollowBusy(true);
-    try { setFollowing(following ? await followService.unfollow(userId) : await followService.follow(userId)); if(isConsumer(user)&&isApprovedHost(host))await refreshSocial(); }
-    catch (error) { Alert.alert('Unable to update follow', error.message); }
-    finally { setFollowBusy(false); }
+    try { const value=following ? await followService.unfollow(userId, current) : await followService.follow(userId, current); if(!current())return;setFollowing(value); if(isConsumer(user)&&isApprovedHost(host))await refreshSocial(); }
+    catch (error) { if(current())Alert.alert('Unable to update follow', error.message); }
+    finally { if(current())setFollowBusy(false); }
   };
 
   const block = () => blockState.blockedByMe ? Alert.alert('Unblock user', `Allow ${host?.username} to interact with you again?`, [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Unblock', onPress: async () => { try{await blockService.unblock(userId); setBlockState({ blockedByMe: false, blocked: false });}catch(e){Alert.alert('Unable to unblock',e.message);} } },
+    { text: 'Unblock', onPress: async () => { if(!current())return;try{await blockService.unblock(userId);if(!current())return; setBlockState({ blockedByMe: false, blocked: false });}catch(e){if(current())Alert.alert('Unable to unblock',e.message);} } },
   ]) : Alert.alert('Block user', `Block ${host?.username}?`, [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Block', style: 'destructive', onPress: async () => { try{await blockService.block(userId); setBlockState({ blockedByMe: true, blocked: true });setFollowing(false);setLiked(false);setRelationshipLabel('Follow');setSocial(null);}catch(e){Alert.alert('Unable to block',e.message);} } },
+    { text: 'Block', style: 'destructive', onPress: async () => { if(!current())return;try{await blockService.block(userId);if(!current())return; setBlockState({ blockedByMe: true, blocked: true });setFollowing(false);setLiked(false);setRelationshipLabel('Follow');setSocial(null);}catch(e){if(current())Alert.alert('Unable to block',e.message);} } },
   ]);
 
-  useEffect(()=>{if(!focused||!userId||!isApprovedHost(host))return;let active=true;giftService.publicHostGifts(userId).then(value=>{if(active)setPublicGifts(value.gifts||[]);}).catch(()=>{if(active)setPublicGifts([]);});return()=>{active=false;};},[focused,userId,host?.uid,host?.hostStatus?.isApproved]);
+  useEffect(()=>{if(!focused||!userId||!isApprovedHost(host))return;let active=true;giftService.publicHostGifts(userId).then(value=>{if(active && current())setPublicGifts(value.gifts||[]);}).catch(()=>{if(active && current())setPublicGifts([]);});return()=>{active=false;};}, [focused,userId,host?.uid,host?.hostStatus?.isApproved, current]);
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
   if (!host) return <View style={styles.center}><ShieldAlert color={COLORS.primary} size={42} /><Text style={styles.unavailable}>This profile is unavailable.</Text><TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.backText}>Go back</Text></TouchableOpacity></View>;
@@ -117,7 +121,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   const rate=Number.isSafeInteger(host.hostProfile?.videoRateCredits)&&host.hostProfile.videoRateCredits>0?host.hostProfile.videoRateCredits:null;
   const available=!blockState.blocked&&host.hostStatus?.availability==='online'&&rate!==null;
   const message=()=>navigation.navigate('ChatDetail',{userId,name:host.username});
-  const invite=async()=>{if(inviteBusy||blockState.blocked)return;setInviteBusy(true);try{const value=await sponsoredInviteService.send(userId,'consumer_profile');Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer will review the call terms before accepting.`);}catch(e){Alert.alert('Unable to invite',e.message);}finally{setInviteBusy(false);}};
+  const invite=async()=>{if(!current()||inviteBusy||blockState.blocked)return;setInviteBusy(true);try{const value=await sponsoredInviteService.send(userId,'consumer_profile');if(!current())return;Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer will review the call terms before accepting.`);}catch(e){if(current())Alert.alert('Unable to invite',e.message);}finally{if(current())setInviteBusy(false);}};
   return <View style={styles.container}>
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.hero}>
@@ -148,7 +152,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     {approvedHost&&isConsumer(user)&&<View style={{backgroundColor:'white',paddingBottom:Math.max(12,insets.bottom)}}><View style={{flexDirection:'row',gap:6,padding:12}}>
     <TouchableOpacity disabled={likeBusy||blockState.blocked} accessibilityLabel={liked?'Unlike Host':'Like Host'} style={styles.smallAction} onPress={toggleLike}><Text style={styles.smallText}>{liked?'Liked':'Like'}</Text></TouchableOpacity>
     <TouchableOpacity disabled={blockState.blocked} style={styles.smallAction} onPress={message}><MessageCircle color={COLORS.primary}/><Text style={styles.smallText}>Message</Text></TouchableOpacity>
-    <TouchableOpacity disabled={!available} style={styles.smallAction} onPress={()=>startVideoCall({navigation,creator:host})}><Video color={available?COLORS.primary:COLORS.textSecondary}/><Text style={styles.smallText}>{rate===null?'Video unavailable':`Video ${rate}/min`}</Text></TouchableOpacity>
+    <TouchableOpacity disabled={!available} style={styles.smallAction} onPress={()=>startVideoCall({navigation,isCurrent:current,creator:host})}><Video color={available?COLORS.primary:COLORS.textSecondary}/><Text style={styles.smallText}>{rate===null?'Video unavailable':`Video ${rate}/min`}</Text></TouchableOpacity>
     <TouchableOpacity disabled={blockState.blocked} style={styles.smallAction} onPress={()=>setGiftOpen(true)}><Text style={styles.smallText}>Gift</Text></TouchableOpacity>
     </View></View>}
     <Modal visible={showMore} transparent animationType="fade" onRequestClose={()=>setShowMore(false)}><View style={{flex:1,justifyContent:'flex-end',backgroundColor:'rgba(0,0,0,.35)'}}><View style={{backgroundColor:'white',padding:20,paddingBottom:Math.max(20,insets.bottom),borderTopLeftRadius:20,borderTopRightRadius:20}}>
@@ -158,7 +162,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     <TouchableOpacity style={styles.safetyAction} onPress={()=>setShowMore(false)}><Text style={styles.safetyText}>Cancel</Text></TouchableOpacity>
     </View></View></Modal>
     <GiftTray visible={giftOpen} onClose={()=>setGiftOpen(false)} hostUid={userId} source="host_profile"/>
-    <ReportUserModal visible={showReport} onClose={() => setShowReport(false)} userName={host.username} onReport={async (reason, info) => { await reportService.submit({ reportedUserId:userId, contextType:'profile', contextId:userId, reason, details:info }); Alert.alert('Report received', 'Thank you.'); }} />
+    <ReportUserModal visible={showReport} onClose={() => setShowReport(false)} userName={host.username} onReport={async (reason, info) => { if(!current())return;try { await reportService.submit({ reportedUserId:userId, contextType:'profile', contextId:userId, reason, details:info }); if(current())Alert.alert('Report received', 'Thank you.'); }catch(_){if(current())Alert.alert('Report not sent','Please try again.');} }} />
   </View>;
 };
 

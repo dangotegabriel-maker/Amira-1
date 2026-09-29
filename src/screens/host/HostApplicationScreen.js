@@ -1,3 +1,4 @@
+import {useSessionGuard} from '../../hooks/useSessionGuard';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -19,6 +20,7 @@ const mediaUploadsEnabled = process.env.EXPO_PUBLIC_ENABLE_MEDIA_UPLOADS === 'tr
 
 const HostApplicationScreen = ({ navigation }) => {
   const { user, refreshUser } = useUser();
+  const current=useSessionGuard();
   const [step, setStep] = useState(0);
   const [applicationStatus, setApplicationStatus] = useState(user?.hostStatus?.verificationStatus || 'not_started');
   const [loading, setLoading] = useState(true);
@@ -33,7 +35,7 @@ const HostApplicationScreen = ({ navigation }) => {
 
   useEffect(() => {
     hostApplicationService.getApplication().then((application) => {
-      if (!application) return;
+      if (!current() || !application) return;
       setApplicationStatus(application.status || 'in_progress');
       setBio(application.details?.bio || '');
       setInterests((application.details?.interests || []).join(', '));
@@ -42,8 +44,8 @@ const HostApplicationScreen = ({ navigation }) => {
       setIntroVideo(application.media?.introVideo || null);
       setEvidence(application.verification?.evidence || []);
       setPayoutMethod(application.payoutSetup?.method || '');
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    }).catch(() => {}).finally(() => {if(current())setLoading(false);});
+  }, [current]);
 
   const parsedInterests = useMemo(() => interests.split(',').map((value) => value.trim()).filter(Boolean).slice(0, 8), [interests]);
 
@@ -51,31 +53,35 @@ const HostApplicationScreen = ({ navigation }) => {
     const permission = camera
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!current()) return null;
     if (!permission.granted) throw new Error(`${camera ? 'Camera' : 'Media library'} permission is required.`);
     const options = { quality: 0.8, mediaTypes: kind === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images };
     if (kind === 'video') options.videoMaxDuration = 30;
     const result = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
-    if (result.canceled) return null;
+    if (!current() || result.canceled) return null;
     return mediaService.uploadUserMedia({ asset: result.assets[0], category, kind, includeDownloadUrl });
   };
 
   const performUpload = async (work) => {
+    if(!current())return;
     setBusy(true);
-    try { await work(); } catch (error) { Alert.alert('Upload failed', error.message || 'Please try again.'); }
-    finally { setBusy(false); }
+    try { await work(); } catch (error) { if(current())Alert.alert('Upload failed', error.message || 'Please try again.'); }
+    finally { if(current())setBusy(false); }
   };
 
   const uploadMainPhoto = () => performUpload(async () => {
     const media = await pickAndUpload({ category: 'profile', kind: 'image' });
-    if (!media) return;
+    if (!current() || !media) return;
     const previous = profilePhoto;
     try {
       await hostApplicationService.saveDraft({ media: { profilePhoto: media, gallery, ...(introVideo ? { introVideo } : {}) } });
+      if (!current()) return;
       await dbService.updateUserProfile(user.uid, { profilePic: media.url, updatedAt: new Date() });
+      if (!current()) return;
       setProfilePhoto(media);
       if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
     } catch (error) {
-      mediaService.deleteOwnedMedia(media.path).catch(() => {});
+      if (current()) mediaService.deleteOwnedMedia(media.path).catch(() => {});
       throw error;
     }
   });
@@ -83,13 +89,14 @@ const HostApplicationScreen = ({ navigation }) => {
   const uploadGalleryPhoto = () => performUpload(async () => {
     if (gallery.length >= 4) throw new Error('You can add up to four additional photos.');
     const media = await pickAndUpload({ category: 'gallery', kind: 'image' });
-    if (!media) return;
+    if (!current() || !media) return;
     const nextGallery = [...gallery, media];
     try {
       await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery: nextGallery, ...(introVideo ? { introVideo } : {}) } });
+      if (!current()) return;
       setGallery(nextGallery);
     } catch (error) {
-      mediaService.deleteOwnedMedia(media.path).catch(() => {});
+      if (current()) mediaService.deleteOwnedMedia(media.path).catch(() => {});
       throw error;
     }
   });
@@ -97,35 +104,38 @@ const HostApplicationScreen = ({ navigation }) => {
   const removeGalleryPhoto = (media) => performUpload(async () => {
     const nextGallery = gallery.filter((item) => item.path !== media.path);
     await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery: nextGallery, ...(introVideo ? { introVideo } : {}) } });
+    if (!current()) return;
     setGallery(nextGallery);
     await mediaService.deleteOwnedMedia(media.path).catch(() => {});
   });
 
   const uploadIntroVideo = () => performUpload(async () => {
     const media = await pickAndUpload({ category: 'intro-video', kind: 'video' });
-    if (!media) return;
+    if (!current() || !media) return;
     const previous = introVideo;
     try {
       await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery, introVideo: media } });
+      if (!current()) return;
       setIntroVideo(media);
       if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
     } catch (error) {
-      mediaService.deleteOwnedMedia(media.path).catch(() => {});
+      if (current()) mediaService.deleteOwnedMedia(media.path).catch(() => {});
       throw error;
     }
   });
 
   const uploadVerificationCapture = (action, index) => performUpload(async () => {
     const media = await pickAndUpload({ category: `verification/${index + 1}`, camera: true, includeDownloadUrl: false });
-    if (!media) return;
+    if (!current() || !media) return;
     const previous = evidence.find((item) => item.order === index);
     const nextEvidence = [...evidence.filter((item) => item.order !== index), { ...media, action, order: index }].sort((a, b) => a.order - b.order);
     try {
       await hostApplicationService.saveDraft({ verification: { method: 'manual_review', evidence: nextEvidence, status: 'captured' } });
+      if (!current()) return;
       setEvidence(nextEvidence);
       if (previous?.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
     } catch (error) {
-      mediaService.deleteOwnedMedia(media.path).catch(() => {});
+      if (current()) mediaService.deleteOwnedMedia(media.path).catch(() => {});
       throw error;
     }
   });
@@ -155,21 +165,25 @@ const HostApplicationScreen = ({ navigation }) => {
   };
 
   const next = async () => {
+    if(!current())return;
     setBusy(true);
-    try { await saveCurrentStep(); setApplicationStatus('in_progress'); setStep((value) => Math.min(value + 1, STEPS.length - 1)); }
-    catch (error) { Alert.alert('Complete this step', error.message); }
-    finally { setBusy(false); }
+    try { await saveCurrentStep(); if(!current())return;setApplicationStatus('in_progress'); setStep((value) => Math.min(value + 1, STEPS.length - 1)); }
+    catch (error) { if(current())Alert.alert('Complete this step', error.message); }
+    finally { if(current())setBusy(false); }
   };
 
   const submit = async () => {
+    if(!current())return;
     setBusy(true);
     try {
       await hostApplicationService.submit();
+      if(!current())return;
       setApplicationStatus('submitted');
       await refreshUser();
+      if(!current())return;
       Alert.alert('Application submitted', 'Your evidence will be reviewed manually.');
-    } catch (error) { Alert.alert('Cannot submit', error.message); }
-    finally { setBusy(false); }
+    } catch (error) { if(current())Alert.alert('Cannot submit', error.message); }
+    finally { if(current())setBusy(false); }
   };
 
   if (isApprovedHost(user)) return <View style={[styles.container, { padding: 20, paddingTop: 60 }]}><Text style={styles.sectionTitle}>Approved Host</Text><Text style={styles.note}>Your Creator application has been approved.</Text></View>;

@@ -3,6 +3,7 @@ jest.mock('../firebaseService', () => ({ auth: { currentUser: null }, db: 'db' }
 jest.mock('../publicIdentityService', () => ({ publicIdentityService: {} }));
 jest.mock('../blockService', () => ({ blockService: {} }));
 jest.mock('firebase/firestore', () => ({
+  doc: (_, ...parts) => parts.join('/'),
   collection: (_, ...parts) => parts.join('/'),
   orderBy: (field, direction) => ({ kind: 'order', field, direction }),
   limit: count => ({ kind: 'limit', count }),
@@ -31,6 +32,13 @@ const deliver = (listener, records) => {
   listener.value({ docs });
 };
 beforeEach(() => { mockListeners.length = 0; auth.currentUser = { uid: 'a' }; });
+
+test.each(['stop','logout','same UID','different UID'])('conversation metadata suppresses queued values/errors after %s',kind=>{
+ const value=jest.fn(),error=jest.fn(),stop=messagingService.subscribeConversation('a__b',value,error);
+ if(kind==='stop')stop();else auth.currentUser=kind==='logout'?null:{uid:kind==='same UID'?'a':'c'};
+ mockListeners[0].value({id:'a__b',exists:()=>true,data:()=>({private:'old'})});mockListeners[0].error(new Error('old'));
+ expect(value).not.toHaveBeenCalled();expect(error).not.toHaveBeenCalled();
+});
 
 test('production query selects newest 250 of 300 and normalizes every chronological boundary', () => {
   const receive = jest.fn();

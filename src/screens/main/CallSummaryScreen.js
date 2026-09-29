@@ -1,3 +1,4 @@
+import { useSessionGuard } from '../../hooks/useSessionGuard';
 import React, { useEffect, useState } from 'react';
 import { Alert, View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
@@ -17,31 +18,33 @@ const CallSummaryScreen = ({ route, navigation }) => {
   const [review, setReview] = useState(null);
   const [busy, setBusy] = useState(false);
   const focused = useIsFocused();
+  const current = useSessionGuard(callId, focused);
+  useEffect(() => { setBusy(false); }, [current]);
   useEffect(() => {
     if (!focused || !targetUserId) return undefined;
-    return followService.subscribeRelationship(targetUserId, setRelationship, () => setRelationship(null));
-  }, [focused, targetUserId]);
+    return followService.subscribeRelationship(targetUserId, value => {if(current())setRelationship(value);}, () => {if(current())setRelationship(null);}, current);
+  }, [focused, targetUserId, current]);
   useEffect(() => {
     if (!callId || !focused) return undefined;
     let active = true;
-    callReviewService.status(callId).then((value) => { if (active) { setReview(value); setRating(value.rating || 0); } }).catch(() => {});
+    callReviewService.status(callId).then((value) => { if (active && current()) { setReview(value); setRating(value.rating || 0); } }).catch(() => {});
     return () => { active = false; };
-  }, [callId, focused]);
+  }, [callId, focused, current]);
   const isFollowing = relationship?.following;
   const handleFollow = async () => {
-    if (!relationship?.valid || relationship.blocked || relationship.following || busy) return;
+    if (!current() || !relationship?.valid || relationship.blocked || relationship.following || busy) return;
     setBusy(true);
-    try { await followService.follow(targetUserId); }
-    catch (error) { Alert.alert('Unable to follow', error.message); }
-    finally { setBusy(false); }
+    try { await followService.follow(targetUserId, current); }
+    catch (error) { if(current())Alert.alert('Unable to follow', error.message); }
+    finally { if(current())setBusy(false); }
   };
   const handleRating = (value) => { if (!review?.rating && !busy) { hapticService.lightImpact(); setRating(value); } };
   const submitReview = async () => {
-    if (!rating || busy) return;
+    if (!current() || !rating || busy) return;
     setBusy(true);
-    try { const result = await callReviewService.submit(callId, rating); setReview({ eligible: true, rating: result.rating }); }
-    catch (error) { Alert.alert('Review not saved', error.message); }
-    finally { setBusy(false); }
+    try { const result = await callReviewService.submit(callId, rating); if(!current())return;setReview({ eligible: true, rating: result.rating }); }
+    catch (error) { if(current())Alert.alert('Review not saved', error.message); }
+    finally { if(current())setBusy(false); }
   };
 
   const formatDuration = (s) => {

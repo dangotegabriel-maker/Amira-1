@@ -11,13 +11,18 @@ class SocketService extends EventEmitter {
     this.offlineGraceTimer = null;
     this.pendingNotifications = {};
 
-    AppState.addEventListener('change', this.handleAppStateChange.bind(this));
+    this.appStateSubscription = null;
   }
 
   connect(userId) {
     if (!userId) return;
     if (this.connected && this.userId === userId) return;
      // console.log(`Socket connecting for user: ${userId}`);
+    this.disconnect();
+    const generation = this.connectionVersion;
+    this.appStateSubscription = AppState.addEventListener('change', state => {
+      if (generation === this.connectionVersion) this.handleAppStateChange(state);
+    });
     this.userId = userId;
     this.connected = true;
     this.broadcastStatus('ONLINE_STATUS');
@@ -58,6 +63,8 @@ class SocketService extends EventEmitter {
   }
 
   handleAppStateChange(nextAppState) {
+    if (!this.connected) return;
+    clearTimeout(this.offlineGraceTimer);
     if (nextAppState === 'background' || nextAppState === 'inactive') {
       this.offlineGraceTimer = setTimeout(() => {
         this.broadcastStatus('OFFLINE_STATUS');
@@ -97,6 +104,12 @@ class SocketService extends EventEmitter {
   }
 
   disconnect() {
+    this.connectionVersion = (this.connectionVersion || 0) + 1;
+    this.appStateSubscription?.remove();
+    this.appStateSubscription = null;
+    clearTimeout(this.offlineGraceTimer);
+    this.offlineGraceTimer = null;
+    this.pendingNotifications = {};
     if (this.userId) this.broadcastStatus('OFFLINE_STATUS');
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.connected = false;

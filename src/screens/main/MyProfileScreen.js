@@ -1,3 +1,4 @@
+import { useSessionGuard } from '../../hooks/useSessionGuard';
 import {AmiraIdentity} from '../../components/AmiraIdentity';
 import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
@@ -21,6 +22,7 @@ const Row = ({ icon: Icon, label, detail, onPress, destructive = false }) => (
 
 const MyProfileScreen = ({ navigation }) => {
   const focused = useIsFocused();
+  const current=useSessionGuard('',focused);
   const { user, terminateSession } = useUser();
   const [profileViewCount, setProfileViewCount] = useState(null);
   const [applicationStatus, setApplicationStatus] = useState('');
@@ -28,8 +30,8 @@ const MyProfileScreen = ({ navigation }) => {
   const approvedHost = isApprovedHost(user);
   const creatorState = getCreatorCardState(user, applicationStatus);
   const creatorCopy = CREATOR_CARD_COPY[creatorState];
-  useEffect(() => { if (focused && user?.uid && !approvedHost) profileViewService.getAggregateCount(user.uid).then(setProfileViewCount).catch(() => setProfileViewCount(null)); }, [user?.uid, focused, approvedHost]);
-  useEffect(() => { if (focused && user?.uid && !approvedHost) hostApplicationService.getApplication().then((application)=>setApplicationStatus(application?.status||'')).catch(()=>{}); }, [user?.uid, focused, approvedHost]);
+  useEffect(() => { if (focused && user?.uid && !approvedHost) profileViewService.getAggregateCount(user.uid).then(value=>{if(current())setProfileViewCount(value);}).catch(() => {if(current())setProfileViewCount(null);}); }, [user?.uid, focused, approvedHost,current]);
+  useEffect(() => { if (focused && user?.uid && !approvedHost) hostApplicationService.getApplication().then((application)=>{if(current())setApplicationStatus(application?.status||'');}).catch(()=>{}); }, [user?.uid, focused, approvedHost,current]);
 
   const terminateWithFeedback = () => terminateSession().catch(() => Alert.alert('Unable to log out', 'Your account is still signed in. Please try again.'));
   const logout = () => Alert.alert('Log out', 'Are you sure you want to log out?', [

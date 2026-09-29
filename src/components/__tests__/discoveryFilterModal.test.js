@@ -1,6 +1,7 @@
+const mockAuthenticatedSession = { isCurrent: () => true };
 import React from 'react';
 import {fireEvent,render} from '@testing-library/react-native';
-jest.mock('../../context/UserContext',()=>({useUser:()=>({user:{uid:'c'}})}));
+jest.mock('../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:{uid:'c'}})}));
 jest.mock('../CountrySelectorModal',()=>()=>null);
 import DiscoveryFilterModal,{EMPTY_DISCOVERY_FILTERS} from '../DiscoveryFilterModal';
 test('exact requested filters, controlled interests/languages, no Search or price tier; Clear applies reset',()=>{const apply=jest.fn(),close=jest.fn();const screen=render(<DiscoveryFilterModal visible value={{...EMPTY_DISCOVERY_FILTERS,language:'English',interests:['Music']}} languages={['English','French']} onApply={apply} onClose={close}/>);for(const label of ['Country','Language','Age Range','Online Now','Interests'])expect(screen.getByText(label)).toBeTruthy();expect(screen.queryByText(/Search|pricing tier/i)).toBeNull();expect(screen.queryByPlaceholderText('Music, travel, movies...')).toBeNull();fireEvent.press(screen.getByText('French'));fireEvent.press(screen.getByText('Gaming'));fireEvent.press(screen.getByText('Apply'));expect(apply).toHaveBeenCalledWith({...EMPTY_DISCOVERY_FILTERS,language:'French',interests:['Music','Gaming']});fireEvent.press(screen.getByText('Clear Filters'));expect(apply).toHaveBeenLastCalledWith(EMPTY_DISCOVERY_FILTERS);screen.unmount();});

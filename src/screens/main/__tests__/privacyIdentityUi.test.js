@@ -1,3 +1,5 @@
+let mockAuthenticatedSession;
+const mockNewSession=()=>{const token={isCurrent:()=>mockAuthenticatedSession===token};mockAuthenticatedSession=token;};
 import React from 'react';
 import {act,fireEvent,render} from '@testing-library/react-native';
 jest.setTimeout(30000);
@@ -6,8 +8,8 @@ const mockIdentity={calls:jest.fn(),blocked:jest.fn()};
 const mockBlock={unblock:jest.fn()};
 const mockCall={respond:jest.fn()};
 const mockHistory={listPage:jest.fn()};
-jest.mock('../../../context/UserContext',()=>({useUser:()=>({user:{uid:mockUid,hostStatus:{isApproved:false}}})}));
-jest.mock('@react-navigation/native',()=>({useFocusEffect:callback=>require('react').useEffect(callback,[callback])}));
+jest.mock('../../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:{uid:mockUid,hostStatus:{isApproved:false}}})}));
+jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true,useFocusEffect:callback=>require('react').useEffect(callback,[callback])}));
 jest.mock('../../../services/publicIdentityService',()=>({publicIdentityService:mockIdentity}));
 jest.mock('../../../services/blockService',()=>({blockService:mockBlock}));
 jest.mock('../../../services/callService',()=>({callService:mockCall}));
@@ -22,7 +24,7 @@ const Messages=require('../MessageHomeScreen').default;
 const navigation={navigate:jest.fn(),setParams:jest.fn()};
 const call={callId:'call',callerId:'caller',expiresAtMs:0};
 const historyRecord={id:'call',callId:'call',callerId:'owner',receiverId:'target',participantIds:['owner','target'],status:'ended',connectedAt:new Date(Date.now()-222000),endedAt:new Date(),createdAt:new Date(Date.now()-300000),durationSeconds:222};
-beforeEach(()=>{jest.clearAllMocks();mockUid='owner';mockIdentity.calls.mockResolvedValue([{callId:'call',identity:{uid:'caller',username:'Real caller',profilePic:''}}]);mockIdentity.blocked.mockResolvedValue([{uid:'target',username:'Owned blocked account',profilePic:''}]);mockHistory.listPage.mockResolvedValue({records:[],cursor:null,hasMore:false});});
+beforeEach(()=>{mockNewSession();jest.clearAllMocks();mockUid='owner';mockIdentity.calls.mockResolvedValue([{callId:'call',identity:{uid:'caller',username:'Real caller',profilePic:''}}]);mockIdentity.blocked.mockResolvedValue([{uid:'target',username:'Owned blocked account',profilePic:''}]);mockHistory.listPage.mockResolvedValue({records:[],cursor:null,hasMore:false});});
 test('incoming card requests call-authorized identity and leaves response actions intact',async()=>{
  const screen=render(<Incoming call={call} navigation={navigation}/>);await act(async()=>{});
  expect(screen.getByText('Real caller')).toBeTruthy();expect(mockIdentity.calls).toHaveBeenCalledWith(['call']);
@@ -82,4 +84,12 @@ test('older-page failure keeps rows, retries the same cursor, clears on success,
 test('blocked historical call contacts cannot navigate to a new chat',async()=>{
  mockHistory.listPage.mockResolvedValue({records:[historyRecord],cursor:null,hasMore:false});mockIdentity.calls.mockResolvedValue([{callId:'call',identity:{uid:'target',username:'Historical participant'},canInteract:false}]);
  const screen=render(<Messages navigation={navigation} route={{params:{}}}/>);await act(async()=>{});fireEvent.press(screen.getByText('CALLS'));expect(screen.getByText(/Video call · 3:42/)).toBeTruthy();expect(screen.queryByText(/Credits|billed|rate/i)).toBeNull();fireEvent.press(screen.getByText('Historical participant'));expect(navigation.navigate).not.toHaveBeenCalled();screen.unmount();
+});
+
+
+test('old call-history page cannot request identities or populate a replacement session',async()=>{
+ let resolve;mockHistory.listPage.mockReturnValueOnce(new Promise(done=>{resolve=done;}));const screen=render(<Messages navigation={navigation} route={{params:{}}}/>);mockNewSession();screen.rerender(<Messages navigation={navigation} route={{params:{}}}/>);await act(async()=>{});mockIdentity.calls.mockClear();await act(async()=>resolve({records:[historyRecord],cursor:null,hasMore:false}));expect(mockIdentity.calls).not.toHaveBeenCalled();fireEvent.press(screen.getByText('CALLS'));expect(screen.queryByText('Real caller')).toBeNull();
+});
+test('late unblock failure after unmount is silent',async()=>{
+ const alert=jest.spyOn(require('react-native').Alert,'alert').mockImplementation(()=>{});let reject;mockBlock.unblock.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;}));const screen=render(<Blocked/>);await act(async()=>{});act(()=>{fireEvent.press(screen.getByText('Unblock'));});screen.unmount();await act(async()=>reject(new Error('old')));expect(alert).not.toHaveBeenCalled();alert.mockRestore();
 });

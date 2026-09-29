@@ -204,3 +204,16 @@ test('profile retry during local logout cleanup does not skip Firebase sign-out'
   await act(async () => { cleanup.resolve(); await task; });
   expect(mockSignOut).toHaveBeenCalledTimes(1); expect(session.bootstrapStatus).toBe('signed_out');
 });
+
+
+test('authenticated capability and navigation key change for same-UID replacement, and invalidate immediately',async()=>{
+ mount();await ready('a');const first=session.authenticatedSession;expect(first.isCurrent()).toBe(true);
+ await ready('a');expect(first.isCurrent()).toBe(false);expect(session.authenticatedSession.key).not.toBe(first.key);expect(session.authenticatedSession.isCurrent()).toBe(true);
+ const second=session.authenticatedSession;await transition(null);expect(second.isCurrent()).toBe(false);
+});
+
+test.each(['a','b'])('old logout confirmation cannot terminate replacement %s session',async uid=>{
+ mount();await ready('a');const oldLogout=session.terminateSession;await ready(uid);
+ await act(async()=>{await oldLogout();});expect(mockSignOut).not.toHaveBeenCalled();
+ expect(session.authenticatedSession.isCurrent()).toBe(true);
+});

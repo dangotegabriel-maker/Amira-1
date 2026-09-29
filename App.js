@@ -10,13 +10,13 @@ import SplashScreen from './src/screens/onboarding/SplashScreen';
 
 const AppContent = () => {
   console.log('BOOT: AppContent rendered');
-  const { user, loading } = useUser();
+  const { user, loading, authenticatedSession } = useUser();
   const [splashReady, setSplashReady] = React.useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setSplashReady(true), 1100);
     return () => clearTimeout(timer);
   }, []);
-  useEffect(() => user?.uid ? presenceService.start() : undefined, [user?.uid]);
+  useEffect(() => user?.uid ? presenceService.start(authenticatedSession) : undefined, [user?.uid, authenticatedSession]);
   if (loading || !splashReady) return <SplashScreen />;
   return (
     <>

@@ -1,3 +1,5 @@
+let mockAuthenticatedSession;
+const mockNewSession=()=>{const token={isCurrent:()=>mockAuthenticatedSession===token};mockAuthenticatedSession=token;};
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
@@ -23,7 +25,7 @@ const mockCalls = {
   confirmPaid: jest.fn(async () => ({ billingMode: 'paid' })), settleIncrement: jest.fn(async () => ({})),
   end: jest.fn(async () => ({ durationSeconds: 30, billedCredits: 5 })),
 };
-jest.mock('../../../context/UserContext', () => ({ useUser: () => ({ user: mockUser, coins: 100 }) }));
+jest.mock('../../../context/UserContext', () => ({ useUser: () => ({authenticatedSession:mockAuthenticatedSession, user: mockUser, coins: 100 }) }));
 jest.mock('../../../services/rtcService', () => ({ rtcService: mockRtc }));
 jest.mock('../../../services/callService', () => ({ callService: mockCalls }));
 jest.mock('../../../services/blockService', () => ({ blockService: { block: jest.fn() } }));
@@ -56,7 +58,7 @@ const open = async (call = pendingCall()) => {
   return screen;
 };
 
-beforeEach(() => {
+beforeEach(() => {mockNewSession();
   jest.useFakeTimers().setSystemTime(new Date('2026-09-08T12:00:00Z'));
   jest.clearAllMocks();
   mockUser = { uid: 'consumer', role: 'consumer', vip: { tier: 'VIP_3', status: 'active' } };
@@ -170,4 +172,14 @@ test.each(['Follow','Following','Friends'])('summary resolves real %s relationsh
   mockRelationship = { valid: true, following: label !== 'Follow', label };
   const screen = render(<CallSummaryScreen navigation={navigation} route={{params:{duration:30,targetUserId:'host',targetUserName:'Host'}}}/>);
   await flush(); expect(screen.getByText(label)).toBeTruthy(); screen.unmount();
+});
+
+
+test.each(['same UID','unmount'])('late call-end response cannot navigate after %s',async kind=>{
+ let resolve;mockCalls.end.mockReturnValueOnce(new Promise(done=>{resolve=done;}));const screen=await open();act(()=>{fireEvent.press(screen.getByLabelText('End Call'));});await flush();
+ if(kind==='same UID')mockNewSession();else screen.unmount();await act(async()=>resolve({durationSeconds:99,billedCredits:5}));expect(navigation.replace).not.toHaveBeenCalled();
+});
+test('obsolete permission rejection and call snapshot are harmless after same-UID replacement',async()=>{
+ let reject;mockRtc.requestPermissions.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;}));const screen=await open();const old=mockListener;mockNewSession();
+ await act(async()=>reject(new Error('old permissions')));act(()=>old({...pendingCall(),status:'rejected'}));expect(Alert.alert).not.toHaveBeenCalled();expect(mockRtc.joinSession).not.toHaveBeenCalled();expect(navigation.goBack).not.toHaveBeenCalled();screen.unmount();
 });

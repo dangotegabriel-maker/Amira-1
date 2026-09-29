@@ -1,3 +1,5 @@
+import {useIsFocused} from '@react-navigation/native';
+import { useSessionGuard } from '../../hooks/useSessionGuard';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
@@ -8,18 +10,20 @@ import { hostEarningsService } from '../../services/hostEarningsService';
 
 const HostEarningsScreen = () => {
   const { user } = useUser();
+  const focused=useIsFocused();
+  const current = useSessionGuard('',focused);
   const approvedHost = isApprovedHost(user);
   const [earnings, setEarnings] = useState(null), [error, setError] = useState(false), [retry, setRetry] = useState(0);
   useEffect(() => {
     setEarnings(null); setError(false);
-    if (!approvedHost) return undefined;
+    if (!approvedHost || !focused || !current()) return undefined;
     let active = true;
-    const fail = () => { if (active) { setEarnings(null); setError(true); } };
+    const fail = () => { if (active && current()) { setEarnings(null); setError(true); } };
     let stop = () => {};
-    try { stop = hostEarningsService.subscribe((value) => { if (active) { setEarnings(value); setError(false); } }, fail); }
+    try { stop = hostEarningsService.subscribe((value) => { if (active && current()) { setEarnings(value); setError(false); } }, fail); }
     catch (_) { fail(); }
     return () => { active = false; stop(); };
-  }, [user?.uid, approvedHost, retry]);
+  }, [user?.uid, approvedHost, retry, current]);
   if (!approvedHost) return null;
 
   return (

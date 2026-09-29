@@ -5,6 +5,7 @@ import { useUser } from '../context/UserContext';
 import { isApprovedHost } from '../models/userModel';
 import { callService } from '../services/callService';
 import { blockService } from '../services/blockService';
+import QuickMatchListener from './QuickMatchListener';
 import IncomingCallCard from './IncomingCallCard';
 
 // One owner above the root stack; route focus never owns this subscription.
@@ -64,6 +65,7 @@ export default function IncomingCallListener({ children, enabled }) {
 
   const visible = eligible && foreground && entry?.session === session && session?.isCurrent();
   return <View style={{ flex: 1 }}>{children}
+    <QuickMatchListener enabled={enabled} suppressed={Boolean(visible)} />
     {error === session && session?.isCurrent() && eligible && foreground &&
       <TouchableOpacity accessibilityRole="button" onPress={() => setRetry(value => value + 1)}>
         <Text accessibilityRole="alert">Incoming calls unavailable. Tap to retry.</Text>

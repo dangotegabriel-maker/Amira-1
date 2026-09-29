@@ -48,7 +48,7 @@ import { getRequiredProfileStep, isProfileActuallyComplete, isApprovedHost } fro
 const Stack = createNativeStackNavigator();
 
 const RootNavigator = () => {
-  const { user, loading, bootstrapStatus, retryProfile } = useUser();
+  const { user, loading, bootstrapStatus, retryProfile, authenticatedSession } = useUser();
 
   if (loading) return null;
   if (bootstrapStatus === 'profile_error') return (
@@ -65,7 +65,7 @@ const RootNavigator = () => {
   const isProfileComplete = isProfileActuallyComplete(user);
 
   return (
-    <SafeAreaProvider><MessageActivityProvider><IncomingCallListener enabled={isProfileComplete}><Stack.Navigator
+    <SafeAreaProvider key={authenticatedSession?.key || 'signed-out'}><MessageActivityProvider><IncomingCallListener enabled={isProfileComplete}><Stack.Navigator
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',

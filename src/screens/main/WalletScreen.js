@@ -1,3 +1,4 @@
+import {useSessionGuard} from '../../hooks/useSessionGuard';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { Wallet } from 'lucide-react-native';
@@ -5,8 +6,8 @@ import { COLORS } from '../../theme/COLORS';
 import { creditWalletService } from '../../services/creditWalletService';
 
 const WalletScreen = () => {
-  const [wallet, setWallet] = useState(null); const [entries, setEntries] = useState([]); const [error, setError] = useState('');
-  const load = useCallback(async () => { setError(''); try { const [next, history] = await Promise.all([creditWalletService.getWallet(), creditWalletService.listHistory()]); setWallet(next); setEntries(history.entries || []); } catch (_) { setError('Wallet information is unavailable. Please try again later.'); } }, []);
+const current=useSessionGuard();  const [wallet, setWallet] = useState(null); const [entries, setEntries] = useState([]); const [error, setError] = useState('');
+  const load = useCallback(async () => { setError(''); try { const [next, history] = await Promise.all([creditWalletService.getWallet(), creditWalletService.listHistory()]); if(!current())return;setWallet(next); setEntries(history.entries || []); } catch (_) { if(current())setError('Wallet information is unavailable. Please try again later.'); } }, [current]);
   useEffect(() => { load(); }, [load]);
   if (!wallet && !error) return <View style={styles.center}><ActivityIndicator color={COLORS.primary}/><Text style={styles.note}>Loading wallet…</Text></View>;
   return <View style={styles.container}><Text style={styles.title}>Wallet</Text>{error ? <Text style={styles.error}>{error}</Text> : <><View style={styles.balanceCard}><Wallet color={COLORS.white} size={28}/><Text style={styles.balanceLabel}>Available Credits</Text><Text style={styles.balanceValue}>{wallet.totalCredits.toLocaleString()}</Text></View><Text style={styles.historyTitle}>Credit history</Text><FlatList data={entries} keyExtractor={item=>item.id} ListEmptyComponent={<Text style={styles.note}>No Credit activity yet.</Text>} renderItem={({item})=><View style={styles.entry}><Text style={styles.entryType}>{item.type === 'recharge' ? 'Recharge' : item.type === 'bonus_grant' ? 'Bonus' : 'Adjustment'}</Text><Text style={styles.entryAmount}>{item.direction === 'debit' ? '−' : '+'}{item.credits} Credits</Text></View>}/></>}</View>;

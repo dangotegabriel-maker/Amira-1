@@ -6,6 +6,7 @@ import { collection, collectionGroup, onSnapshot, query, where } from 'firebase/
 import { db } from '../services/firebaseService';
 import { messagingService } from '../services/messagingService';
 import { blockService } from '../services/blockService';
+import { useSessionGuard } from '../hooks/useSessionGuard';
 import { useUser } from './UserContext';
 import { incomingBanner, totalUnread, visibleConversations } from '../utils/messageActivity';
 
@@ -14,6 +15,8 @@ export const useMessageActivity = () => useContext(Context);
 
 export const MessageActivityProvider = ({ children }) => {
   const { user } = useUser();
+  const current = useSessionGuard();
+  const [retry, setRetry] = useState(0), [error, setError] = useState(false);
   const navigation = useNavigation(), insets = useSafeAreaInsets();
   const [unread, setUnread] = useState(0), [banner, setBanner] = useState(null);
   const activeConversation = useRef(null), appState = useRef(AppState.currentState);
@@ -22,13 +25,13 @@ export const MessageActivityProvider = ({ children }) => {
     return () => subscription.remove();
   }, []);
   useEffect(() => {
-    setUnread(0); setBanner(null);
-    if (!user?.uid) return undefined;
+    setUnread(0); setBanner(null); setError(false); activeConversation.current = null;
+    if (!user?.uid || !current()) return undefined;
     const uid = user.uid;
     let items = [], mine = null, theirs = null, primed = false, serverReady = false, alive = true;
     const seen = new Map();
     const update = (newInbox = false) => {
-      if (!alive || !mine || !theirs) return;
+      if (!alive || !current() || !mine || !theirs) return;
       const blocked = new Set([...mine, ...theirs]);
       const visible = visibleConversations(items, uid, blocked);
       setUnread(totalUnread(visible, uid));
@@ -47,27 +50,30 @@ export const MessageActivityProvider = ({ children }) => {
       }
       primed = true;
     };
-    const failed = () => { mine = null; theirs = null; primed = false; setUnread(0); setBanner(null); };
+    const failed = () => { if (!alive || !current()) return; setError(true); mine = null; theirs = null; primed = false; setUnread(0); setBanner(null); };
     const stops = [
-      onSnapshot(collection(db, 'users', uid, 'blocked'), (snapshot) => { mine = snapshot.docs.map((entry) => entry.id); update(); }, failed),
+      onSnapshot(collection(db, 'users', uid, 'blocked'), (snapshot) => { if (!alive || !current()) return; mine = snapshot.docs.map((entry) => entry.id); update(); }, failed),
       onSnapshot(query(collectionGroup(db, 'blocked'), where('blockedUid', '==', uid)), (snapshot) => {
+        if (!alive || !current()) return;
         theirs = snapshot.docs.map((entry) => entry.ref.parent.parent.id); update();
       }, failed),
-      messagingService.subscribeInbox((next, metadata) => { items = next; if (!serverReady || metadata?.fromCache || !mine || !theirs) { for (const item of items) seen.set(item.id, item.lastMessageAt?.toMillis?.() || 0); primed = true; if (metadata?.fromCache === false) serverReady = true; update(); return; } update(true); }, failed, { all: true }),
+      messagingService.subscribeInbox((next, metadata) => { if (!alive || !current()) return; items = next; if (!serverReady || metadata?.fromCache || !mine || !theirs) { for (const item of items) seen.set(item.id, item.lastMessageAt?.toMillis?.() || 0); primed = true; if (metadata?.fromCache === false) serverReady = true; update(); return; } update(true); }, failed, { all: true }),
     ];
     return () => { alive = false; stops.forEach((stop) => stop()); };
-  }, [user?.uid]);
+  }, [user?.uid, current, retry]);
   useEffect(() => { if (!banner) return undefined; const timer = setTimeout(() => setBanner(null), 5000); return () => clearTimeout(timer); }, [banner]);
   const setActiveConversation = (id) => {
+    if (!current()) return;
     activeConversation.current = id;
     setBanner((current) => current?.conversationId === id ? null : current);
   };
   const openBanner = async () => {
     const target = banner; setBanner(null);
-    if (target && !(await blockService.getRelationship(target.userId)).blocked) navigation.navigate('ChatDetail', { userId: target.userId, name: target.name });
+    if (current() && target && !(await blockService.getRelationship(target.userId)).blocked && current()) navigation.navigate('ChatDetail', { userId: target.userId, name: target.name });
   };
   return <Context.Provider value={{ unread, setActiveConversation }}>
     <View style={{ flex: 1 }}>{children}
+      {error && <TouchableOpacity onPress={() => setRetry(value => value + 1)}><Text>Message updates unavailable. Tap to retry.</Text></TouchableOpacity>}
       {banner && <TouchableOpacity accessibilityLabel="Open incoming message" style={[styles.banner, { top: insets.top + 8 }]} onPress={() => openBanner().catch(() => {})}>
         <Text style={styles.name}>{banner.name}</Text><Text numberOfLines={2}>{banner.text}</Text>
       </TouchableOpacity>}

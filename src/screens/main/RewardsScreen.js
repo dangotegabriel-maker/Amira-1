@@ -1,3 +1,4 @@
+import { useSessionGuard } from '../../hooks/useSessionGuard';
 import { isConsumer } from '../../models/userModel';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -16,6 +17,7 @@ const videoTime = (seconds) => `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 const RewardsScreen = () => {
   const { user } = useUser();
   const focused = useIsFocused();
+  const current = useSessionGuard('', focused);
   const [dashboard, setDashboard] = useState(null);
   const [rewards, setRewards] = useState(null);
   const [error, setError] = useState('');
@@ -24,26 +26,28 @@ const RewardsScreen = () => {
   const [tasks, setTasks] = useState(null);
   const [taskClaiming, setTaskClaiming] = useState('');
   const consumer = isConsumer(user);
+  useEffect(() => { setClaiming(false); setTaskClaiming(''); }, [current]);
 
   useEffect(() => {
     if (!consumer || !focused) return undefined;
     let active = true, midnightTimer;
     setDashboard(null); setRewards(null); setError('');
     const load = async () => {
+      if (!active || !current()) return;
       try {
         const [next, taskState] = await Promise.all([rewardsService.getDashboard(), rewardsService.getTasks()]);
-        if (!active) return;
+        if (!active || !current()) return;
         setDashboard(next); setTasks(taskState); setError('');
         // UI refresh only. Claim eligibility always uses the backend's UTC date.
         const nextMidnight = (Math.floor(next.serverNowMs / 86400000) + 1) * 86400000;
         midnightTimer = setTimeout(load, Math.max(250, nextMidnight - next.serverNowMs + 250));
-      } catch (_) { if (active) setError('Could not load rewards. Please try again.'); }
+      } catch (_) { if (active && current()) setError('Could not load rewards. Please try again.'); }
     };
     load();
-    const stop = rewardsService.subscribe((value) => { if (active) setRewards(value); },
-      () => { if (active) setError('Rewards updates are unavailable. Please refresh.'); });
+    const stop = rewardsService.subscribe((value) => { if (active && current()) setRewards(value); },
+      () => { if (active && current()) setError('Rewards updates are unavailable. Please refresh.'); });
     return () => { active = false; clearTimeout(midnightTimer); stop(); };
-  }, [consumer, user?.uid, focused, refresh]);
+  }, [consumer, user?.uid, focused, refresh, current]);
 
   if (!consumer) return null;
   const balance = rewards || dashboard?.balances;
@@ -51,19 +55,20 @@ const RewardsScreen = () => {
   const claimed = dashboard && (checkIn?.lastClaimDate === dashboard.dateKey || dashboard.alreadyClaimed || dashboard.claimed);
   const nextDay = dashboard?.nextDay;
   const claim = async () => {
-    if (claiming || claimed || !dashboard || error) return;
+    if (!current() || claiming || claimed || !dashboard || error) return;
     setClaiming(true);
     try {
       const result = await rewardsService.claimDailyCheckIn();
+      if(!current())return;
       setDashboard(result);
       setRewards({ ...result.balances, checkIn: result.checkIn });
       Alert.alert(result.alreadyClaimed ? 'Already claimed today' : [result.reward?.freeMessages,result.reward?.freeVideoSeconds,result.reward?.quickMatchCount].some(value=>value>0) ? 'Reward claimed' : 'Check-in complete', rewardDescription(result.reward || {}));
-    } catch (failure) { Alert.alert('Unable to claim reward', failure.message || 'Please try again.'); }
-    finally { setClaiming(false); }
+    } catch (failure) { if(current())Alert.alert('Unable to claim reward', failure.message || 'Please try again.'); }
+    finally { if(current())setClaiming(false); }
   };
   const claimTask = async (task) => {
-    const key=`${task.scope}:${task.id}`;if(taskClaiming||!task.claimable)return;
-    setTaskClaiming(key);try{const result=await rewardsService.claimTask(task.scope,task.id);setTasks(await rewardsService.getTasks());Alert.alert(result.idempotent?'Already claimed':'Reward claimed',task.reward.description);}catch(failure){Alert.alert('Unable to claim reward',failure.message||'Please try again.');}finally{setTaskClaiming('');}
+    const key=`${task.scope}:${task.id}`;if(!current()||taskClaiming||!task.claimable)return;
+    setTaskClaiming(key);try{const result=await rewardsService.claimTask(task.scope,task.id);if(!current())return;const next=await rewardsService.getTasks();if(!current())return;setTasks(next);Alert.alert(result.idempotent?'Already claimed':'Reward claimed',task.reward.description);}catch(failure){if(current())Alert.alert('Unable to claim reward',failure.message||'Please try again.');}finally{if(current())setTaskClaiming('');}
   };
   const taskSection=(title,items,empty)=> <View style={styles.card}>
     <Text style={styles.heading}>{title}</Text>

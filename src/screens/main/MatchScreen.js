@@ -1,5 +1,6 @@
+import {useSessionGuard} from '../../hooks/useSessionGuard';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { MessageCircle, RefreshCw, Sparkles, UserRound, Video } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
@@ -14,27 +15,34 @@ import {quickMatchService} from '../../services/quickMatchService';
 const MatchScreen = ({ navigation }) => {
   const { user } = useUser();
   const [filters]=useDiscoveryFilters(); const focused=useIsFocused();
+  const current=useSessionGuard();
   const seen=useRef([]),request=useRef(0);
   const [error,setError]=useState('');
   const [hosts, setHosts] = useState([]);
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
+  const callCurrent=useSessionGuard(match?.uid,focused);
   const [quick,setQuick]=useState(null);const [quickBusy,setQuickBusy]=useState(false);
-  const quickNavigated=useRef(null);
-  useEffect(()=>{if(!quick||!['searching','offering','accepted','connecting'].includes(quick.status))return undefined;let active=true;const sync=()=>quickMatchService.state().then(value=>{if(!active)return;setQuick(value);if(value.status==='connecting'&&value.callId&&quickNavigated.current!==value.callId){quickNavigated.current=value.callId;navigation.navigate('VideoCall',{call:value,creator:value.host});}}).catch(()=>{});const timer=setInterval(sync,3000);return()=>{active=false;clearInterval(timer)}},[quick?.requestId,quick?.status,navigation]);
+  const quickNavigated=useRef(null),quickLock=useRef(false);
+  useEffect(()=>{
+    if(!current()||!quick||!['searching','offering','accepted','connecting'].includes(quick.status))return undefined;
+    let active=true,pending=false;
+    const sync=async()=>{if(!active||!current()||pending||AppState.currentState!=='active')return;pending=true;try{const value=await quickMatchService.state();if(!active||!current()||AppState.currentState!=='active')return;setQuick(value);if(value.status==='connecting'&&value.callId&&quickNavigated.current!==value.callId){quickNavigated.current=value.callId;navigation.navigate('VideoCall',{call:value,creator:value.host});}}catch(_){/* Existing request remains retryable on the next tick. */}finally{pending=false;}};
+    const timer=setInterval(sync,3000);return()=>{active=false;clearInterval(timer);};
+  },[quick?.requestId,quick?.status,navigation,current]);
 
   const findMatch = useCallback(async () => {
     const version=++request.current;setLoading(true);setError('');
     try {
       const eligible=filterDiscoveryHosts(await discoveryService.getApprovedHosts(),filters).filter(host=>host.hostStatus?.availability!=='busy');
-      if(version!==request.current)return;
+      if(!current()||version!==request.current)return;
       setHosts(eligible);
       let nextMatch=discoveryService.getBestMatch(eligible,user,seen.current);
       if(!nextMatch){seen.current=[];nextMatch=discoveryService.getBestMatch(eligible,user,[]);}
       setMatch(nextMatch);
-    } catch(e){if(version===request.current){setHosts([]);setMatch(null);setError('Matches could not be loaded. Try again.');}}
-    finally {if(version===request.current)setLoading(false);}
-  },[filters,user?.uid,user?.countryCode]);
+    } catch(e){if(current()&&version===request.current){setHosts([]);setMatch(null);setError('Matches could not be loaded. Try again.');}}
+    finally {if(current()&&version===request.current)setLoading(false);}
+  },[filters,user?.uid,user?.countryCode,current]);
   useFocusEffect(useCallback(()=>{findMatch();return()=>{request.current++;};},[findMatch]));
 
   const next = () => {
@@ -51,10 +59,10 @@ const MatchScreen = ({ navigation }) => {
 
   const openProfile=()=>navigation.navigate('UserProfile',{userId:match.uid});
   const message=()=>navigation.navigate('ChatDetail',{userId:match.uid,name:match.username});
-  const startQuick=async()=>{if(quickBusy)return;setQuickBusy(true);try{const value=await quickMatchService.start();setQuick(value);if(value.status==='connecting'&&value.callId)navigation.navigate('VideoCall',{call:value,creator:value.host});}catch(e){setQuick({status:'unavailable',message:e.message});}finally{setQuickBusy(false)}};
-  const cancelQuick=async()=>{if(!quick?.requestId)return;setQuickBusy(true);try{setQuick(await quickMatchService.cancel(quick.requestId));}finally{setQuickBusy(false)}};
+  const startQuick=async()=>{if(!current()||quickLock.current)return;quickLock.current=true;setQuickBusy(true);try{const value=await quickMatchService.start();if(!current())return;setQuick(value);if(value.status==='connecting'&&value.callId&&quickNavigated.current!==value.callId){quickNavigated.current=value.callId;navigation.navigate('VideoCall',{call:value,creator:value.host});}}catch(e){if(current())setQuick({status:'unavailable',message:e.message});}finally{quickLock.current=false;if(current())setQuickBusy(false)}};
+  const cancelQuick=async()=>{if(!current()||quickLock.current||!quick?.requestId)return;quickLock.current=true;setQuickBusy(true);try{const value=await quickMatchService.cancel(quick.requestId);if(current())setQuick(value);}catch(e){if(current())setQuick(previous=>({...previous,message:e.message}));}finally{quickLock.current=false;if(current())setQuickBusy(false)}};
   const quickText={offering:'Waiting for a Host response…',searching:'Finding someone…',connecting:'Connecting…',no_match:'No one is available right now. Try again later.',cancelled:'Quick Match cancelled.',unavailable:quick?.message}[quick?.status];
-  return <View style={styles.container}><Text style={styles.title}>Your Amira Match</Text><Text style={styles.subtitle}>Discover someone new and start a conversation.</Text><View style={styles.quickBox}><Text style={styles.quickTitle}>Quick Match</Text><Text style={styles.quickCopy}>{quickText||'Uses 1 Quick Match. Includes a 20 sec connected intro, then your Free Video Time. Before connection, the matched Host rate is protected for the call; paid time continues automatically in 10-second increments while you have enough Credits.'}</Text>{quick&&['searching','offering','connecting'].includes(quick.status)?<TouchableOpacity onPress={cancelQuick} disabled={quickBusy}><Text style={styles.cancel}>Cancel</Text></TouchableOpacity>:<TouchableOpacity style={styles.quickButton} onPress={startQuick} disabled={quickBusy}><Text style={styles.white}>{quickBusy?'Starting…':'Start Quick Match'}</Text></TouchableOpacity>}</View><HostCard host={match} compact autoCycle={focused} onPress={openProfile} onCallPress={() => startVideoCall({ navigation, creator: match })} /><View style={styles.actions}><TouchableOpacity style={styles.secondary} onPress={openProfile}><UserRound color={COLORS.primary} /><Text style={styles.secondaryText}>Profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={message}><MessageCircle color={COLORS.primary} /><Text style={styles.secondaryText}>Message</Text></TouchableOpacity><TouchableOpacity disabled={match.hostStatus?.availability!=='online'||!match.hostProfile?.videoRateCredits} style={styles.secondary} onPress={() => startVideoCall({ navigation, creator: match })}><Video color={COLORS.primary} /><Text style={styles.secondaryText}>Video</Text></TouchableOpacity></View><TouchableOpacity style={styles.primary} onPress={next}><RefreshCw color="white" /><Text style={styles.primaryText}>Next Match</Text></TouchableOpacity></View>;
+  return <View style={styles.container}><Text style={styles.title}>Your Amira Match</Text><Text style={styles.subtitle}>Discover someone new and start a conversation.</Text><View style={styles.quickBox}><Text style={styles.quickTitle}>Quick Match</Text><Text style={styles.quickCopy}>{quickText||'Uses 1 Quick Match. Includes a 20 sec connected intro, then your Free Video Time. Before connection, the matched Host rate is protected for the call; paid time continues automatically in 10-second increments while you have enough Credits.'}</Text>{quick&&['searching','offering','connecting'].includes(quick.status)?<TouchableOpacity onPress={cancelQuick} disabled={quickBusy}><Text style={styles.cancel}>Cancel</Text></TouchableOpacity>:<TouchableOpacity style={styles.quickButton} onPress={startQuick} disabled={quickBusy}><Text style={styles.white}>{quickBusy?'Starting…':'Start Quick Match'}</Text></TouchableOpacity>}</View><HostCard host={match} compact autoCycle={focused} onPress={openProfile} onCallPress={() => startVideoCall({ navigation,isCurrent:callCurrent, creator: match })} /><View style={styles.actions}><TouchableOpacity style={styles.secondary} onPress={openProfile}><UserRound color={COLORS.primary} /><Text style={styles.secondaryText}>Profile</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={message}><MessageCircle color={COLORS.primary} /><Text style={styles.secondaryText}>Message</Text></TouchableOpacity><TouchableOpacity disabled={match.hostStatus?.availability!=='online'||!match.hostProfile?.videoRateCredits} style={styles.secondary} onPress={() => startVideoCall({ navigation,isCurrent:callCurrent, creator: match })}><Video color={COLORS.primary} /><Text style={styles.secondaryText}>Video</Text></TouchableOpacity></View><TouchableOpacity style={styles.primary} onPress={next}><RefreshCw color="white" /><Text style={styles.primaryText}>Next Match</Text></TouchableOpacity></View>;
 };
 
 const styles = StyleSheet.create({

@@ -1,0 +1,66 @@
+ M App.js
+ M src/components/GiftTray.js
+ M src/components/IncomingCallListener.js
+ M src/components/QuickMatchOfferCard.js
+ M src/components/SponsoredCallInviteBanner.js
+ M src/components/__tests__/discoveryFilterModal.test.js
+ M src/components/__tests__/giftTray.test.js
+ M src/components/__tests__/incomingCallLifecycle.test.js
+ M src/context/MessageActivityContext.js
+ M src/context/UserContext.js
+ M src/context/__tests__/messageActivityUi.test.js
+ M src/context/__tests__/userSessionIsolation.test.js
+ M src/hooks/useDiscoveryFilters.js
+ M src/navigation/RootNavigator.js
+ M src/navigation/__tests__/accountNavigation.test.js
+ M src/screens/host/HostActivityScreen.js
+ M src/screens/host/HostApplicationScreen.js
+ M src/screens/host/HostDashboardScreen.js
+ M src/screens/host/HostEarningsScreen.js
+ M src/screens/host/__tests__/hostActivityUi.test.js
+ M src/screens/host/__tests__/hostConnectUi.test.js
+ M src/screens/main/BlockedUsersScreen.js
+ M src/screens/main/CallSummaryScreen.js
+ M src/screens/main/ChatDetailScreen.js
+ M src/screens/main/EditProfileScreen.js
+ M src/screens/main/FollowingScreen.js
+ M src/screens/main/HomeScreen.js
+ M src/screens/main/MatchScreen.js
+ M src/screens/main/MessageHomeScreen.js
+ M src/screens/main/MyLevelScreen.js
+ M src/screens/main/MyProfileScreen.js
+ M src/screens/main/RechargeHubScreen.js
+ M src/screens/main/RewardsScreen.js
+ M src/screens/main/UserProfileScreen.js
+ M src/screens/main/VIPStoreScreen.js
+ M src/screens/main/VideoCallScreen.js
+ M src/screens/main/WalletScreen.js
+ M src/screens/main/__tests__/callPaymentUi.test.js
+ M src/screens/main/__tests__/consumerLevelVisibility.test.js
+ M src/screens/main/__tests__/discoveryProfileUi.test.js
+ M src/screens/main/__tests__/hostAccountUi.test.js
+ M src/screens/main/__tests__/messageEntitlementUi.test.js
+ M src/screens/main/__tests__/myLevelUi.test.js
+ M src/screens/main/__tests__/privacyIdentityUi.test.js
+ M src/screens/main/__tests__/profileViewTrackingUi.test.js
+ M src/screens/main/__tests__/rewardsUi.test.js
+ M src/screens/main/__tests__/truthfulUi.test.js
+ M src/services/__tests__/callEntry.test.js
+ M src/services/__tests__/clientAuthorityCleanup.test.js
+ M src/services/__tests__/followHelpers.test.js
+ M src/services/__tests__/messageHistory.test.js
+ M src/services/__tests__/rtcService.test.js
+ M src/services/callNavigationService.js
+ M src/services/callService.js
+ M src/services/followService.js
+ M src/services/messagingService.js
+ M src/services/presenceService.js
+ M src/services/rtcService.js
+ M src/services/socketService.js
+?? docs/realtime-listener-session-audit-git-status.txt
+?? docs/realtime-listener-session-audit-report.md
+?? src/components/QuickMatchListener.js
+?? src/components/__tests__/quickMatchLifecycle.test.js
+?? src/hooks/useSessionGuard.js
+?? src/screens/main/__tests__/screenSessionLifecycle.test.js
+?? src/services/__tests__/sessionListeners.test.js

@@ -24,3 +24,11 @@ test('keyboard fallback has zero offset after native resize and only residual ov
   expect(keyboardOverlap(800,500)).toBe(300);
   expect(keyboardOverlap(800,null)).toBe(0);
 });
+
+
+test('obsolete disclosure confirmation cannot prepare or start a call',async()=>{
+ let valid=true;const navigation={navigate:jest.fn()},pending=startVideoCall({navigation,creator:{uid:'h',hostProfile:{videoRateCredits:25}},isCurrent:()=>valid});valid=false;Alert.alert.mock.calls[0][2][1].onPress();await pending;expect(callService.prepare).not.toHaveBeenCalled();expect(callService.request).not.toHaveBeenCalled();expect(navigation.navigate).not.toHaveBeenCalled();
+});
+test('obsolete request rejection cannot Alert or offer recharge to a replacement screen',async()=>{
+ let valid=true,reject;callService.request.mockImplementationOnce(()=>new Promise((_done,fail)=>{reject=fail;}));const navigation={navigate:jest.fn()},pending=startVideoCall({navigation,creator:{uid:'h',hostProfile:{videoRateCredits:25}},isCurrent:()=>valid});Alert.alert.mock.calls[0][2][1].onPress();await Promise.resolve();await Promise.resolve();valid=false;reject({details:{reason:'insufficient_call_credits'}});await pending;expect(Alert.alert).toHaveBeenCalledTimes(1);expect(navigation.navigate).not.toHaveBeenCalled();
+});

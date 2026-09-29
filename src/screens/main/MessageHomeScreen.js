@@ -1,4 +1,6 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+﻿import { useIsFocused } from '@react-navigation/native';
+import { useSessionGuard } from '../../hooks/useSessionGuard';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Bell, MessageCircle, Phone } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
@@ -14,13 +16,14 @@ import {formatCallHistoryTime,normalizeCallHistoryRecords} from '../../utils/cal
 
 const TABS=['All','Online','Unreplied','Calls','Notices'];
 const relative=(value)=>{const date=toDate(value);if(!date)return '';const seconds=Math.max(0,(Date.now()-date.getTime())/1000);if(seconds<60)return 'Now';if(seconds<3600)return `${Math.floor(seconds/60)}m`;if(seconds<86400)return `${Math.floor(seconds/3600)}h`;return `${Math.floor(seconds/86400)}d`;};
-const MessageHomeScreen=({navigation, route})=>{const{user}=useUser();const[active,setActive]=useState('All');const[conversationRecord,setConversationRecord]=useState(null);const[presence,setPresence]=useState({});const[noticeRecord,setNoticeRecord]=useState(null);const[callRecord,setCallRecord]=useState(null);const[loading,setLoading]=useState(true);
+const MessageHomeScreen=({navigation, route})=>{const{user}=useUser();const focused=useIsFocused();const current=useSessionGuard('',focused);const[active,setActive]=useState('All');const[conversationRecord,setConversationRecord]=useState(null);const[presence,setPresence]=useState({});const[noticeRecord,setNoticeRecord]=useState(null);const[callRecord,setCallRecord]=useState(null);const[loading,setLoading]=useState(true);
 const conversations=conversationRecord?.ownerUid===user.uid ? conversationRecord.items : [];
 const notices=noticeRecord?.ownerUid===user.uid ? noticeRecord.items : [];
 const setConversations=items=>setConversationRecord({ownerUid:user.uid,items});
 const setNotices=items=>setNoticeRecord({ownerUid:user.uid,items});
 const calls = callRecord?.ownerUid===user.uid ? callRecord.items : [];
 const setCalls = value=>setCallRecord(current=>({ownerUid:user.uid,items:typeof value==='function'?value(current?.ownerUid===user.uid?current.items:[]):value}));
+const callsRequest=useRef(0), moreLock=useRef(false);
 const [callsLoading,setCallsLoading]=useState(true);
 const [callsError,setCallsError]=useState('');
 const [callsLoadMoreError,setCallsLoadMoreError]=useState('');
@@ -36,20 +39,20 @@ useEffect(() => {
     navigation.setParams({ view: undefined });
   }
 }, [route.params?.view, navigation]);
-useEffect(()=>{let alive=true;setConversations([]);setPresence({});setLoading(true);
-const stop=messagingService.subscribeInbox(async(items)=>{if(!alive)return;setConversations(items);const others=items.map(item=>item.participantIds.find(id=>id!==user.uid)).filter(Boolean);const states=await Promise.all(others.map(async uid=>[uid,await presenceService.get(uid).catch(()=>null)]));if(alive){setPresence(Object.fromEntries(states));setLoading(false);}},()=>{if(alive)setLoading(false);});
-return ()=>{alive=false;stop();};},[user.uid]);
-useEffect(()=>{let alive=true;setNotices([]);const stop=noticeService.subscribe(items=>{if(alive)setNotices(items);},()=>{});return ()=>{alive=false;stop();};},[user.uid]);
-useEffect(()=>{let alive=true;setCalls([]);setCallsCursor(null);setCallsHasMore(false);setCallsLoading(true);setCallsError('');setCallsLoadMoreError('');
+useEffect(()=>{if(!current())return undefined;let alive=true;setConversations([]);setPresence({});setLoading(true);
+let version=0;const stop=messagingService.subscribeInbox(async(items)=>{const request=++version;if(!alive||!current())return;setConversations(items);const others=items.map(item=>item.participantIds.find(id=>id!==user.uid)).filter(Boolean);const states=await Promise.all(others.map(async uid=>[uid,await presenceService.get(uid).catch(()=>null)]));if(alive&&current()&&request===version){setPresence(Object.fromEntries(states));setLoading(false);}},()=>{if(alive&&current())setLoading(false);});
+return ()=>{alive=false;stop();};},[user.uid,current]);
+useEffect(()=>{if(!current())return undefined;let alive=true;setNotices([]);const stop=noticeService.subscribe(items=>{if(alive&&current())setNotices(items);},()=>{});return ()=>{alive=false;stop();};},[user.uid,current]);
+useEffect(()=>{if(!current())return undefined;let alive=true;const request=++callsRequest.current;moreLock.current=false;setCallsLoadingMore(false);setCalls([]);setCallsCursor(null);setCallsHasMore(false);setCallsLoading(true);setCallsError('');setCallsLoadMoreError('');
 callHistoryService.listPage().then(async page=>{
-const normalized=normalizeCallHistoryRecords(page.records,user.uid);
+if(!alive||!current()||request!==callsRequest.current)return;const normalized=normalizeCallHistoryRecords(page.records,user.uid);
 const identities=await publicIdentityService.calls(normalized.map(item=>item.callId));
 const byCall=new Map(identities.map(item=>[item.callId,item]));
 const rows=normalized.map(item=>{const result=byCall.get(item.callId);return {...item,profile:result?.identity,canInteract:result?.canInteract===true};});
-if(alive){setCalls(rows);setCallsCursor(page.cursor);setCallsHasMore(page.hasMore);}
-}).catch(()=>{if(alive)setCallsError("Couldn't load call history.");}).finally(()=>{if(alive)setCallsLoading(false);});
-return ()=>{alive=false;};},[user.uid,callsVersion]);
-const loadMoreCalls=async()=>{if(!callsHasMore||callsLoadingMore||callsLoading)return;setCallsLoadingMore(true);setCallsLoadMoreError('');try{const page=await callHistoryService.listPage({cursor:callsCursor});const normalized=normalizeCallHistoryRecords(page.records,user.uid),identities=await publicIdentityService.calls(normalized.map(item=>item.callId)),byCall=new Map(identities.map(item=>[item.callId,item]));const next=normalized.map(item=>{const result=byCall.get(item.callId);return{...item,profile:result?.identity,canInteract:result?.canInteract===true};});setCalls(current=>{const byId=new Map(current.map(item=>[item.callId,item]));next.forEach(item=>byId.set(item.callId,item));return[...byId.values()].sort((a,b)=>(b.timestampMs||0)-(a.timestampMs||0)||a.callId.localeCompare(b.callId));});setCallsCursor(page.cursor);setCallsHasMore(page.hasMore);setCallsLoadMoreError('');}catch{setCallsLoadMoreError('Unable to load more call history.');}finally{setCallsLoadingMore(false);}};
+if(alive&&current()&&request===callsRequest.current){setCalls(rows);setCallsCursor(page.cursor);setCallsHasMore(page.hasMore);}
+}).catch(()=>{if(alive&&current())setCallsError("Couldn't load call history.");}).finally(()=>{if(alive&&current())setCallsLoading(false);});
+return ()=>{alive=false;callsRequest.current++;};},[user.uid,callsVersion,current]);
+const loadMoreCalls=async()=>{if(!current()||moreLock.current||!callsHasMore||callsLoadingMore||callsLoading)return;const request=callsRequest.current;moreLock.current=true;setCallsLoadingMore(true);setCallsLoadMoreError('');try{const page=await callHistoryService.listPage({cursor:callsCursor});if(!current()||request!==callsRequest.current)return;const normalized=normalizeCallHistoryRecords(page.records,user.uid),identities=await publicIdentityService.calls(normalized.map(item=>item.callId)),byCall=new Map(identities.map(item=>[item.callId,item]));if(!current()||request!==callsRequest.current)return;const next=normalized.map(item=>{const result=byCall.get(item.callId);return{...item,profile:result?.identity,canInteract:result?.canInteract===true};});setCalls(current=>{const byId=new Map(current.map(item=>[item.callId,item]));next.forEach(item=>byId.set(item.callId,item));return[...byId.values()].sort((a,b)=>(b.timestampMs||0)-(a.timestampMs||0)||a.callId.localeCompare(b.callId));});setCallsCursor(page.cursor);setCallsHasMore(page.hasMore);setCallsLoadMoreError('');}catch{if(current()&&request===callsRequest.current)setCallsLoadMoreError('Unable to load more call history.');}finally{if(current()&&request===callsRequest.current){moreLock.current=false;setCallsLoadingMore(false);}}};
 const rows=useMemo(()=>active==='Online'?conversations.filter((item)=>presenceService.isOnline(presence[item.participantIds.find((id)=>id!==user.uid)])):active==='Unreplied'?conversations.filter((item)=>isConversationUnreplied(item,user.uid)):conversations,[active,conversations,presence,user.uid]);
 const empty={All:'No conversations yet.',Online:'None of your conversations are online right now.',Unreplied:"You're all caught up.",Calls:'No video calls yet.',Notices:'No notices yet.'}[active];
 const renderConversation=({item})=>{const otherUid=item.participantIds.find((id)=>id!==user.uid);const other=item.participants?.[otherUid]||{};const online=presenceService.isOnline(presence[otherUid]);const unread=item.unreadCounts?.[user.uid]||0;return <TouchableOpacity style={styles.row} onPress={()=>navigation.navigate('ChatDetail',{userId:otherUid,name:other.username})}>{other.profilePic?<Image source={{uri:other.profilePic}} style={styles.avatar}/>:<View style={styles.avatar}/>}<View style={styles.rowBody}><View style={styles.nameRow}><Text style={styles.name}>{other.username||'Amira user'}</Text>{online&&<View style={styles.online}/>}<Text style={styles.time}>{relative(item.lastMessageAt)}</Text></View><Text style={[styles.preview,unread&&styles.unreadText]} numberOfLines={1}>{item.lastMessage?.text||'Start a conversation'}</Text></View>{unread>0&&<View style={styles.badge}><Text style={styles.badgeText}>{unread>99?'99+':unread}</Text></View>}</TouchableOpacity>;};
