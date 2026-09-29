@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,12 +9,15 @@ import {
   View,
 } from 'react-native';
 import { COLORS } from '../theme/COLORS';
+import { blockService } from '../services/blockService';
 import { callService } from '../services/callService';
 import { publicIdentityService } from '../services/publicIdentityService';
 import { useUser } from '../context/UserContext';
 import { AmiraLevelBadge } from './AmiraLevelBadge';
 
-const IncomingCallCard = ({ call, navigation, onDismiss }) => {
+const alwaysCurrent = () => true;
+const IncomingCallCard = ({ call, navigation, onDismiss, isSessionCurrent = alwaysCurrent }) => {
+  const responseLock = useRef(false);
   const {user} = useUser();
   const [identityError,setIdentityError]=useState(false);
   const [identityVersion,setIdentityVersion]=useState(0);
@@ -27,10 +30,13 @@ const IncomingCallCard = ({ call, navigation, onDismiss }) => {
 
   useEffect(() => {
     let alive=true; setCaller(null); setIdentityError(false);
-    if (callId) publicIdentityService.calls([callId]).then(items=>{if(alive) {setCaller(items[0]?.identity || null);setIdentityError(!items[0]?.identity);}})
-      .catch(()=>{if(alive) setIdentityError(true);});
+    if (callId) publicIdentityService.calls([callId]).then(items=>{if(alive && isSessionCurrent()) {
+      if (items[0]?.canInteract === false) { onDismiss?.(); return; }
+      setCaller(items[0]?.identity || null);setIdentityError(!items[0]?.identity);
+    }})
+      .catch(()=>{if(alive && isSessionCurrent()) setIdentityError(true);});
     return ()=>{alive=false;};
-  }, [callId,user?.uid,identityVersion]);
+  }, [callId,user?.uid,identityVersion,isSessionCurrent,onDismiss]);
 
   useEffect(() => {
     const expiresAtMs = Number(call?.expiresAtMs || 0);
@@ -67,7 +73,9 @@ const IncomingCallCard = ({ call, navigation, onDismiss }) => {
   };
 
   const decline = async () => {
-    if (responding || !callId) return;
+    if (responseLock.current || !callId || !isSessionCurrent()) return;
+    if (call?.expiresAtMs && call.expiresAtMs <= Date.now()) { onDismiss?.(); return; }
+    responseLock.current = true;
 
     setResponding(true);
 
@@ -77,30 +85,38 @@ const IncomingCallCard = ({ call, navigation, onDismiss }) => {
         action: 'decline',
       });
 
-      onDismiss?.();
+      if (isSessionCurrent()) onDismiss?.();
     } catch (error) {
-      if (!handleExpiredCall(error)) {
+      if (isSessionCurrent() && !handleExpiredCall(error)) {
         Alert.alert(
           'Could not decline call',
           error?.message || 'Please try again.',
         );
       }
     } finally {
-      setResponding(false);
+      responseLock.current = false;
+      if (isSessionCurrent()) setResponding(false);
     }
   };
 
   const accept = async () => {
-    if (responding || !callId) return;
+    if (responseLock.current || !callId || !isSessionCurrent()) return;
+    if (call?.expiresAtMs && call.expiresAtMs <= Date.now()) { onDismiss?.(); return; }
+    responseLock.current = true;
 
     setResponding(true);
 
     try {
+      const relationship = await blockService.getRelationship(call.callerId);
+      if (!isSessionCurrent()) return;
+      if (relationship.blocked) { onDismiss?.(); return; }
+      if (call?.expiresAtMs && call.expiresAtMs <= Date.now()) { onDismiss?.(); return; }
       const accepted = await callService.respond({
         callId,
         action: 'accept',
       });
 
+      if (!isSessionCurrent()) return;
       onDismiss?.();
 
       navigation.navigate('VideoCall', {
@@ -111,14 +127,15 @@ const IncomingCallCard = ({ call, navigation, onDismiss }) => {
         creator: caller,
       });
     } catch (error) {
-      if (!handleExpiredCall(error)) {
+      if (isSessionCurrent() && !handleExpiredCall(error)) {
         Alert.alert(
           'Could not answer call',
           error?.message || 'Please try again.',
         );
       }
     } finally {
-      setResponding(false);
+      responseLock.current = false;
+      if (isSessionCurrent()) setResponding(false);
     }
   };
 

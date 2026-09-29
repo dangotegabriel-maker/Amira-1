@@ -1,3 +1,4 @@
+jest.mock('../../components/IncomingCallListener',()=>({children})=>children);
 jest.mock('../../screens/main/MyLevelScreen',()=>()=>null);
 import React from 'react';
 import {fireEvent, render} from '@testing-library/react-native';

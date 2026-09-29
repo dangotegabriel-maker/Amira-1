@@ -6,10 +6,8 @@ import { COLORS } from '../../theme/COLORS';
 
 import { useUser } from '../../context/UserContext';
 import { isApprovedHost } from '../../models/userModel';
-import { callService } from '../../services/callService';
 import { discoveryService } from '../../services/discoveryService';
 import { getCountryByCode } from '../../data/countries';
-import IncomingCallCard from '../../components/IncomingCallCard';
 import QuickMatchOfferCard from '../../components/QuickMatchOfferCard';
 import {quickMatchService} from '../../services/quickMatchService';
 
@@ -37,7 +35,6 @@ const ConsumerCard=({consumer,navigation})=>{
 const HostDashboardScreen = ({ navigation }) => {
   const { user } = useUser();
   const [updating, setUpdating] = useState(false);
-  const [incomingCall, setIncomingCall] = useState(null);
   const [quickOffer,setQuickOffer]=useState(null);
   const [consumers, setConsumers] = useState([]);
   const [loadingConsumers, setLoadingConsumers] = useState(true);
@@ -78,28 +75,6 @@ const HostDashboardScreen = ({ navigation }) => {
     return()=>{active=false;statusVersion.current++;};
   },[user?.uid,approvedHost,isFocused,refreshVersion,user?.hostStatus?.availability]);
   const availability=user?.hostStatus?.availability==='busy'?'busy':status?.availability;
-  useEffect(() => {
-  if (!approvedHost || !isFocused || !user?.uid || availability !== 'online') {
-    setIncomingCall(null);
-    return undefined;
-  }
-
-  return callService.subscribeIncoming(user.uid, (nextCall) => {
-    if (!nextCall) {
-      setIncomingCall(null);
-      return;
-    }
-
-    const expiresAtMs = Number(nextCall.expiresAtMs || 0);
-
-    if (expiresAtMs && expiresAtMs <= Date.now()) {
-      setIncomingCall(null);
-      return;
-    }
-
-    setIncomingCall(nextCall);
-  });
-}, [user?.uid, availability,approvedHost,isFocused]);
   useEffect(()=>{if(!approvedHost||!isFocused||availability!=='online'){setQuickOffer(null);return undefined;}let active=true;const load=()=>quickMatchService.offer().then(value=>{if(active)setQuickOffer(value.offer||null)}).catch(()=>{});load();const timer=setInterval(load,5000);return()=>{active=false;clearInterval(timer)}},[approvedHost,isFocused,availability,user?.uid]);
 
   const updateOnlineStatus=async online=>{
@@ -144,8 +119,7 @@ const HostDashboardScreen = ({ navigation }) => {
       </View>}
 
     />
-    {incomingCall && <IncomingCallCard call={incomingCall} navigation={navigation} onDismiss={()=>setIncomingCall(null)} />}
-    {!incomingCall&&quickOffer&&<QuickMatchOfferCard offer={quickOffer} navigation={navigation} onDismiss={()=>setQuickOffer(null)}/>}
+    {quickOffer&&<QuickMatchOfferCard offer={quickOffer} navigation={navigation} onDismiss={()=>setQuickOffer(null)}/>}
   </View>;
 };
 

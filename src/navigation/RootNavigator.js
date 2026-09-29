@@ -1,4 +1,5 @@
 import React from 'react';
+import IncomingCallListener from '../components/IncomingCallListener';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MessageActivityProvider } from '../context/MessageActivityContext';
@@ -64,7 +65,7 @@ const RootNavigator = () => {
   const isProfileComplete = isProfileActuallyComplete(user);
 
   return (
-    <SafeAreaProvider><MessageActivityProvider><Stack.Navigator
+    <SafeAreaProvider><MessageActivityProvider><IncomingCallListener enabled={isProfileComplete}><Stack.Navigator
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
@@ -119,7 +120,7 @@ const RootNavigator = () => {
           <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ headerShown: true, title: 'Blocked Users' }} />
         </Stack.Group>
       )}
-    </Stack.Navigator></MessageActivityProvider></SafeAreaProvider>
+    </Stack.Navigator></IncomingCallListener></MessageActivityProvider></SafeAreaProvider>
   );
 };
 

@@ -50,7 +50,7 @@ export const callService = Object.freeze({
   reportConnection: async (callId, event) => invoke('reportVideoCallConnection', { callId, state: event.state, sequence: event.sequence, epoch: event.epoch }),
   end: async (callId,reason) => invoke('endVideoCall',{callId,reason}),
   subscribe: (callId,listener) => onSnapshot(doc(db,'calls',callId),(snapshot)=>{if(snapshot.exists())listener({id:snapshot.id,callId:snapshot.id,...snapshot.data()});}),
-  subscribeIncoming: (uid, listener) =>
+  subscribeIncoming: (uid, listener, onError) =>
   onSnapshot(
     query(
       collection(db, 'calls'),
@@ -70,5 +70,6 @@ export const callService = Object.freeze({
               ...snapshot.docs[0].data(),
             },
       ),
+    onError,
   ),
 });

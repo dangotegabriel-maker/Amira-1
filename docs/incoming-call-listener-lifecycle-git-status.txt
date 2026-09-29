@@ -1,0 +1,11 @@
+ M src/components/IncomingCallCard.js
+ M src/context/UserContext.js
+ M src/navigation/RootNavigator.js
+ M src/navigation/__tests__/accountNavigation.test.js
+ M src/screens/host/HostDashboardScreen.js
+ M src/services/callService.js
+?? docs/incoming-call-listener-lifecycle-git-status.txt
+?? docs/incoming-call-listener-lifecycle-report.md
+?? src/components/IncomingCallListener.js
+?? src/components/__tests__/incomingCallLifecycle.test.js
+?? src/services/__tests__/incomingCallService.test.js

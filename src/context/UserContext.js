@@ -43,6 +43,7 @@ export const UserProvider = ({ children }) => {
       return;
     }
     const token = { authUser, lifecycle, stop: () => {} };
+    token.publicSession = { isCurrent: () => current(token) };
     owner.current = token;
     setState(emptyState('profile_loading'));
     try {
@@ -144,6 +145,7 @@ export const UserProvider = ({ children }) => {
 
   return <UserContext.Provider value={{
     user: state.user,
+    authenticatedSession: session?.publicSession,
     coins: state.coins,
     bootstrapStatus: state.status,
     loading: state.status === 'auth_loading' || state.status === 'profile_loading',
