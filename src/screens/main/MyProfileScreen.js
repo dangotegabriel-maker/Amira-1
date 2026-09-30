@@ -49,6 +49,7 @@ const MyProfileScreen = ({ navigation }) => {
 
     {!approvedHost && <View style={styles.creditsCard}><Text style={styles.creditsLabel}>AMIRA CREDITS</Text><View style={styles.balanceRow}><Coins color="#FACC15" size={30} /><Text style={styles.balance}>{(user?.wallet?.creditBalance || 0).toLocaleString()}</Text></View><TouchableOpacity style={styles.recharge} onPress={() => navigation.navigate('RechargeHub')}><Text style={styles.rechargeText}>Recharge</Text></TouchableOpacity></View>}
 
+    {!approvedHost && <Row icon={Coins} label="Credit history" detail="View Credit transactions" onPress={() => navigation.navigate('Wallet')} />}
     {approvedHost && <Section title="CREATOR"><Row icon={Coins} label="Earnings" detail="View pending earnings" onPress={() => navigation.navigate('HostEarnings')} /></Section>}
 
     {isConsumer(user) && <Section title="REWARDS"><Row icon={Sparkles} label="My Level" detail="Your Amira Level" onPress={() => navigation.navigate('MyLevel')} /><Row icon={Gift} label="Rewards & Tasks" detail="Your rewards and Daily Check-In" onPress={() => navigation.navigate('Rewards')} /></Section>}

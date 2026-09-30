@@ -1,3 +1,4 @@
+import { withRouteSafety } from '../../navigation/routeSafety';
 import { useSessionGuard } from '../../hooks/useSessionGuard';
 import React, { useEffect, useState } from 'react';
 import { Alert, View, Text, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
@@ -133,4 +134,4 @@ const styles = StyleSheet.create({
   homeBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16, marginLeft: 10 }
 });
 
-export default CallSummaryScreen;
+export default withRouteSafety('CallSummary', CallSummaryScreen);

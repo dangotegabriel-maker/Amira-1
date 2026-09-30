@@ -1,4 +1,5 @@
 import React from 'react';
+import { chatRouteId } from './routeSafety';
 import IncomingCallListener from '../components/IncomingCallListener';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -87,13 +88,12 @@ const RootNavigator = () => {
                   : nextProfileScreen === 'CountrySetup' ? CountrySetupScreen
                   : NameSetupScreen
           } />
-          {!approvedHost && <Stack.Screen name="HostApplication" component={HostApplicationScreen} />}
         </Stack.Group>
       ) : (
         <Stack.Group navigationKey={`${user.uid}:${approvedHost ? 'host' : 'consumer'}`}>
           <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-          <Stack.Screen name="ChatDetail" component={ChatDetailScreen} options={{ headerShown: true, title: 'Chat' }} />
-          <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+          <Stack.Screen name="ChatDetail" component={ChatDetailScreen} getId={chatRouteId} options={{ headerShown: true, title: 'Chat' }} />
+          <Stack.Screen name="UserProfile" component={UserProfileScreen} getId={chatRouteId} />
           <Stack.Screen name="VideoCall" component={VideoCallScreen} />
           {!approvedHost && <Stack.Screen name="Wallet" component={WalletScreen} options={{ headerShown: true, title: 'Wallet' }} />}
           {!approvedHost && <Stack.Screen name="MyLevel" component={MyLevelScreen} options={{headerShown:true,title:"My Level"}} />}
@@ -105,7 +105,7 @@ const RootNavigator = () => {
           {!approvedHost && <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />}
           {!approvedHost && <Stack.Screen name="Payment" component={PaymentScreen} />}
           <Stack.Screen name="StoryViewer" component={StoryViewerScreen} />
-          <Stack.Screen name="Moments" component={MomentsScreen} />
+          <Stack.Screen name="Moments" component={MomentsScreen} options={{ headerShown: true, title: 'Moments' }} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
           {!approvedHost && <Stack.Screen name="GiftLedger" component={GiftLedgerScreen} options={{ headerShown: false }} />}
           <Stack.Screen name="CallSummary" component={CallSummaryScreen} />

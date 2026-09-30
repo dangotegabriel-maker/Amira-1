@@ -9,7 +9,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { COUNTRIES } from '../../data/countries';
 import { validateUsername } from '../../utils/usernameValidation';
-import CountrySelectorModal from '../../components/CountrySelectorModal';
 import { mediaService } from '../../services/mediaService';
 
 const EditProfileScreen = ({ navigation }) => {
@@ -17,10 +16,7 @@ const EditProfileScreen = ({ navigation }) => {
   const current=useSessionGuard();
   const [name, setName] = useState(user?.username || user?.name || '');
   const [bio, setBio] = useState(user?.bio || '');
-  const [showCountries, setShowCountries] = useState(false);
-  const [country, setCountry] = useState(
-    COUNTRIES.find((item) => item.cca2 === user?.countryCode) || COUNTRIES[0],
-  );
+  const country = COUNTRIES.find((item) => item.cca2 === user?.countryCode);
   const [loading, setLoading] = useState(false);
   const [profilePic, setProfilePic] = useState(user?.profilePic || '');
 
@@ -69,9 +65,6 @@ const EditProfileScreen = ({ navigation }) => {
       await dbService.updateUserProfile(currentAuthUser.uid, {
         username: validation.value,
         bio,
-        countryCode: country.cca2,
-        countryName: country.name,
-        phoneCode: `+${country.callingCode}`,
         updatedAt: new Date(),
       });
       if(!current())return;
@@ -131,14 +124,13 @@ const EditProfileScreen = ({ navigation }) => {
 
         <View style={styles.section}>
           <Text style={styles.label}>Country</Text>
-          <TouchableOpacity style={styles.countryButton} onPress={() => setShowCountries(true)}>
-            <Text style={styles.countryButtonText}>{country.flag} {country.name}</Text>
-            <Text style={styles.countryMeta}>+{country.callingCode} · Wallet currency is unchanged</Text>
-          </TouchableOpacity>
+          <View style={styles.countryButton} accessibilityLabel="Country, read only">
+            <Text style={styles.countryButtonText}>{country?.flag} {country?.name || user?.countryCode || 'Unavailable'}</Text>
+            <Text style={styles.countryMeta}>Country cannot be changed here.</Text>
+          </View>
         </View>
       </ScrollView>
 
-      <CountrySelectorModal visible={showCountries} onClose={() => setShowCountries(false)} onSelect={setCountry} />
     </View>
   );
 };

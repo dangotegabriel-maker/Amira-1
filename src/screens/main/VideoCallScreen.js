@@ -1,3 +1,4 @@
+import { withRouteSafety, leaveCallRoute } from '../../navigation/routeSafety';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Flag, Gift, MessageCircle, Mic, MicOff, PhoneOff, RefreshCw } from 'lucide-react-native';
@@ -71,7 +72,7 @@ const VideoCallScreen = ({ route, navigation }) => {
     let result = { durationSeconds: current?.durationSeconds ?? duration, billedCredits: current?.billedCredits || 0 };
     if (!current?.simulated) result = await callService.end(current.callId || current.id, reason).catch(() => result);
     if (!sessionCurrent()) return;
-    navigation.replace('CallSummary', {
+    leaveCallRoute(navigation, route.key, {
       callId: current?.simulated ? undefined : current?.callId || current?.id,
       duration: result.durationSeconds ?? duration, coinsSpent: result.billedCredits ?? 0,
       isConsumer, targetUserId: remoteProfile?.uid || (isConsumer ? current?.receiverId : current?.callerId), targetUserName: remoteProfile?.username,
@@ -186,7 +187,7 @@ const VideoCallScreen = ({ route, navigation }) => {
         if (friendlyEnd[next.status]) {
           endedRef.current = true;
           rtcService.leaveSession().catch(() => {});
-          Alert.alert(friendlyEnd[next.status], 'The video call has ended.', [{ text: 'OK', onPress: () => sessionCurrent() && navigation.goBack() }]);
+          Alert.alert(friendlyEnd[next.status], 'The video call has ended.', [{ text: 'OK', onPress: () => sessionCurrent() && leaveCallRoute(navigation, route.key) }]);
         }
         if (next.status === 'ended') finishRef.current(next.endReason || 'remote_ended');
       }, () => {
@@ -297,7 +298,7 @@ const VideoCallScreen = ({ route, navigation }) => {
         {muted || paymentPaused ? <MicOff color="white" /> : <Mic color="white" />}
       </TouchableOpacity>
       <TouchableOpacity style={styles.control} onPress={() => rtcService.switchCamera()}><RefreshCw color="white" /></TouchableOpacity>
-      <TouchableOpacity disabled={phase!=='connected'} style={styles.control} onPress={()=>navigation.navigate('ChatDetail',{userId:remoteProfile?.uid,name:remoteProfile?.username})} accessibilityLabel="Open Call Chat"><MessageCircle color="white" /></TouchableOpacity>
+      <TouchableOpacity disabled={phase!=='connected'} style={styles.control} onPress={()=>navigation.navigate('ChatDetail',{userId:remoteProfile?.uid || (user?.uid === call?.callerId ? call?.receiverId : call?.callerId),name:remoteProfile?.username,activeCallId:call?.callId || call?.id})} accessibilityLabel="Open Call Chat"><MessageCircle color="white" /></TouchableOpacity>
       {isConsumer&&phase==='connected'&&<TouchableOpacity style={styles.control} onPress={()=>setGiftOpen(true)} accessibilityLabel="Send Gift"><Gift color="white" /></TouchableOpacity>}
       <TouchableOpacity style={styles.control} onPress={safety} accessibilityLabel="Call safety"><Flag color="white" /></TouchableOpacity>
       <TouchableOpacity style={[styles.control, styles.hangup]} onPress={() => finish()} accessibilityLabel="End Call"><PhoneOff color="white" /></TouchableOpacity>
@@ -306,4 +307,4 @@ const VideoCallScreen = ({ route, navigation }) => {
   </View>;
 };
 const styles=StyleSheet.create({container:{flex:1,backgroundColor:'#0B0710'},remote:{...StyleSheet.absoluteFillObject,alignItems:'center',justifyContent:'center'},remoteImage:{...StyleSheet.absoluteFillObject,width:'100%',height:'100%',opacity:.42},heading:{alignItems:'center',backgroundColor:'rgba(0,0,0,.28)',padding:12,borderRadius:16},name:{color:'white',fontSize:30,fontWeight:'900'},status:{color:'white',fontSize:17,fontWeight:'800',marginTop:8},rate:{color:'#FDE68A',fontWeight:'800',marginTop:5},billing:{color:'#FDE68A',fontWeight:'700',marginTop:8},preview:{position:'absolute',top:55,right:16,width:105,height:150,borderRadius:16},decision:{position:'absolute',left:20,right:20,top:'34%',backgroundColor:'white',borderRadius:22,padding:22,alignItems:'center'},decisionTitle:{fontSize:22,fontWeight:'900',color:COLORS.text},decisionText:{textAlign:'center',color:COLORS.textSecondary,lineHeight:20,marginVertical:12},continue:{backgroundColor:COLORS.primary,borderRadius:22,paddingVertical:12,paddingHorizontal:38},white:{color:'white',fontWeight:'900'},endText:{color:'#DC2626',fontWeight:'900',marginTop:15},giftNotice:{position:'absolute',top:'20%',alignSelf:'center',backgroundColor:'rgba(0,0,0,.78)',borderRadius:20,paddingHorizontal:24,paddingVertical:14,alignItems:'center'},giftNoticeIcon:{fontSize:34},giftNoticeText:{color:'white',fontWeight:'900',marginTop:4},controls:{position:'absolute',bottom:45,left:8,right:8,flexDirection:'row',justifyContent:'space-around'},control:{width:50,height:50,borderRadius:25,backgroundColor:'rgba(255,255,255,.2)',alignItems:'center',justifyContent:'center'},hangup:{backgroundColor:'#DC2626'}});
-export default VideoCallScreen;
+export default withRouteSafety('VideoCall', VideoCallScreen);

@@ -7,7 +7,7 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockTerminateSession = jest.fn(async () => undefined);
 jest.mock('lucide-react-native', () => Object.fromEntries(
-  ['Images', 'Users', 'ChevronRight', 'Coins', 'Crown', 'Eye', 'Gift', 'Headphones', 'LogOut', 'Settings', 'ShieldCheck', 'Sparkles'].map(name => [name, () => null]),
+  ['HelpCircle', 'MessageSquare', 'Images', 'Users', 'ChevronRight', 'Coins', 'Crown', 'Eye', 'Gift', 'Headphones', 'LogOut', 'Settings', 'ShieldCheck', 'Sparkles'].map(name => [name, () => null]),
 ));
 jest.mock('../../../context/UserContext', () => ({ useUser: () => ({authenticatedSession:mockAuthenticatedSession, terminateSession: mockTerminateSession }) }));
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => false }));
@@ -126,4 +126,34 @@ describe('translation safety', () => {
     const chat = fs.readFileSync(path.resolve(__dirname, '..', 'ChatDetailScreen.js'), 'utf8');
     expect(chat).not.toMatch(/translationService|translateMessage|translated label/i);
   });
+});
+
+
+test('Profile credit history and VIP status are reachable',()=>{
+ const navigation={navigate:jest.fn()};
+ const profile=render(<MyProfile navigation={navigation}/>);
+ fireEvent.press(profile.getByText('Credit history'));
+ expect(navigation.navigate).toHaveBeenCalledWith('Wallet');profile.unmount();
+ const VipInfo=require('../VipInfoScreen').default;
+ const vip=render(<VipInfo navigation={navigation}/>);
+ fireEvent.press(vip.getByText('View VIP status'));
+ expect(navigation.navigate).toHaveBeenCalledWith('VIPStore');
+});
+
+test('unfinished support destinations are truthfully disabled',()=>{
+ const Support=require('../HelpSupportScreen').default,navigation={navigate:jest.fn()};
+ const screen=render(<Support navigation={navigation}/>);
+ for(const title of ['Frequently Asked Questions','Contact Live Support','Safety & Privacy Guide']){
+  const row=screen.getByLabelText(`${title}, not available yet`);
+  expect(row.props.accessibilityState).toEqual({disabled:true});fireEvent.press(row);
+ }
+ expect(navigation.navigate).not.toHaveBeenCalled();
+});
+
+test('OTP direct entry without params explains unavailability and returns to sign in',()=>{
+ const OTP=require('../../onboarding/OTPScreen').default,navigation={reset:jest.fn()};
+ const screen=render(<OTP navigation={navigation}/>);
+ expect(screen.getByText('Phone sign-in unavailable')).toBeTruthy();
+ fireEvent.press(screen.getByText('Back to sign in'));
+ expect(navigation.reset).toHaveBeenCalledWith({index:0,routes:[{name:'Login'}]});
 });

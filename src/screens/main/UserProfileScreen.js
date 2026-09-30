@@ -1,3 +1,4 @@
+import { withRouteSafety } from '../../navigation/routeSafety';
 import { useSessionGuard } from '../../hooks/useSessionGuard';
 import {AmiraIdentity} from '../../components/AmiraIdentity';
 import { AmiraLevelBadge } from '../../components/AmiraLevelBadge';
@@ -120,7 +121,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   const interests=controlledInterests(host.hostProfile?.interests||host.interests);
   const rate=Number.isSafeInteger(host.hostProfile?.videoRateCredits)&&host.hostProfile.videoRateCredits>0?host.hostProfile.videoRateCredits:null;
   const available=!blockState.blocked&&host.hostStatus?.availability==='online'&&rate!==null;
-  const message=()=>navigation.navigate('ChatDetail',{userId,name:host.username});
+  const message=()=>navigation.navigate('ChatDetail',{userId,name:host.username,...(route.params?.activeCallId?{activeCallId:route.params.activeCallId}:{})});
   const invite=async()=>{if(!current()||inviteBusy||blockState.blocked)return;setInviteBusy(true);try{const value=await sponsoredInviteService.send(userId,'consumer_profile');if(!current())return;Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer will review the call terms before accepting.`);}catch(e){if(current())Alert.alert('Unable to invite',e.message);}finally{if(current())setInviteBusy(false);}};
   return <View style={styles.container}>
     <ScrollView contentContainerStyle={styles.content}>
@@ -172,4 +173,4 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 9, padding: 14 }, action: { flex: 1.4, minHeight: 58, borderRadius: 18, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 }, following: { backgroundColor: 'white', borderWidth: 1, borderColor: COLORS.primary }, actionText: { color: 'white', fontWeight: '900' }, smallAction: { flex: 1, minHeight: 58, backgroundColor: 'white', borderRadius: 18, alignItems: 'center', justifyContent: 'center' }, smallText: { color: COLORS.text, fontSize: 11, fontWeight: '800', marginTop: 2 },
   section: { backgroundColor: 'white', marginHorizontal: 14, marginBottom: 12, borderRadius: 20, padding: 18 }, sectionTitle: { color: COLORS.text, fontSize: 20, fontWeight: '900', marginBottom: 10 }, bio: { color: COLORS.textSecondary, lineHeight: 21 }, tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 13 }, tag: { color: COLORS.primary, backgroundColor: '#FFF1F4', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 13, fontWeight: '700' }, rate: { color: COLORS.text, fontWeight: '800', marginTop: 15 }, galleryImage: { width: 130, height: 165, borderRadius: 14, marginRight: 9 }, video: { height: 240, borderRadius: 15, overflow: 'hidden' }, safety: { flexDirection: 'row', marginHorizontal: 14, gap: 10 }, safetyAction: { flex: 1, minHeight: 54, borderRadius: 16, backgroundColor: 'white', flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }, safetyText: { color: COLORS.textSecondary, fontWeight: '800' },
 });
-export default UserProfileScreen;
+export default withRouteSafety('UserProfile', UserProfileScreen);

@@ -32,3 +32,22 @@ test('obsolete disclosure confirmation cannot prepare or start a call',async()=>
 test('obsolete request rejection cannot Alert or offer recharge to a replacement screen',async()=>{
  let valid=true,reject;callService.request.mockImplementationOnce(()=>new Promise((_done,fail)=>{reject=fail;}));const navigation={navigate:jest.fn()},pending=startVideoCall({navigation,creator:{uid:'h',hostProfile:{videoRateCredits:25}},isCurrent:()=>valid});Alert.alert.mock.calls[0][2][1].onPress();await Promise.resolve();await Promise.resolve();valid=false;reject({details:{reason:'insufficient_call_credits'}});await pending;expect(Alert.alert).toHaveBeenCalledTimes(1);expect(navigation.navigate).not.toHaveBeenCalled();
 });
+
+
+test('rapid entry taps share one disclosure, one request and one navigation',async()=>{
+ const navigation={navigate:jest.fn()},creator={uid:'h',hostProfile:{videoRateCredits:25}};
+ const first=startVideoCall({navigation,creator});
+ await startVideoCall({navigation,creator});
+ expect(Alert.alert).toHaveBeenCalledTimes(1);
+ Alert.alert.mock.calls[0][2][1].onPress();await first;
+ expect(callService.request).toHaveBeenCalledTimes(1);
+ expect(navigation.navigate).toHaveBeenCalledTimes(1);
+});
+
+test('cancelled disclosure releases the entry lock for retry',async()=>{
+ const navigation={navigate:jest.fn()},creator={uid:'h',hostProfile:{videoRateCredits:25}};
+ const first=startVideoCall({navigation,creator});Alert.alert.mock.calls[0][2][0].onPress();await first;
+ const retry=startVideoCall({navigation,creator});expect(Alert.alert).toHaveBeenCalledTimes(2);
+ Alert.alert.mock.calls[1][2][1].onPress();await retry;
+ expect(callService.request).toHaveBeenCalledTimes(1);
+});

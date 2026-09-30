@@ -1,8 +1,13 @@
 import { Alert } from 'react-native';
 import { callService } from './callService';
 
+const entries = new WeakMap();
+
 export const startVideoCall = async ({ navigation, creator, isCurrent = () => true }) => {
   if (!isCurrent()) return;
+  if (entries.get(navigation)?.isCurrent()) return;
+  const entry = { isCurrent };
+  entries.set(navigation, entry);
   try {
     const displayedRate=creator?.hostProfile?.videoRateCredits;
     if(!Number.isSafeInteger(displayedRate)||displayedRate<=0)throw new Error('Authoritative call terms are unavailable.');
@@ -24,5 +29,7 @@ export const startVideoCall = async ({ navigation, creator, isCurrent = () => tr
       return;
     }
     Alert.alert('Video call unavailable', error.message || 'This call could not be started.');
+  } finally {
+    if (entries.get(navigation) === entry) entries.delete(navigation);
   }
 };

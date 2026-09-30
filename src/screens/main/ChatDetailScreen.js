@@ -1,3 +1,4 @@
+import { withRouteSafety } from '../../navigation/routeSafety';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -136,6 +137,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
           onPress={() => identityError ? setIdentityVersion(n=>n+1) : recipient &&
             navigation.navigate('UserProfile', {
               userId: receiverId,
+              ...(route.params?.activeCallId ? { activeCallId: route.params.activeCallId } : {}),
             })
           }
         >
@@ -181,7 +183,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         </TouchableOpacity></View>
       ),
     });
-  }, [navigation, name, receiverId, blocked, hostActions, sponsoredAction, recipient, identityError, current]);
+  }, [navigation, name, receiverId, route.params?.activeCallId, blocked, hostActions, sponsoredAction, recipient, identityError, current]);
 
   useEffect(() => {
     if (!conversationId || !current()) return undefined;
@@ -617,4 +619,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ChatDetailScreen;
+export default withRouteSafety('ChatDetail', ChatDetailScreen);

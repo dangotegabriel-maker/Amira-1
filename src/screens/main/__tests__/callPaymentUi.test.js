@@ -105,7 +105,7 @@ test('connected Consumer opens the unified authoritative tray without remounting
  fireEvent.press(screen.getByLabelText('Authoritative Gift Tray'));expect(screen.getByText('Fixture Gift sent')).toBeTruthy();await act(async()=>jest.advanceTimersByTime(2500));expect(screen.queryByText('Fixture Gift sent')).toBeNull();expect(mockCalls.settleIncrement).not.toHaveBeenCalled();screen.unmount();
 });
 
-test('Gift control is absent while reconnecting and call Chat uses the existing conversation route',async()=>{const call={...pendingCall(),status:'reconnecting'},screen=await open(call);expect(screen.queryByLabelText('Send Gift')).toBeNull();expect(screen.getByLabelText('Open Call Chat')).toBeDisabled();await act(async()=>mockListener({...call,status:'connected'}));fireEvent.press(screen.getByLabelText('Open Call Chat'));expect(navigation.navigate).toHaveBeenCalledWith('ChatDetail',{userId:'host',name:'Host'});screen.unmount();});
+test('Gift control is absent while reconnecting and call Chat uses the existing conversation route',async()=>{const call={...pendingCall(),status:'reconnecting'},screen=await open(call);expect(screen.queryByLabelText('Send Gift')).toBeNull();expect(screen.getByLabelText('Open Call Chat')).toBeDisabled();await act(async()=>mockListener({...call,status:'connected'}));fireEvent.press(screen.getByLabelText('Open Call Chat'));expect(navigation.navigate).toHaveBeenCalledWith('ChatDetail',{userId:'host',name:'Host',activeCallId:'call-1'});screen.unmount();});
 
 test('automatic continuation screen has no manual spending control and still allows consumer to end', async () => {
   const screen = await open();
@@ -182,4 +182,11 @@ test.each(['same UID','unmount'])('late call-end response cannot navigate after 
 test('obsolete permission rejection and call snapshot are harmless after same-UID replacement',async()=>{
  let reject;mockRtc.requestPermissions.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;}));const screen=await open();const old=mockListener;mockNewSession();
  await act(async()=>reject(new Error('old permissions')));act(()=>old({...pendingCall(),status:'rejected'}));expect(Alert.alert).not.toHaveBeenCalled();expect(mockRtc.joinSession).not.toHaveBeenCalled();expect(navigation.goBack).not.toHaveBeenCalled();screen.unmount();
+});
+
+
+test('CallSummary exits to a fresh role-selected MainTabs root',async()=>{
+ const screen=render(<CallSummaryScreen navigation={navigation} route={{params:{duration:30,targetUserId:'host'}}}/>);
+ await flush();fireEvent.press(screen.getByText('Back to Discovery'));
+ expect(navigation.reset).toHaveBeenCalledWith({index:0,routes:[{name:'MainTabs'}]});
 });

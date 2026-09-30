@@ -109,3 +109,19 @@ test.each(['same UID','unmount','recipient'])('send failure after %s cannot aler
  if(kind==='same UID')mockNewSession();else if(kind==='unmount')screen.unmount();else{screen.rerender(<Chat route={{params:{userId:'other'}}} navigation={navigation}/>);await act(async()=>{});}
  await act(async()=>reject({details:{reason:'insufficient_credits'}}));expect(Alert.alert).not.toHaveBeenCalled();expect(navigation.navigate).not.toHaveBeenCalled();
 });
+
+
+test.each([undefined,{userId:'c'},{userId:'bad/path'}])('invalid chat entry never starts identity or conversation work',async params=>{
+ const screen=render(<Chat route={{params}} navigation={navigation}/>);await act(async()=>{});
+ expect(screen.getByText('This screen is unavailable. Please open it again from the app.')).toBeTruthy();
+ expect(mockMessaging.prepareConversation).not.toHaveBeenCalled();
+ expect(mockMessaging.subscribeMessages).not.toHaveBeenCalled();
+ expect(navigation.setOptions).not.toHaveBeenCalled();
+});
+
+test('in-call Chat propagates its call context to the recipient profile',async()=>{
+ render(<Chat route={{params:{userId:'h',activeCallId:'call-1'}}} navigation={navigation}/>);await act(async()=>{});
+ const header=render(navigation.setOptions.mock.calls.at(-1)[0].headerTitle());
+ fireEvent.press(header.getByLabelText('Open profile'));
+ expect(navigation.navigate).toHaveBeenCalledWith('UserProfile',{userId:'h',activeCallId:'call-1'});
+});

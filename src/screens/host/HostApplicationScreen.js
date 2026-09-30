@@ -1,5 +1,5 @@
 import {useSessionGuard} from '../../hooks/useSessionGuard';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Video, X } from 'lucide-react-native';
@@ -25,6 +25,8 @@ const HostApplicationScreen = ({ navigation }) => {
   const [applicationStatus, setApplicationStatus] = useState(user?.hostStatus?.verificationStatus || 'not_started');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const actionLock = useRef(false);
+  const [loadError, setLoadError] = useState(false), [retry, setRetry] = useState(0);
   const [bio, setBio] = useState(user?.bio || '');
   const [interests, setInterests] = useState('');
   const [profilePhoto, setProfilePhoto] = useState(null);
@@ -34,6 +36,7 @@ const HostApplicationScreen = ({ navigation }) => {
   const [payoutMethod, setPayoutMethod] = useState('');
 
   useEffect(() => {
+    setLoading(true); setLoadError(false);
     hostApplicationService.getApplication().then((application) => {
       if (!current() || !application) return;
       setApplicationStatus(application.status || 'in_progress');
@@ -44,8 +47,8 @@ const HostApplicationScreen = ({ navigation }) => {
       setIntroVideo(application.media?.introVideo || null);
       setEvidence(application.verification?.evidence || []);
       setPayoutMethod(application.payoutSetup?.method || '');
-    }).catch(() => {}).finally(() => {if(current())setLoading(false);});
-  }, [current]);
+    }).catch(() => { if(current())setLoadError(true); }).finally(() => {if(current())setLoading(false);});
+  }, [current, retry]);
 
   const parsedInterests = useMemo(() => interests.split(',').map((value) => value.trim()).filter(Boolean).slice(0, 8), [interests]);
 
@@ -63,10 +66,11 @@ const HostApplicationScreen = ({ navigation }) => {
   };
 
   const performUpload = async (work) => {
-    if(!current())return;
+    if(!current() || actionLock.current)return;
+    actionLock.current = true;
     setBusy(true);
     try { await work(); } catch (error) { if(current())Alert.alert('Upload failed', error.message || 'Please try again.'); }
-    finally { if(current())setBusy(false); }
+    finally { actionLock.current = false; if(current())setBusy(false); }
   };
 
   const uploadMainPhoto = () => performUpload(async () => {
@@ -165,15 +169,17 @@ const HostApplicationScreen = ({ navigation }) => {
   };
 
   const next = async () => {
-    if(!current())return;
+    if(!current() || actionLock.current)return;
+    actionLock.current = true;
     setBusy(true);
     try { await saveCurrentStep(); if(!current())return;setApplicationStatus('in_progress'); setStep((value) => Math.min(value + 1, STEPS.length - 1)); }
     catch (error) { if(current())Alert.alert('Complete this step', error.message); }
-    finally { if(current())setBusy(false); }
+    finally { actionLock.current = false; if(current())setBusy(false); }
   };
 
   const submit = async () => {
-    if(!current())return;
+    if(!current() || actionLock.current)return;
+    actionLock.current = true;
     setBusy(true);
     try {
       await hostApplicationService.submit();
@@ -183,12 +189,13 @@ const HostApplicationScreen = ({ navigation }) => {
       if(!current())return;
       Alert.alert('Application submitted', 'Your evidence will be reviewed manually.');
     } catch (error) { if(current())Alert.alert('Cannot submit', error.message); }
-    finally { if(current())setBusy(false); }
+    finally { actionLock.current = false; if(current())setBusy(false); }
   };
 
   if (isApprovedHost(user)) return <View style={[styles.container, { padding: 20, paddingTop: 60 }]}><Text style={styles.sectionTitle}>Approved Host</Text><Text style={styles.note}>Your Creator application has been approved.</Text></View>;
   if (['submitted','pending','under_review'].includes(applicationStatus)) return <View style={[styles.container, { padding: 20, paddingTop: 60 }]}><Text style={styles.sectionTitle}>Application Under Review</Text><Text style={styles.note}>Your application is waiting for review. You can continue using Amira as a Consumer.</Text><TouchableOpacity style={styles.next} onPress={() => navigation.goBack()}><Text style={styles.nextText}>Back</Text></TouchableOpacity></View>;
   if (loading) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
+  if (loadError) return <View style={styles.center}><Text>Application could not be loaded.</Text><TouchableOpacity onPress={() => setRetry(value => value + 1)}><Text>Try again</Text></TouchableOpacity><TouchableOpacity onPress={() => navigation.goBack()}><Text>Back</Text></TouchableOpacity></View>;
 
   const missingRequirements = getMissingCreatorRequirements({ profilePhoto, introVideo, evidence, payoutMethod });
   const mediaUnavailable = isDevelopmentBuild && !mediaUploadsEnabled;
@@ -217,7 +224,7 @@ const HostApplicationScreen = ({ navigation }) => {
   };
 
   const continueDisabled = busy || (step === STEPS.length - 1 && missingRequirements.length > 0);
-  return <View style={styles.container}><View style={styles.header}><TouchableOpacity onPress={() => step ? setStep(step - 1) : navigation.goBack()}><ChevronLeft color={COLORS.text} size={28} /></TouchableOpacity><View style={{ flex: 1 }}><Text style={styles.headerTitle}>{STEPS[step]}</Text><Text style={styles.progress}>Step {step + 1} of {STEPS.length} · {applicationStatus.replace(/_/g, ' ')}</Text></View></View><ScrollView contentContainerStyle={styles.content}>{renderStep()}</ScrollView><TouchableOpacity style={[styles.next, continueDisabled && styles.nextDisabled]} disabled={continueDisabled} onPress={step === STEPS.length - 1 ? submit : next}>{busy ? <ActivityIndicator color="white" /> : <><Text style={styles.nextText}>{step === STEPS.length - 1 ? 'Submit for Review' : 'Continue'}</Text><ChevronRight color="white" /></>}</TouchableOpacity></View>;
+  return <View style={styles.container}><View style={styles.header}><TouchableOpacity accessibilityLabel="Previous application step" disabled={busy} onPress={() => { if(!actionLock.current) { if(step)setStep(step - 1);else navigation.goBack(); } }}><ChevronLeft color={COLORS.text} size={28} /></TouchableOpacity><View style={{ flex: 1 }}><Text style={styles.headerTitle}>{STEPS[step]}</Text><Text style={styles.progress}>Step {step + 1} of {STEPS.length} · {applicationStatus.replace(/_/g, ' ')}</Text></View></View><ScrollView contentContainerStyle={styles.content}>{renderStep()}</ScrollView><TouchableOpacity style={[styles.next, continueDisabled && styles.nextDisabled]} disabled={continueDisabled} onPress={step === STEPS.length - 1 ? submit : next}>{busy ? <ActivityIndicator color="white" /> : <><Text style={styles.nextText}>{step === STEPS.length - 1 ? 'Submit for Review' : 'Continue'}</Text><ChevronRight color="white" /></>}</TouchableOpacity></View>;
 };
 
 const styles = StyleSheet.create({

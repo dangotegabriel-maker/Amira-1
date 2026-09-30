@@ -1,0 +1,25 @@
+ M src/navigation/RootNavigator.js
+ M src/navigation/__tests__/accountNavigation.test.js
+ M src/screens/host/HostApplicationScreen.js
+ M src/screens/main/CallSummaryScreen.js
+ M src/screens/main/ChatDetailScreen.js
+ M src/screens/main/EditProfileScreen.js
+ M src/screens/main/GiftLedgerScreen.js
+ M src/screens/main/HelpSupportScreen.js
+ M src/screens/main/MyProfileScreen.js
+ M src/screens/main/StoryViewerScreen.js
+ M src/screens/main/UserProfileScreen.js
+ M src/screens/main/VIPStoreScreen.js
+ M src/screens/main/VideoCallScreen.js
+ M src/screens/main/VipInfoScreen.js
+ M src/screens/main/__tests__/callPaymentUi.test.js
+ M src/screens/main/__tests__/messageEntitlementUi.test.js
+ M src/screens/main/__tests__/screenSessionLifecycle.test.js
+ M src/screens/main/__tests__/truthfulUi.test.js
+ M src/screens/onboarding/OTPScreen.js
+ M src/services/__tests__/callEntry.test.js
+ M src/services/callNavigationService.js
+?? docs/navigation-e2e-audit-git-status.txt
+?? docs/navigation-e2e-audit-report.md
+?? src/navigation/__tests__/routeSafety.test.js
+?? src/navigation/routeSafety.js

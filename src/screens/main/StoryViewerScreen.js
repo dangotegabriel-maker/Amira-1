@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import { withRouteSafety, backOrMain } from '../../navigation/routeSafety';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from "react-native";
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
@@ -30,10 +31,11 @@ const StoryMedia = ({ story }) => {
   return <Image source={{ uri: story?.uri }} style={styles.media} contentFit="cover" />;
 };
 
-const StoryViewerScreen = ({ route, navigation }) => {
+const StoryViewerScreen = ({ route = {}, navigation }) => {
   const stories = useMemo(() => route.params?.stories || [], [route.params?.stories]);
   const userName = route.params?.userName || 'Story';
   const [index, setIndex] = useState(0);
+  useEffect(() => { setIndex(0); }, [stories]);
 
   const currentStory = stories[index];
 
@@ -43,7 +45,7 @@ const StoryViewerScreen = ({ route, navigation }) => {
       return;
     }
 
-    navigation.goBack();
+    backOrMain(navigation);
   };
 
   const goPrevious = () => {
@@ -55,7 +57,7 @@ const StoryViewerScreen = ({ route, navigation }) => {
   if (!currentStory) {
     return (
       <View style={styles.emptyContainer}>
-        <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => backOrMain(navigation)}>
           <X color="white" size={26} />
         </TouchableOpacity>
         <Text style={styles.emptyText}>No story available</Text>
@@ -77,7 +79,7 @@ const StoryViewerScreen = ({ route, navigation }) => {
 
       <View style={styles.header}>
         <Text style={styles.userName} numberOfLines={1}>{userName}</Text>
-        <TouchableOpacity style={styles.closeTap} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.closeTap} onPress={() => backOrMain(navigation)}>
           <X color="white" size={26} />
         </TouchableOpacity>
       </View>
@@ -107,4 +109,4 @@ const styles = StyleSheet.create({
   emptyText: { color: 'white', fontSize: 16 },
 });
 
-export default StoryViewerScreen;
+export default withRouteSafety('StoryViewer', StoryViewerScreen);

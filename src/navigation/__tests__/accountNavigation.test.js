@@ -1,4 +1,5 @@
-const mockAuthenticatedSession = { isCurrent: () => true };
+let mockAuthenticatedSession = { key: "session-1", isCurrent: () => true };
+const mockMount = jest.fn(), mockUnmount = jest.fn();
 jest.mock('../../components/IncomingCallListener',()=>({children})=>children);
 jest.mock('../../screens/main/MyLevelScreen',()=>()=>null);
 import React from 'react';
@@ -9,10 +10,10 @@ jest.mock('../../context/UserContext',()=>({useUser:()=>({authenticatedSession:m
 jest.mock('../../context/MessageActivityContext',()=>({useMessageActivity:()=>({unread:0}),MessageActivityProvider:({children})=>children}));
 jest.mock('../../services/socketService',()=>({socketService:{on:jest.fn(),off:jest.fn()}}));
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true,useNavigation:()=>({navigate:jest.fn()})}));
-jest.mock('react-native-safe-area-context',()=>({SafeAreaProvider:({children})=>children}));
+jest.mock('react-native-safe-area-context',()=>({SafeAreaProvider:({children})=>{require('react').useEffect(()=>{mockMount();return ()=>mockUnmount();},[]);return children;}}));
 jest.mock('lucide-react-native',()=>Object.fromEntries(['Compass','HeartHandshake','Activity','MessageCircle','User'].map(key=>[key,()=>null])));
 jest.mock('@react-navigation/bottom-tabs',()=>({createBottomTabNavigator:()=>({Navigator:({children,initialRouteName})=>{const {View}=require('react-native');return <View testID="tabs" accessibilityLabel={initialRouteName}>{children}</View>},Screen:({name})=>{const {Text}=require('react-native');return <Text>{name}</Text>}})}));
-jest.mock('@react-navigation/native-stack',()=>({createNativeStackNavigator:()=>({Navigator:({children})=>children,Group:({children})=>children,Screen:({name})=>{const {Text}=require('react-native');return <Text>{name}</Text>}})}));
+jest.mock('@react-navigation/native-stack',()=>({createNativeStackNavigator:()=>({Navigator:({children})=>children,Group:({children})=>children,Screen:({name,options})=>{const {Text}=require('react-native');return <Text testID={`route-${name}`} accessibilityHint={options?.headerShown?'native-header':undefined}>{name}</Text>}})}));
 jest.mock('../../screens/host/HostActivityScreen',()=>()=>null);
 jest.mock('../../screens/host/HostApplicationScreen',()=>()=>null);
 jest.mock('../../screens/host/HostDashboardScreen',()=>()=>null);
@@ -91,4 +92,39 @@ test('signed out routes to Login; only a loaded incomplete profile routes to onb
  mockStatus='signed_out';mockUser=null;const screen=render(<Root/>);expect(screen.getByText('Login')).toBeTruthy();
  mockStatus='ready';mockUser={uid:'a',username:'Alice'};screen.rerender(<Root/>);
  expect(screen.getByText('BirthdaySetup')).toBeTruthy();expect(screen.queryByText('Login')).toBeNull();
+});
+
+
+test.each([false, true])('tabs are exactly the approved role set: Host=%s', approved => {
+ mockUser.hostStatus.isApproved=approved;
+ const screen=render(<Main/>);
+ expect(screen.getByTestId('tabs').findAllByType(require('react-native').Text).map(node=>node.props.children)).toEqual(approved?['Connect','Messages','Activity','Profile']:['Home','Match','Messages','Profile']);
+});
+
+test('incomplete profile has only its required step and cannot enter Creator application',()=>{
+ mockUser={uid:'c',username:'Consumer'};
+ const screen=render(<Root/>);
+ expect(screen.getByText('BirthdaySetup')).toBeTruthy();
+ for(const name of ['HostApplication','MainTabs','CountrySetup','HostEarnings'])expect(screen.queryByText(name)).toBeNull();
+});
+
+test('same UID replacement destroys the navigation subtree and nested state',()=>{
+ mockMount.mockClear();mockUnmount.mockClear();
+ const screen=render(<Root/>);
+ expect(mockMount).toHaveBeenCalledTimes(1);
+ mockAuthenticatedSession={key:'replacement-session',isCurrent:()=>true};
+ screen.rerender(<Root/>);
+ expect(mockUnmount).toHaveBeenCalledTimes(1);
+ expect(mockMount).toHaveBeenCalledTimes(2);
+ mockStatus='signed_out';mockUser=null;mockAuthenticatedSession=null;
+ screen.rerender(<Root/>);
+ expect(mockUnmount).toHaveBeenCalledTimes(2);
+ expect(screen.queryByText('MainTabs')).toBeNull();
+ expect(screen.getByText('Login')).toBeTruthy();
+});
+
+
+test('Moments retains a native header for an explicit back route',()=>{
+ const screen=render(<Root/>);
+ expect(screen.getByTestId('route-Moments').props.accessibilityHint).toBe('native-header');
 });

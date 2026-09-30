@@ -1,13 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { COLORS } from '../../theme/COLORS';
-import { ChevronRight, HelpCircle, MessageSquare, ShieldCheck } from 'lucide-react-native';
+import { HelpCircle, MessageSquare, ShieldCheck } from 'lucide-react-native';
 
-const HelpSupportScreen = ({ navigation }) => {
+const HelpSupportScreen = () => {
   const sections = [
-    { title: 'Frequently Asked Questions', icon: <HelpCircle color={COLORS.primary} size={24} />, action: () => {} },
-    { title: 'Contact Live Support', icon: <MessageSquare color={COLORS.secondary} size={24} />, action: () => {} },
-    { title: 'Safety & Privacy Guide', icon: <ShieldCheck color="#4CD964" size={24} />, action: () => {} },
+    { title: 'Frequently Asked Questions', icon: <HelpCircle color={COLORS.primary} size={24} /> },
+    { title: 'Contact Live Support', icon: <MessageSquare color={COLORS.secondary} size={24} /> },
+    { title: 'Safety & Privacy Guide', icon: <ShieldCheck color="#4CD964" size={24} /> },
   ];
 
   return (
@@ -19,13 +19,13 @@ const HelpSupportScreen = ({ navigation }) => {
 
       <View style={styles.list}>
         {sections.map((item, index) => (
-          <TouchableOpacity key={index} style={styles.item} onPress={item.action}>
+          <View key={index} style={styles.item} accessibilityLabel={`${item.title}, not available yet`} accessibilityState={{ disabled: true }}>
             <View style={styles.itemLeft}>
               {item.icon}
               <Text style={styles.itemText}>{item.title}</Text>
             </View>
-            <ChevronRight color="#CCC" size={20} />
-          </TouchableOpacity>
+            <Text>Not available yet</Text>
+          </View>
         ))}
       </View>
     </ScrollView>
