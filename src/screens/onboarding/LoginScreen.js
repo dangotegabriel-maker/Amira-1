@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +21,8 @@ import { DEV_FEATURES } from '../../config/devFeatures';
 WebBrowser.maybeCompleteAuthSession();
 
 const LoginScreen = () => {
+  const actionOwner = useRef({ mounted: false, kind: null, response: null });
+  useEffect(() => { const owner=actionOwner.current;owner.mounted=true;return()=>{owner.mounted=false;}; }, []);
   const [accountId, setAccountId] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState('');
@@ -38,21 +40,27 @@ const LoginScreen = () => {
 
   useEffect(() => {
     const finishGoogleLogin = async () => {
-      if (response?.type !== 'success') return;
+      const owner=actionOwner.current;
+      if (!owner.mounted || owner.kind !== 'google' || response?.type !== 'success' || owner.response===response) return;
+      owner.response=response;
       const idToken = response.authentication?.idToken || response.params?.id_token;
       setLoading('google');
       try {
         await authService.loginWithGoogleToken(idToken);
       } catch (error) {
-        Alert.alert('Google login failed', error.message || 'Please try again.');
+        if(owner.mounted) Alert.alert('Google login failed', error.message || 'Please try again.');
       } finally {
-        setLoading('');
+        owner.kind=null;
+        if(owner.mounted)setLoading('');
       }
     };
     finishGoogleLogin();
   }, [response]);
 
   const quickLogin = async () => {
+    const owner=actionOwner.current;
+    if(!owner.mounted || owner.kind)return;
+    owner.kind='quick';
     setLoading('quick');
     try {
       const account = await authService.createQuickAccount();
@@ -61,28 +69,35 @@ const LoginScreen = () => {
         `Save these credentials now. They are not stored in your profile.\n\nAccount ID: ${account.accountId}\nPassword: ${account.password}`,
       );
     } catch (error) {
-      Alert.alert('Quick login failed', error.message || 'Please try again.');
+      if(owner.mounted)Alert.alert('Quick login failed', error.message || 'Please try again.');
     } finally {
-      setLoading('');
+      owner.kind=null;
+      if(owner.mounted)setLoading('');
     }
   };
 
   const accountLogin = async () => {
+    const owner=actionOwner.current;
+    if(!owner.mounted || owner.kind)return;
     if (!accountId.trim() || password.length < 6) {
       Alert.alert('Enter account details', 'Use your numeric Account ID and 6-character password.');
       return;
     }
+    owner.kind='account';
     setLoading('account');
     try {
       await authService.loginWithAccount(accountId, password);
     } catch (error) {
-      Alert.alert('Login failed', 'The Account ID or password is incorrect.');
+      if(owner.mounted)Alert.alert('Login failed', 'The Account ID or password is incorrect.');
     } finally {
-      setLoading('');
+      owner.kind=null;
+      if(owner.mounted)setLoading('');
     }
   };
 
   const googleLogin = async () => {
+    const owner=actionOwner.current;
+    if(!owner.mounted || owner.kind)return;
     if (!googleClientId) {
       Alert.alert(
         'Google login needs configuration',
@@ -90,7 +105,9 @@ const LoginScreen = () => {
       );
       return;
     }
-    await promptAsync();
+    owner.kind='google';setLoading('google');
+    try { const result=await promptAsync();if(result?.type!=='success'){owner.kind=null;if(owner.mounted)setLoading('');} }
+    catch(error){owner.kind=null;if(owner.mounted){setLoading('');Alert.alert('Google login failed',error.message||'Please try again.');}}
   };
 
   const busy = Boolean(loading);

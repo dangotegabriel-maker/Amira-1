@@ -18,7 +18,7 @@ jest.mock('../../../services/sponsoredInviteService',()=>({sponsoredInviteServic
 jest.mock('../../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:{uid:'c',role:mockRole,hostStatus:{isApproved:mockRole==='host'}}})}));
 jest.mock('react-native-safe-area-context',()=>({useSafeAreaInsets:()=>({bottom:24})}));
 jest.mock('../../../services/messagingService',()=>({messagingService:mockMessaging}));
-jest.mock('../../../services/blockService',()=>({blockService:{getRelationship:async()=>({blocked:false})}}));
+jest.mock('../../../services/blockService',()=>({blockService:{getRelationship:jest.fn(async()=>({blocked:false})),block:jest.fn(),unblock:jest.fn()}}));
 jest.mock('../../../services/reportService',()=>({reportService:{}}));
 jest.mock('../../../components/ReportUserModal',()=>()=>null);
 jest.mock('../../../components/GiftTray',()=>({visible})=>visible?require('react').createElement(require('react-native').Text,null,'Authoritative Gift Tray'):null);
@@ -124,4 +124,40 @@ test('in-call Chat propagates its call context to the recipient profile',async()
  const header=render(navigation.setOptions.mock.calls.at(-1)[0].headerTitle());
  fireEvent.press(header.getByLabelText('Open profile'));
  expect(navigation.navigate).toHaveBeenCalledWith('UserProfile',{userId:'h',activeCallId:'call-1'});
+});
+
+
+test('double Send has one request and success preserves a newer draft typed while pending',async()=>{
+ let resolve;mockMessaging.sendText.mockReturnValueOnce(new Promise(done=>{resolve=done;}));
+ const screen=await open();fireEvent.changeText(screen.getByPlaceholderText('Type a message...'),'First message');
+ act(()=>{fireEvent.press(screen.getByLabelText('Send message'));fireEvent.press(screen.getByLabelText('Send message'));});
+ expect(mockMessaging.sendText).toHaveBeenCalledTimes(1);
+ fireEvent.changeText(screen.getByPlaceholderText('Type a message...'),'Next draft');
+ await act(async()=>resolve('c__h'));
+ expect(screen.getByDisplayValue('Next draft')).toBeTruthy();
+});
+
+test('chat sponsored invitation uses one request for same-frame taps and retries failure',async()=>{
+ const service=require('../../../services/sponsoredInviteService').sponsoredInviteService;
+ mockRole='host';mockTargetRole='consumer';let reject;service.send.mockReturnValueOnce(new Promise((_ok,fail)=>{reject=fail;})).mockResolvedValueOnce({sponsoredSeconds:30});
+ const screen=await open(),header=render(navigation.setOptions.mock.calls.at(-1)[0].headerRight());
+ act(()=>{fireEvent.press(header.getByLabelText('Video Call Invite'));fireEvent.press(header.getByLabelText('Video Call Invite'));});
+ expect(service.send).toHaveBeenCalledTimes(1);await act(async()=>reject(new Error('offline')));
+ await act(async()=>fireEvent.press(header.getByLabelText('Video Call Invite')));expect(service.send).toHaveBeenCalledTimes(2);
+ screen.unmount();
+});
+
+
+test('chat block is single-flight and unblock reloads both sides instead of granting access',async()=>{
+ const service=require('../../../services/blockService').blockService;
+ let resolve;service.block.mockReturnValueOnce(new Promise(done=>{resolve=done;}));service.unblock.mockResolvedValueOnce(undefined);
+ const screen=await open();
+ const openActions=()=>{const header=render(navigation.setOptions.mock.calls.at(-1)[0].headerRight());fireEvent.press(header.UNSAFE_getAllByType(require('react-native').TouchableOpacity).at(-1));return Alert.alert.mock.calls.at(-1)[2];};
+ const block=openActions().find(action=>action.text==='Block').onPress;
+ act(()=>{block();block();});expect(service.block).toHaveBeenCalledTimes(1);
+ await act(async()=>resolve());
+ service.getRelationship.mockResolvedValueOnce({blockedByMe:false,blockedMe:true,blocked:true});
+ const unblock=openActions().find(action=>action.text==='Unblock').onPress;
+ await act(async()=>unblock());expect(service.unblock).toHaveBeenCalledTimes(1);
+ expect(screen.queryByPlaceholderText('Type a message...')).toBeNull();
 });

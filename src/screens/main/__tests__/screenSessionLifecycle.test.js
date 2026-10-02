@@ -114,3 +114,14 @@ test('failed VIP read does not infer FREE and retries authoritative status',asyn
  expect(screen.getByText('VIP is active')).toBeTruthy();
  expect(mockVip).toHaveBeenCalledTimes(2);
 });
+
+
+test('profile save is synchronous single-flight and retries after authoritative failure',async()=>{
+ const pending=deferred();mockAuthUpdate.mockReturnValueOnce(pending.promise);
+ const navigation={goBack:jest.fn()},screen=render(<Edit navigation={navigation}/>);
+ const save=screen.UNSAFE_getAllByType(TouchableOpacity).find(button=>button.props.onPress?.name==='handleSave').props.onPress;
+ act(()=>{save();save();});expect(mockAuthUpdate).toHaveBeenCalledTimes(1);
+ await act(async()=>pending.reject(new Error('offline')));
+ expect(mockProfileUpdate).not.toHaveBeenCalled();expect(navigation.goBack).not.toHaveBeenCalled();
+ await act(async()=>save());expect(mockAuthUpdate).toHaveBeenCalledTimes(2);expect(mockProfileUpdate).toHaveBeenCalledTimes(1);expect(navigation.goBack).toHaveBeenCalledTimes(1);
+});

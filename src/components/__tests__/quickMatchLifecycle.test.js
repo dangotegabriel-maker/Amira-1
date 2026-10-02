@@ -66,3 +66,13 @@ test('declined replay remains dismissed and expiry dismisses without a new poll'
   const screen=render(<Owner enabled/>);await flush();await act(async()=>{fireEvent.press(screen.getByText('Decline'));});await act(async()=>jest.advanceTimersByTime(5000));expect(screen.queryByText('Public Consumer')).toBeNull();
   screen.unmount();const next=render(<Owner enabled/>);await flush();mockOffer.mockReturnValue(new Promise(()=>{}));await act(async()=>jest.advanceTimersByTime(21000));expect(next.queryByText('Public Consumer')).toBeNull();
 });
+
+
+test('failed Quick Match response keeps the offer available for retry',async()=>{
+ mockRespond.mockRejectedValueOnce(new Error('offline'));
+ const screen=render(<Owner enabled/>);await flush();
+ await act(async()=>fireEvent.press(screen.getByText('Accept')));
+ expect(Alert.alert).toHaveBeenCalled();expect(screen.getByText('Accept')).toBeTruthy();
+ await act(async()=>fireEvent.press(screen.getByText('Accept')));
+ expect(mockRespond).toHaveBeenCalledTimes(2);expect(mockNavigate).toHaveBeenCalledTimes(1);
+});

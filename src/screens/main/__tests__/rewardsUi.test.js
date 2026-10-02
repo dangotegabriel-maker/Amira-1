@@ -121,3 +121,25 @@ test('My Profile count ignores old-session completion',async()=>{
  const service=require('../../../services/profileViewService').profileViewService;let resolve;const spy=jest.spyOn(service,'getAggregateCount').mockReturnValueOnce(new Promise(done=>{resolve=done;})).mockResolvedValue(2);
  const screen=render(<MyProfileScreen navigation={{}}/>);mockNewSession();screen.rerender(<MyProfileScreen navigation={{}}/>);await flush();await act(async()=>resolve(999));expect(screen.queryByText('999 recent profile viewers')).toBeNull();expect(screen.getByText('2 recent profile viewers')).toBeTruthy();spy.mockRestore();
 });
+
+
+test('daily claim is single-flight and failure releases it without a success acknowledgement',async()=>{
+ let reject;mockRewards.claimDailyCheckIn.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;})).mockResolvedValueOnce({...dashboard(),claimed:true,reward:{freeMessages:7}});
+ const screen=render(<RewardsScreen/>);await flush();
+ act(()=>{fireEvent.press(screen.getByText('Claim daily reward'));fireEvent.press(screen.getByText('Claim daily reward'));});
+ expect(mockRewards.claimDailyCheckIn).toHaveBeenCalledTimes(1);
+ await act(async()=>reject(new Error('offline')));expect(Alert.alert).toHaveBeenLastCalledWith('Unable to claim reward','offline');
+ await act(async()=>fireEvent.press(screen.getByText('Claim daily reward')));expect(mockRewards.claimDailyCheckIn).toHaveBeenCalledTimes(2);
+});
+
+test('successful task claim remains claimed when subsequent dashboard refresh fails',async()=>{
+ const task={id:'bio',scope:'getting_started',title:'Add bio',description:'Bio',progress:1,target:1,claimable:true,claimed:false,reward:{description:'2 Chat Passes'}};
+ mockRewards.getTasks.mockResolvedValueOnce({gettingStarted:[task],daily:[]}).mockRejectedValueOnce(new Error('refresh offline'));
+ let resolve;mockRewards.claimTask.mockReturnValueOnce(new Promise(done=>{resolve=done;}));
+ const screen=render(<RewardsScreen/>);await flush();
+ act(()=>{fireEvent.press(screen.getByText('Claim'));fireEvent.press(screen.getByText('Claim'));});expect(mockRewards.claimTask).toHaveBeenCalledTimes(1);
+ await act(async()=>resolve({claimed:true,task:{...task,claimable:false,claimed:true}}));
+ expect(screen.getByText('Claimed')).toBeTruthy();expect(screen.queryByText('Claim')).toBeNull();
+ expect(Alert.alert.mock.calls.map(args=>args[0])).not.toContain('Unable to claim reward');
+ expect(Alert.alert).toHaveBeenLastCalledWith('Reward claimed',expect.stringContaining('could not be refreshed'));
+});

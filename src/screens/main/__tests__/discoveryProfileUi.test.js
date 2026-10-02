@@ -9,14 +9,14 @@ import {act,fireEvent,render} from '@testing-library/react-native';
 jest.setTimeout(30000);
 let mockUser;
 const mockDiscovery={getApprovedHosts:jest.fn(),getNewHosts:jest.fn(),getFollowingHosts:jest.fn(),getBestMatch:(pool,_user,seen=[])=>pool.filter(host=>!seen.includes(host.uid)).sort((a,b)=>(b.hostStatus.availability==='online')-(a.hostStatus.availability==='online'))[0]||null};
-const mockProfile={get:jest.fn(),setLiked:jest.fn(),hide:jest.fn()},mockCall=jest.fn(),mockFollow={isFollowing:async()=>false,subscribeRelationship:(_id,callback)=>{callback({following:true,followedBy:true,label:'Friends',blocked:false});return()=>{};},follow:jest.fn(),unfollow:jest.fn()};
+const mockProfile={get:jest.fn(),setLiked:jest.fn(),hide:jest.fn()},mockCall=jest.fn(),mockFollow={isFollowing:async()=>false,subscribeRelationship:(_id,callback)=>{callback({following:true,followedBy:true,label:'Friends',blocked:false});return()=>{};},follow:jest.fn(),unfollow:jest.fn(),unfollowHost:jest.fn()};
 jest.mock('../../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:mockUser})}));
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>mockFocused,useFocusEffect:callback=>require('react').useEffect(()=>mockFocused?callback():undefined,[callback,mockFocused])}));
 jest.mock('../../../services/discoveryService',()=>({discoveryService:mockDiscovery}));
 jest.mock('../../../services/hostActivityService',()=>({hostActivityService:{}}));
 jest.mock('../../../services/hostProfileService',()=>({hostProfileService:mockProfile}));
 jest.mock('../../../services/callNavigationService',()=>({startVideoCall:mockCall}));
-jest.mock('../../../services/quickMatchService',()=>({quickMatchService:{start:jest.fn(),cancel:jest.fn(),state:jest.fn()}}));
+jest.mock('../../../services/quickMatchService',()=>({quickMatchService:{requestId:jest.fn(()=>"qm_test_request"),start:jest.fn(),cancel:jest.fn(),state:jest.fn()}}));
 jest.mock('../../../services/sponsoredInviteService',()=>({sponsoredInviteService:{pending:jest.fn(async()=>({invites:[]})),send:jest.fn(),respond:jest.fn()}}));
 jest.mock('../../../services/firebaseService',()=>({dbService:{}}));
 jest.mock('../../../services/followService',()=>({canFollowProfile:()=>true,followService:mockFollow}));
@@ -60,4 +60,50 @@ test('Consumer Quick Match start completion from obsolete same-UID session canno
 });
 test('Sponsored invite response cannot navigate after Home unmount',async()=>{
  const service=require('../../../services/sponsoredInviteService').sponsoredInviteService;service.pending.mockResolvedValueOnce({invites:[{inviteId:'invite',hostIdentity:{username:'Inviting Host'},sponsoredSeconds:30,consumerRatePerMinute:25}]});let resolve;service.respond.mockReturnValueOnce(new Promise(done=>{resolve=done;}));const nav={navigate:jest.fn()},screen=render(<Home navigation={nav}/>);await flush();act(()=>{fireEvent.press(screen.getByText('Accept'));});screen.unmount();await act(async()=>resolve({status:'connecting',callId:'old'}));expect(nav.navigate).not.toHaveBeenCalled();
+});
+
+
+test('same-frame Like and Follow mutations share a relationship lock and release on failure',async()=>{
+ let reject;mockProfile.setLiked.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;}));
+ const screen=render(<Profile route={{params:{userId:'h'}}} navigation={{}}/>);await flush();
+ act(()=>{fireEvent.press(screen.getByLabelText('Like Host'));fireEvent.press(screen.getByLabelText('Like Host'));fireEvent.press(screen.getByText('Friends'));});
+ expect(mockProfile.setLiked).toHaveBeenCalledTimes(1);expect(mockFollow.unfollow).not.toHaveBeenCalled();
+ await act(async()=>reject(new Error('offline')));
+ await act(async()=>fireEvent.press(screen.getByText('Friends')));expect(mockFollow.follow).toHaveBeenCalledTimes(1);
+});
+
+test('Like completion from an old target cannot change a new profile',async()=>{
+ let resolve;mockProfile.setLiked.mockReturnValueOnce(new Promise(done=>{resolve=done;}));
+ const screen=render(<Profile route={{params:{userId:'h'}}} navigation={{}}/>);await flush();
+ act(()=>{fireEvent.press(screen.getByLabelText('Like Host'));});
+ mockProfile.get.mockResolvedValue(host('other'));screen.rerender(<Profile route={{params:{userId:'other'}}} navigation={{}}/>);await flush();
+ await act(async()=>resolve({liked:true}));expect(screen.getByLabelText('Like Host')).toBeTruthy();expect(mockProfile.setLiked).toHaveBeenCalledWith('h',true);
+});
+
+test('Quick Match retry reuses request identity after an uncertain result',async()=>{
+ const service=require('../../../services/quickMatchService').quickMatchService;
+ service.start.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({requestId:'qm_test_request',status:'offering'});
+ const screen=render(<Match navigation={{navigate:jest.fn()}}/>);await flush();
+ await act(async()=>fireEvent.press(screen.getByText('Start Quick Match')));
+ await act(async()=>fireEvent.press(screen.getByText('Start Quick Match')));
+ expect(service.start.mock.calls.map(args=>args[0])).toEqual(['qm_test_request','qm_test_request']);expect(service.requestId).toHaveBeenCalledTimes(1);screen.unmount();
+});
+
+test('sponsored invite response failure keeps the same invitation retryable',async()=>{
+ const service=require('../../../services/sponsoredInviteService').sponsoredInviteService;
+ service.pending.mockResolvedValueOnce({invites:[{inviteId:'invite',hostIdentity:{username:'Host'},sponsoredSeconds:30,consumerRatePerMinute:25,termsFingerprint:'terms'}]});
+ service.respond.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({status:'connecting',callId:'call'});
+ const navigation={navigate:jest.fn()},screen=render(<Home navigation={navigation}/>);await flush();
+ await act(async()=>fireEvent.press(screen.getByText('Accept')));expect(navigation.navigate).not.toHaveBeenCalled();expect(screen.getByText('Accept')).toBeTruthy();
+ await act(async()=>fireEvent.press(screen.getByText('Accept')));expect(service.respond.mock.calls.map(args=>args[0])).toEqual(['invite','invite']);expect(navigation.navigate).toHaveBeenCalledTimes(1);
+});
+
+
+test('Following list serializes unfollow and keeps the row on failure',async()=>{
+ const Following=require('../FollowingScreen').default;mockDiscovery.getFollowingHosts.mockResolvedValue([host('h')]);
+ let reject;mockFollow.unfollowHost.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;})).mockResolvedValueOnce(false);
+ const screen=render(<Following navigation={{}}/>);await flush();
+ act(()=>{fireEvent.press(screen.getByText('Unfollow'));fireEvent.press(screen.getByText('Unfollow'));});expect(mockFollow.unfollowHost).toHaveBeenCalledTimes(1);
+ await act(async()=>reject(new Error('offline')));expect(screen.getByText('Unfollow')).toBeTruthy();expect(Alert.alert).toHaveBeenLastCalledWith('Unable to unfollow','Please try again.');
+ await act(async()=>fireEvent.press(screen.getByText('Unfollow')));expect(mockFollow.unfollowHost).toHaveBeenCalledTimes(2);expect(screen.queryByText('Unfollow')).toBeNull();
 });

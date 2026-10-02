@@ -1,5 +1,8 @@
+import { reportService } from '../services/reportService';
+import { useSessionGuard } from '../hooks/useSessionGuard';
+import { useActionLock } from '../hooks/useActionLock';
 // src/components/ReportUserModal.js
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, Dimensions } from "react-native";
 import { COLORS } from '../theme/COLORS';
 import { X } from 'lucide-react-native';
@@ -13,16 +16,26 @@ const REASONS = [
   'Other'
 ];
 
-const ReportUserModal = ({ visible, onClose, onReport, userName }) => {
+const ReportUserModal = ({ visible, onClose, onReport, userName, targetKey }) => {
+  const current = useSessionGuard(targetKey, visible);
+  const owner = useSessionGuard(targetKey);
+  const runAction = useActionLock(owner);
+  const pending = useMemo(() => ({ request: null }), [owner]);
+  const [busy, setBusy] = useState(false);
   const [selectedReason, setSelectedReason] = useState(null);
   const [additionalInfo, setAdditionalInfo] = useState('');
 
-  const handleReport = () => {
-    if (selectedReason) {
-      onReport(selectedReason, additionalInfo);
-      onClose();
-    }
-  };
+  useEffect(() => { setSelectedReason(null); setAdditionalInfo(''); setBusy(false); }, [owner]);
+  const handleReport = () => runAction('report', async () => {
+    if (!current() || !selectedReason) return;
+    setBusy(true);
+    try {
+      const signature=JSON.stringify([selectedReason,additionalInfo]);
+      if(pending.request?.signature!==signature)pending.request={signature,id:reportService.requestId()};
+      const confirmed = await onReport(selectedReason, additionalInfo, pending.request.id);
+      if (current() && confirmed === true) { pending.request=null; setSelectedReason(null); setAdditionalInfo(''); onClose(); }
+    } finally { if (owner()) setBusy(false); }
+  });
 
   return (
     <Modal
@@ -51,6 +64,7 @@ const ReportUserModal = ({ visible, onClose, onReport, userName }) => {
                   styles.reasonItem,
                   selectedReason === item && styles.reasonItemSelected
                 ]}
+                disabled={busy}
                 onPress={() => setSelectedReason(item)}
               >
                 <Text style={[
@@ -65,6 +79,7 @@ const ReportUserModal = ({ visible, onClose, onReport, userName }) => {
           <TextInput
             style={styles.input}
             placeholder="Tell us more (optional)..."
+            editable={!busy}
             multiline
             numberOfLines={4}
             value={additionalInfo}
@@ -73,7 +88,7 @@ const ReportUserModal = ({ visible, onClose, onReport, userName }) => {
 
           <TouchableOpacity
             style={[styles.reportButton, !selectedReason && styles.reportButtonDisabled]}
-            disabled={!selectedReason}
+            disabled={!selectedReason || busy}
             onPress={handleReport}
           >
             <Text style={styles.reportButtonText}>Send Report</Text>

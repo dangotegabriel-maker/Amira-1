@@ -1,3 +1,4 @@
+import { useActionLock } from '../../hooks/useActionLock';
 import { withRouteSafety } from '../../navigation/routeSafety';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -57,6 +58,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const focused = useIsFocused();
   const targetCurrent = useSessionGuard(route.params?.userId);
   const current = useSessionGuard(route.params?.userId, focused);
+  const runAction = useActionLock(current);
   const sendLock = useRef(false);
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   useEffect(() => { const sub = AppState.addEventListener('change', (state) => setAppActive(state === 'active')); return () => sub.remove(); }, []);
@@ -127,7 +129,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
   }, [focused, receiverId, user?.role, accessVersion, blocked.blocked, current]);
   const hostActions = isConsumer(user) && recipient?.uid === receiverId && isApprovedHost(recipient) && !blocked.blocked;
   const sponsoredAction=isApprovedHost(user)&&recipient?.uid===receiverId&&isConsumer(recipient)&&!blocked.blocked;
-  const invite=async()=>{if(!current())return;try{const value=await sponsoredInviteService.send(receiverId,'messages');if(!current())return;Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer must accept the disclosed terms.`);}catch(e){if(current())Alert.alert('Unable to invite',e.message);}};
+  const invite=()=>runAction('invite',async()=>{if(!current())return;try{const value=await sponsoredInviteService.send(receiverId,'messages');if(!current())return;Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer must accept the disclosed terms.`);}catch(e){if(current())Alert.alert('Unable to invite',e.message);}});
 
   useEffect(() => {
     navigation.setOptions({
@@ -274,7 +276,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
       setAccessVersion((n) => n + 1);
       setConversationExists(true);
       pendingSend.current = null;
-      setText('');
+      setText(value => value === text ? '' : value);
     } catch (error) {
       if (!current()) return;
       if (['insufficient_messages', 'insufficient_chat_passes'].includes(error.details?.reason)) {
@@ -296,26 +298,23 @@ const ChatDetailScreen = ({ route, navigation }) => {
         return;
       }
       Alert.alert(
-        'Message not sent',
-        error.message
+        'Message not confirmed',
+        'Retry the unchanged message to check the same send request.'
       );
     } finally {
       if (current()) { sendLock.current = false; setSending(false); }
     }
   };
 
-  const toggleBlock = async () => {
+  const toggleBlock = () => runAction('block', async () => {
     if (!current()) return;
     try {
       if (blocked.blockedByMe) {
         await blockService.unblock(receiverId);
         if (!current()) return;
 
-        setBlocked({
-          blocked: false,
-          blockedByMe: false,
-          blockedMe: false,
-        });
+        const relationship = await blockService.getRelationship(receiverId);
+        if (current()) setBlocked(relationship);
       } else {
         await blockService.block(receiverId);
         if (!current()) return;
@@ -333,7 +332,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
         error.message
       );
     }
-  };
+  });
 
   const isMessageRead = (item) => {
     if (item.senderId !== user.uid) {
@@ -489,7 +488,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
       </View>
 
     <GiftTray visible={giftOpen} onClose={()=>setGiftOpen(false)} hostUid={receiverId} source="messages"/>
-    <ReportUserModal
+    <ReportUserModal key={receiverId} targetKey={receiverId}
         visible={reportOpen}
         onClose={() =>
           setReportOpen(false)
@@ -497,10 +496,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
         userName={name}
         onReport={async (
           reason,
-          details
+          details,
+          requestId
         ) => {
           if (!current()) return;
           try { await reportService.submit({
+            requestId,
             reportedUserId: receiverId,
             contextType: 'conversation',
             contextId: conversationId,
@@ -513,7 +514,8 @@ const ChatDetailScreen = ({ route, navigation }) => {
             'Report received',
             'Thank you. Our moderation team will review it.'
           );
-          } catch (_) { if (current()) Alert.alert('Report not sent', 'Please try again.'); }
+          return true;
+          } catch (_) { if (current()) Alert.alert('Report not confirmed', 'Please try again.'); return false; }
         }}
       />
     </KeyboardAvoidingView></View>

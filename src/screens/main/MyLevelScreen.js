@@ -1,3 +1,4 @@
+import { useActionLock } from '../../hooks/useActionLock';
 import {useSessionGuard} from '../../hooks/useSessionGuard';
 import React,{useEffect,useRef,useState} from 'react';
 import {ActivityIndicator,Alert,ScrollView,StyleSheet,Text,TouchableOpacity,View,useWindowDimensions} from 'react-native';
@@ -12,13 +13,25 @@ const rewardCopy=(reward)=>[reward.freeMessages&&`${reward.freeMessages} Chat Pa
 const MyLevelScreen=({navigation})=>{
  const {user}=useUser(),consumer=isConsumer(user),focused=useIsFocused(),{width}=useWindowDimensions();
  const current=useSessionGuard('',focused);
+ const runAction=useActionLock(current);
  const [state,setState]=useState(null),[error,setError]=useState(false),[retry,setRetry]=useState(0),[claiming,setClaiming]=useState(null);
  useEffect(()=>{setClaiming(null);},[current]);
  const strip=useRef(null),pageWidth=Math.max(250,width-36);
  useEffect(()=>{if(!consumer||!focused)return undefined;let active=true;setState(null);setError(false);levelService.getOwn().then(value=>{if(active&&current())setState(value);}).catch(()=>{if(active&&current())setError(true);});return()=>{active=false;};},[consumer,user?.uid,focused,retry,current]);
  useEffect(()=>{if(state)strip.current?.scrollTo({x:state.level*pageWidth,animated:false});},[state?.level,pageWidth]);
  if(!consumer)return null;
- const claim=async(level)=>{if(!current()||claiming!==null)return;setClaiming(level);try{await levelService.claim(level);if(!current())return;const next=await levelService.getOwn();if(!current())return;setState(next);Alert.alert('Milestone claimed','Your reward has been added.');}catch(_){if(current())Alert.alert('Unable to claim milestone','Please try again.');}finally{if(current())setClaiming(null);}};
+ const claim=(level)=>runAction('claim',async()=>{
+  if(!current()||claiming!==null)return;setClaiming(level);
+  try{
+   const result=await levelService.claim(level);if(!current())return;
+   if(result.level===level)setState(previous=>({...previous,milestones:previous.milestones.map(item=>item.level===level?{...item,claimed:true,eligible:false}:item)}));
+   Alert.alert('Milestone claimed','Your reward has been added.');
+   try{const next=await levelService.getOwn();if(current())setState(next);}
+   catch(_){if(current())Alert.alert('Milestone claimed','Level details could not be refreshed. Reopen My Level to refresh.');}
+  }catch(_){if(current())Alert.alert('Milestone not confirmed','Please try again.');}
+  finally{if(current())setClaiming(null);}
+ });
+
  return <ScrollView style={styles.container} contentContainerStyle={styles.content}>
   <Text style={styles.title}>My Level</Text><Text style={styles.body}>Your Amira Level grows with qualifying Credit purchases.</Text>
   {error?<View style={styles.card}><Text style={styles.body}>Unable to load your Amira Level.</Text><TouchableOpacity onPress={()=>setRetry(value=>value+1)}><Text style={styles.link}>Try again</Text></TouchableOpacity></View>:!state?<ActivityIndicator accessibilityLabel="Loading Amira Level" color={COLORS.primary}/>:<>

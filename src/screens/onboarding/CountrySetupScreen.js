@@ -1,3 +1,5 @@
+import { useSessionGuard } from '../../hooks/useSessionGuard';
+import { useActionLock } from '../../hooks/useActionLock';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COUNTRIES, DEFAULT_COUNTRY } from '../../data/countries';
@@ -6,6 +8,8 @@ import { COLORS } from '../../theme/COLORS';
 import CountrySelectorModal from '../../components/CountrySelectorModal';
 
 const CountrySetupScreen = () => {
+  const current = useSessionGuard();
+  const runAction = useActionLock(current);
   const { user, updateProfile } = useUser();
   const [selectedCountry, setSelectedCountry] = useState(
     COUNTRIES.find((country) => country.cca2 === user?.countryCode) || DEFAULT_COUNTRY,
@@ -13,7 +17,7 @@ const CountrySetupScreen = () => {
   const [saving, setSaving] = useState(false);
   const [showSelector, setShowSelector] = useState(false);
 
-  const handleContinue = async () => {
+  const handleContinue = () => runAction('save', async () => {
     if (!user?.uid || !selectedCountry) return;
     setSaving(true);
     try {
@@ -23,11 +27,11 @@ const CountrySetupScreen = () => {
         updatedAt: new Date(),
       });
     } catch (error) {
-      Alert.alert('Update Failed', 'Could not save your country. Please try again.');
+      if (current()) Alert.alert('Update Failed', 'Could not save your country. Please try again.');
     } finally {
-      setSaving(false);
+      if (current()) setSaving(false);
     }
-  };
+  });
 
   return (
     <View style={styles.container}>

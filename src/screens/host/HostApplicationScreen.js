@@ -73,21 +73,18 @@ const HostApplicationScreen = ({ navigation }) => {
     finally { actionLock.current = false; if(current())setBusy(false); }
   };
 
+  // A rejected draft response can follow a committed write. Retain uploaded media
+  // on uncertainty; only delete old media after a confirmed replacement/removal.
   const uploadMainPhoto = () => performUpload(async () => {
     const media = await pickAndUpload({ category: 'profile', kind: 'image' });
     if (!current() || !media) return;
     const previous = profilePhoto;
-    try {
-      await hostApplicationService.saveDraft({ media: { profilePhoto: media, gallery, ...(introVideo ? { introVideo } : {}) } });
-      if (!current()) return;
-      await dbService.updateUserProfile(user.uid, { profilePic: media.url, updatedAt: new Date() });
-      if (!current()) return;
-      setProfilePhoto(media);
-      if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
-    } catch (error) {
-      if (current()) mediaService.deleteOwnedMedia(media.path).catch(() => {});
-      throw error;
-    }
+    await hostApplicationService.saveDraft({ media: { profilePhoto: media, gallery, ...(introVideo ? { introVideo } : {}) } });
+    if (!current()) return;
+    await dbService.updateUserProfile(user.uid, { profilePic: media.url, updatedAt: new Date() });
+    if (!current()) return;
+    setProfilePhoto(media);
+    if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
   });
 
   const uploadGalleryPhoto = () => performUpload(async () => {
@@ -95,14 +92,9 @@ const HostApplicationScreen = ({ navigation }) => {
     const media = await pickAndUpload({ category: 'gallery', kind: 'image' });
     if (!current() || !media) return;
     const nextGallery = [...gallery, media];
-    try {
-      await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery: nextGallery, ...(introVideo ? { introVideo } : {}) } });
-      if (!current()) return;
-      setGallery(nextGallery);
-    } catch (error) {
-      if (current()) mediaService.deleteOwnedMedia(media.path).catch(() => {});
-      throw error;
-    }
+    await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery: nextGallery, ...(introVideo ? { introVideo } : {}) } });
+    if (!current()) return;
+    setGallery(nextGallery);
   });
 
   const removeGalleryPhoto = (media) => performUpload(async () => {
@@ -117,15 +109,10 @@ const HostApplicationScreen = ({ navigation }) => {
     const media = await pickAndUpload({ category: 'intro-video', kind: 'video' });
     if (!current() || !media) return;
     const previous = introVideo;
-    try {
-      await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery, introVideo: media } });
-      if (!current()) return;
-      setIntroVideo(media);
-      if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
-    } catch (error) {
-      if (current()) mediaService.deleteOwnedMedia(media.path).catch(() => {});
-      throw error;
-    }
+    await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery, introVideo: media } });
+    if (!current()) return;
+    setIntroVideo(media);
+    if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
   });
 
   const uploadVerificationCapture = (action, index) => performUpload(async () => {
@@ -133,15 +120,10 @@ const HostApplicationScreen = ({ navigation }) => {
     if (!current() || !media) return;
     const previous = evidence.find((item) => item.order === index);
     const nextEvidence = [...evidence.filter((item) => item.order !== index), { ...media, action, order: index }].sort((a, b) => a.order - b.order);
-    try {
-      await hostApplicationService.saveDraft({ verification: { method: 'manual_review', evidence: nextEvidence, status: 'captured' } });
-      if (!current()) return;
-      setEvidence(nextEvidence);
-      if (previous?.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
-    } catch (error) {
-      if (current()) mediaService.deleteOwnedMedia(media.path).catch(() => {});
-      throw error;
-    }
+    await hostApplicationService.saveDraft({ verification: { method: 'manual_review', evidence: nextEvidence, status: 'captured' } });
+    if (!current()) return;
+    setEvidence(nextEvidence);
+    if (previous?.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
   });
 
   const saveCurrentStep = async () => {
@@ -185,7 +167,8 @@ const HostApplicationScreen = ({ navigation }) => {
       await hostApplicationService.submit();
       if(!current())return;
       setApplicationStatus('submitted');
-      await refreshUser();
+      try { await refreshUser(); }
+      catch (_) { if(current())Alert.alert('Application submitted', 'Your application was submitted. Profile refresh is unavailable; reopen your profile to retry.'); return; }
       if(!current())return;
       Alert.alert('Application submitted', 'Your evidence will be reviewed manually.');
     } catch (error) { if(current())Alert.alert('Cannot submit', error.message); }

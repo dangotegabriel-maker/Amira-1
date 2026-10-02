@@ -1,3 +1,4 @@
+import { useActionLock } from '../../hooks/useActionLock';
 import {useSessionGuard} from '../../hooks/useSessionGuard';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from "react-native";
@@ -14,14 +15,16 @@ import { mediaService } from '../../services/mediaService';
 const EditProfileScreen = ({ navigation }) => {
   const { user, refreshUser } = useUser();
   const current=useSessionGuard();
+  const runAction = useActionLock(current);
   const [name, setName] = useState(user?.username || user?.name || '');
   const [bio, setBio] = useState(user?.bio || '');
   const country = COUNTRIES.find((item) => item.cca2 === user?.countryCode);
   const [loading, setLoading] = useState(false);
   const [profilePic, setProfilePic] = useState(user?.profilePic || '');
 
-  const updatePhoto = async () => {
+  const updatePhoto = () => runAction('profile', async () => {
     if(!current())return;
+    try {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if(!current())return;
     if (!permission.granted) return Alert.alert('Permission required', 'Media library access is required.');
@@ -29,7 +32,6 @@ const EditProfileScreen = ({ navigation }) => {
     if(!current())return;
     if (result.canceled) return;
     setLoading(true);
-    try {
       const media = await mediaService.uploadUserMedia({ asset: result.assets[0], category: 'profile', kind: 'image' });
       if(!current())return;
       await dbService.updateUserProfile(user.uid, { profilePic: media.url, updatedAt: new Date() });
@@ -40,9 +42,9 @@ const EditProfileScreen = ({ navigation }) => {
       if(!current())return;
     } catch (error) { if(current())Alert.alert('Upload failed', error.message || 'Please try again.'); }
     finally { if(current())setLoading(false); }
-  };
+  });
 
-  const handleSave = async () => {
+  const handleSave = () => runAction('profile', async () => {
     if(!current())return;
     const validation = validateUsername(name);
     if (!validation.isValid) {
@@ -79,7 +81,7 @@ const EditProfileScreen = ({ navigation }) => {
     } finally {
       if(current())setLoading(false);
     }
-  };
+  });
 
   return (
     <View style={styles.container}>

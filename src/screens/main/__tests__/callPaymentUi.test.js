@@ -10,7 +10,7 @@ jest.setTimeout(30000);
 let mockRelationship = { valid: true, following: false, label: 'Follow' };
 jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
 jest.mock('../../../services/followService', () => ({ followService: { subscribeRelationship: (_id, cb) => { cb(mockRelationship); return () => {}; }, follow: jest.fn(async () => true) } }));
-jest.mock('../../../services/callReviewService', () => ({ callReviewService: { status: async () => ({ eligible: false }) } }));
+jest.mock('../../../services/callReviewService', () => ({ callReviewService: { status: jest.fn(async () => ({ eligible: false })), submit: jest.fn() } }));
 let mockListener;
 let mockUser;
 const mockRtc = {
@@ -29,7 +29,7 @@ jest.mock('../../../context/UserContext', () => ({ useUser: () => ({authenticate
 jest.mock('../../../services/rtcService', () => ({ rtcService: mockRtc }));
 jest.mock('../../../services/callService', () => ({ callService: mockCalls }));
 jest.mock('../../../services/blockService', () => ({ blockService: { block: jest.fn() } }));
-jest.mock('../../../services/reportService', () => ({ reportService: { submit: jest.fn() } }));
+jest.mock('../../../services/reportService', () => ({ reportService: { requestId: () => 'report-stable', submit: jest.fn() } }));
 jest.mock('../../../services/firebaseService', () => ({ dbService: {} }));
 jest.mock('../../../services/hapticService', () => ({ hapticService: { lightImpact: jest.fn() } }));
 jest.mock('../../../components/RtcVideoView', () => ({ LocalRtcVideoView: () => null, RemoteRtcVideoView: () => null }));
@@ -189,4 +189,40 @@ test('CallSummary exits to a fresh role-selected MainTabs root',async()=>{
  const screen=render(<CallSummaryScreen navigation={navigation} route={{params:{duration:30,targetUserId:'host'}}}/>);
  await flush();fireEvent.press(screen.getByText('Back to Discovery'));
  expect(navigation.reset).toHaveBeenCalledWith({index:0,routes:[{name:'MainTabs'}]});
+});
+
+
+test('competing End Call presses dispatch once; failed end is not a fabricated summary and can retry',async()=>{
+ let reject;mockCalls.end.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;}));
+ const screen=await open({...pendingCall(),billingMode:'paid'});
+ const end=screen.getByLabelText('End Call');
+ act(()=>{fireEvent.press(end);fireEvent.press(end);});await flush();
+ expect(mockCalls.end).toHaveBeenCalledTimes(1);expect(navigation.replace).not.toHaveBeenCalled();
+ await act(async()=>reject(new Error('offline')));
+ expect(screen.getByText('Call end not confirmed. Retry End Call.')).toBeTruthy();expect(navigation.replace).not.toHaveBeenCalled();
+ await act(async()=>fireEvent.press(screen.getByLabelText('End Call')));await flush();
+ expect(mockCalls.end).toHaveBeenCalledTimes(2);expect(navigation.replace).toHaveBeenCalledTimes(1);
+});
+
+test('call report failure is visible, duplicate submission is locked, and retry remains possible',async()=>{
+ const reports=require('../../../services/reportService').reportService;let reject;
+ reports.submit.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;})).mockResolvedValueOnce(undefined);
+ const screen=await open({...pendingCall(),billingMode:'paid'});
+ fireEvent.press(screen.getByLabelText('Call safety'));
+ const report=Alert.alert.mock.calls.at(-1)[2].find(action=>action.text==='Report').onPress;
+ act(()=>{report();report();});expect(reports.submit).toHaveBeenCalledTimes(1);
+ await act(async()=>reject(new Error('offline')));expect(Alert.alert).toHaveBeenLastCalledWith('Report not confirmed','Please try again.');
+ await act(async()=>report());expect(reports.submit).toHaveBeenCalledTimes(2);expect(Alert.alert).toHaveBeenLastCalledWith('Report received');
+});
+
+
+test('CallSummary rating submits once for rapid presses and releases after a failure',async()=>{
+ const review=require('../../../services/callReviewService').callReviewService;
+ review.status.mockResolvedValueOnce({eligible:true});let reject;review.submit.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;})).mockResolvedValueOnce({rating:3});
+ const screen=render(<CallSummaryScreen navigation={navigation} route={{params:{callId:'call-1',duration:30,targetUserId:'host'}}}/>);await flush();
+ const buttons=screen.UNSAFE_getAllByType(require('react-native').TouchableOpacity);
+ fireEvent.press(buttons[2]);
+ act(()=>{fireEvent.press(screen.getByText('Submit review'));fireEvent.press(screen.getByText('Submit review'));});expect(review.submit).toHaveBeenCalledTimes(1);
+ await act(async()=>reject(new Error('offline')));
+ await act(async()=>fireEvent.press(screen.getByText('Submit review')));expect(review.submit).toHaveBeenCalledTimes(2);expect(screen.getByText('Thank you for your review')).toBeTruthy();
 });

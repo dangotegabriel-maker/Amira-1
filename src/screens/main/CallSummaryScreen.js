@@ -1,3 +1,4 @@
+import { useActionLock } from '../../hooks/useActionLock';
 import { withRouteSafety } from '../../navigation/routeSafety';
 import { useSessionGuard } from '../../hooks/useSessionGuard';
 import React, { useEffect, useState } from 'react';
@@ -19,7 +20,8 @@ const CallSummaryScreen = ({ route, navigation }) => {
   const [review, setReview] = useState(null);
   const [busy, setBusy] = useState(false);
   const focused = useIsFocused();
-  const current = useSessionGuard(callId, focused);
+  const current = useSessionGuard(`${callId || ""}:${targetUserId || ""}`, focused);
+  const runAction = useActionLock(current);
   useEffect(() => { setBusy(false); }, [current]);
   useEffect(() => {
     if (!focused || !targetUserId) return undefined;
@@ -32,21 +34,21 @@ const CallSummaryScreen = ({ route, navigation }) => {
     return () => { active = false; };
   }, [callId, focused, current]);
   const isFollowing = relationship?.following;
-  const handleFollow = async () => {
+  const handleFollow = () => runAction('summary', async () => {
     if (!current() || !relationship?.valid || relationship.blocked || relationship.following || busy) return;
     setBusy(true);
     try { await followService.follow(targetUserId, current); }
     catch (error) { if(current())Alert.alert('Unable to follow', error.message); }
     finally { if(current())setBusy(false); }
-  };
+  });
   const handleRating = (value) => { if (!review?.rating && !busy) { hapticService.lightImpact(); setRating(value); } };
-  const submitReview = async () => {
+  const submitReview = () => runAction('summary', async () => {
     if (!current() || !rating || busy) return;
     setBusy(true);
     try { const result = await callReviewService.submit(callId, rating); if(!current())return;setReview({ eligible: true, rating: result.rating }); }
     catch (error) { if(current())Alert.alert('Review not saved', error.message); }
     finally { if(current())setBusy(false); }
-  };
+  });
 
   const formatDuration = (s) => {
     const mins = Math.floor(s / 60);

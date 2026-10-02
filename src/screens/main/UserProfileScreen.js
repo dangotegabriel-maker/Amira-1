@@ -1,3 +1,4 @@
+import { useActionLock } from '../../hooks/useActionLock';
 import { withRouteSafety } from '../../navigation/routeSafety';
 import { useSessionGuard } from '../../hooks/useSessionGuard';
 import {AmiraIdentity} from '../../components/AmiraIdentity';
@@ -40,6 +41,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   const [relationshipLabel, setRelationshipLabel] = useState('Follow');
   const userId = route.params?.userId;
   const current = useSessionGuard(userId, focused);
+  const runAction = useActionLock(current);
   const [reputation, setReputation] = useState(null);
   useEffect(() => {
     if (!focused || !userId || route.params?.demoHost) return undefined;
@@ -74,8 +76,8 @@ const UserProfileScreen = ({ route, navigation }) => {
     return()=>{active=false;};
   }, [userId,focused,user?.uid,user?.hostStatus?.isApproved, current]);
   const refreshSocial=async()=>{if(!current())return;try{const profile=await hostProfileService.get(userId);if(!current())return;setSocial(profile.social);setLiked(profile.social.liked);setSocialError(false);}catch(e){if(current())setSocialError(true);}};
-  const toggleLike=async()=>{if(!current()||likeBusy||blockState.blocked||!isConsumer(user)||!isApprovedHost(host))return;setLikeBusy(true);try{const value=await hostProfileService.setLiked(userId,!liked);if(!current())return;setLiked(value.liked);await refreshSocial();}catch(e){if(current())Alert.alert('Unable to update Like',e.message);}finally{if(current())setLikeBusy(false);}};
-  const hideHost=async()=>{if(!current())return;try{await hostProfileService.hide(userId);if(!current())return;navigation.goBack();}catch(e){if(current())Alert.alert('Unable to update discovery',e.message);}};
+  const toggleLike=()=>runAction('relationship',async()=>{if(!current()||likeBusy||blockState.blocked||!isConsumer(user)||!isApprovedHost(host))return;setLikeBusy(true);try{const value=await hostProfileService.setLiked(userId,!liked);if(!current())return;setLiked(value.liked);await refreshSocial();}catch(e){if(current())Alert.alert('Unable to update Like',e.message);}finally{if(current())setLikeBusy(false);}});
+  const hideHost=()=>runAction('relationship',async()=>{if(!current())return;try{await hostProfileService.hide(userId);if(!current())return;navigation.goBack();}catch(e){if(current())Alert.alert('Unable to update discovery',e.message);}});
   const more=()=>setShowMore(true);
 
   useEffect(()=>{
@@ -93,21 +95,21 @@ const UserProfileScreen = ({ route, navigation }) => {
     }, () => {if(current()){setBlockState({blocked:true});setRelationshipLabel('Follow');}}, current);
   }, [userId, focused, route.params?.demoHost, current]);
 
-  const toggleFollow = async () => {
+  const toggleFollow = () => runAction('relationship', async () => {
     if (!current() || !canFollowProfile(user, host) || blockState.blocked || followBusy) return;
     if (host?.isDemo) return;
     setFollowBusy(true);
     try { const value=following ? await followService.unfollow(userId, current) : await followService.follow(userId, current); if(!current())return;setFollowing(value); if(isConsumer(user)&&isApprovedHost(host))await refreshSocial(); }
     catch (error) { if(current())Alert.alert('Unable to update follow', error.message); }
     finally { if(current())setFollowBusy(false); }
-  };
+  });
 
   const block = () => blockState.blockedByMe ? Alert.alert('Unblock user', `Allow ${host?.username} to interact with you again?`, [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Unblock', onPress: async () => { if(!current())return;try{await blockService.unblock(userId);if(!current())return; setBlockState({ blockedByMe: false, blocked: false });}catch(e){if(current())Alert.alert('Unable to unblock',e.message);} } },
+    { text: 'Unblock', onPress: () => runAction('relationship', async () => { if(!current())return;try{await blockService.unblock(userId);if(!current())return; const relationship=await blockService.getRelationship(userId);if(current())setBlockState(relationship);}catch(e){if(current())Alert.alert('Unable to unblock',e.message);} }) },
   ]) : Alert.alert('Block user', `Block ${host?.username}?`, [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Block', style: 'destructive', onPress: async () => { if(!current())return;try{await blockService.block(userId);if(!current())return; setBlockState({ blockedByMe: true, blocked: true });setFollowing(false);setLiked(false);setRelationshipLabel('Follow');setSocial(null);}catch(e){if(current())Alert.alert('Unable to block',e.message);} } },
+    { text: 'Block', style: 'destructive', onPress: () => runAction('relationship', async () => { if(!current())return;try{await blockService.block(userId);if(!current())return; setBlockState({ blockedByMe: true, blocked: true });setFollowing(false);setLiked(false);setRelationshipLabel('Follow');setSocial(null);}catch(e){if(current())Alert.alert('Unable to block',e.message);} }) },
   ]);
 
   useEffect(()=>{if(!focused||!userId||!isApprovedHost(host))return;let active=true;giftService.publicHostGifts(userId).then(value=>{if(active && current())setPublicGifts(value.gifts||[]);}).catch(()=>{if(active && current())setPublicGifts([]);});return()=>{active=false;};}, [focused,userId,host?.uid,host?.hostStatus?.isApproved, current]);
@@ -122,7 +124,7 @@ const UserProfileScreen = ({ route, navigation }) => {
   const rate=Number.isSafeInteger(host.hostProfile?.videoRateCredits)&&host.hostProfile.videoRateCredits>0?host.hostProfile.videoRateCredits:null;
   const available=!blockState.blocked&&host.hostStatus?.availability==='online'&&rate!==null;
   const message=()=>navigation.navigate('ChatDetail',{userId,name:host.username,...(route.params?.activeCallId?{activeCallId:route.params.activeCallId}:{})});
-  const invite=async()=>{if(!current()||inviteBusy||blockState.blocked)return;setInviteBusy(true);try{const value=await sponsoredInviteService.send(userId,'consumer_profile');if(!current())return;Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer will review the call terms before accepting.`);}catch(e){if(current())Alert.alert('Unable to invite',e.message);}finally{if(current())setInviteBusy(false);}};
+  const invite=()=>runAction('invite',async()=>{if(!current()||inviteBusy||blockState.blocked)return;setInviteBusy(true);try{const value=await sponsoredInviteService.send(userId,'consumer_profile');if(!current())return;Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds. The Consumer will review the call terms before accepting.`);}catch(e){if(current())Alert.alert('Unable to invite',e.message);}finally{if(current())setInviteBusy(false);}});
   return <View style={styles.container}>
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.hero}>
@@ -163,7 +165,7 @@ const UserProfileScreen = ({ route, navigation }) => {
     <TouchableOpacity style={styles.safetyAction} onPress={()=>setShowMore(false)}><Text style={styles.safetyText}>Cancel</Text></TouchableOpacity>
     </View></View></Modal>
     <GiftTray visible={giftOpen} onClose={()=>setGiftOpen(false)} hostUid={userId} source="host_profile"/>
-    <ReportUserModal visible={showReport} onClose={() => setShowReport(false)} userName={host.username} onReport={async (reason, info) => { if(!current())return;try { await reportService.submit({ reportedUserId:userId, contextType:'profile', contextId:userId, reason, details:info }); if(current())Alert.alert('Report received', 'Thank you.'); }catch(_){if(current())Alert.alert('Report not sent','Please try again.');} }} />
+    <ReportUserModal key={userId} targetKey={userId} visible={showReport} onClose={() => setShowReport(false)} userName={host.username} onReport={async (reason, info, requestId) => { if(!current())return;try { await reportService.submit({ requestId, reportedUserId:userId, contextType:'profile', contextId:userId, reason, details:info }); if(current()){Alert.alert('Report received', 'Thank you.');return true;} }catch(_){if(current())Alert.alert('Report not confirmed','Please try again.');return false;} }} />
   </View>;
 };
 

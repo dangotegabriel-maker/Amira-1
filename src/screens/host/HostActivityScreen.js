@@ -1,3 +1,4 @@
+import { useActionLock } from '../../hooks/useActionLock';
 import {useSessionGuard} from '../../hooks/useSessionGuard';
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {ActivityIndicator,Alert,FlatList,Image,ScrollView,StyleSheet,Text,TouchableOpacity,View} from 'react-native';
@@ -13,12 +14,12 @@ const EMPTY={All:'No activity yet.',Visitors:'No profile visitors yet.',Likes:'N
 export const activityRelativeTime=(timestamp,now)=>formatCallHistoryTime(timestamp,now)||'';
 const description=event=>event.type==='Visitors'?'Viewed your profile':event.type==='Likes'?'Liked your profile':event.type==='Followers'?'Followed you':event.type==='Gifts'?`${event.giftName} · ${event.earningCreditsEquivalent} pending credit equivalent`:`Video call \u00b7 ${formatCallDuration(event.durationSeconds)}`;
 const ActivityRow=({event,now,navigation})=>{
- const focused=useIsFocused();const current=useSessionGuard(event.id,focused);
+ const focused=useIsFocused();const current=useSessionGuard(`${event.id}:${event.actor.uid}`,focused);const runAction=useActionLock(current);
  const [failed,setFailed]=useState(false);
  const [inviting,setInviting]=useState(false);
  useEffect(()=>{setInviting(false);},[current]);
  useEffect(()=>setFailed(false),[event.actor.uid,event.actor.profilePic]);
- const invite=async()=>{if(!current()||inviting||!event.canInteract)return;setInviting(true);try{const value=await sponsoredInviteService.send(event.actor.uid,'activity');if(!current())return;Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds.`);}catch(e){if(current())Alert.alert('Unable to invite',e.message);}finally{if(current())setInviting(false)}};
+ const invite=()=>runAction('invite',async()=>{if(!current()||inviting||!event.canInteract)return;setInviting(true);try{const value=await sponsoredInviteService.send(event.actor.uid,'activity');if(!current())return;Alert.alert(value.idempotent?'Invite already pending':'Invite sent',`${value.sponsoredSeconds} sponsored connected seconds.`);}catch(e){if(current())Alert.alert('Unable to invite',e.message);}finally{if(current())setInviting(false)}});
  return <View style={styles.row} testID={`activity-${event.id}`}><TouchableOpacity accessibilityLabel={`Open ${event.actor.username} profile`} disabled={!event.canOpenProfile} style={styles.identity} onPress={()=>navigation.navigate('UserProfile',{userId:event.actor.uid})}>
  {event.actor.profilePic&&!failed?<Image source={{uri:event.actor.profilePic}} style={styles.avatar} onError={()=>setFailed(true)}/>:<View style={[styles.avatar,styles.initial]}><Text style={styles.initialText}>{event.actor.username?.[0]}</Text></View>}
  <View style={{flex:1}}><Text style={styles.name}>{event.actor.username}</Text><Text style={styles.detail}>{description(event)}</Text><Text style={styles.time}>{activityRelativeTime(event.timestampMs,now)}</Text></View></TouchableOpacity>

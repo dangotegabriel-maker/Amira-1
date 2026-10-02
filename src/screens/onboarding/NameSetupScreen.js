@@ -1,3 +1,5 @@
+import { useSessionGuard } from '../../hooks/useSessionGuard';
+import { useActionLock } from '../../hooks/useActionLock';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { COLORS } from '../../theme/COLORS';
@@ -6,18 +8,20 @@ import { auth } from '../../services/firebaseService';
 import { validateUsername } from '../../utils/usernameValidation';
 
 const NameSetupScreen = ({ navigation }) => {
+  const current = useSessionGuard();
+  const runAction = useActionLock(current);
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const { updateProfile } = useUser();
 
-  const saveName = async () => {
-    setLoading(true);
+  const saveName = () => runAction('save', async () => {
     const validation = validateUsername(name);
     if (!validation.isValid) {
       Alert.alert('Check your name', validation.error);
       return;
     }
     const enteredName = validation.value;
+    setLoading(true);
 
     try {
       await updateProfile({
@@ -26,12 +30,11 @@ const NameSetupScreen = ({ navigation }) => {
         updatedAt: new Date()
       });
     } catch (error) {
-      console.log("SAVE ERROR:", error.code, error.message);
-      alert(error.code + " - " + error.message);
+      if (current()) Alert.alert('Unable to save name', error.message || 'Please try again.');
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  };
+  });
 
   return (
     <View style={styles.container}>

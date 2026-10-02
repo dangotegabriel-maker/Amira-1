@@ -1,14 +1,18 @@
+import { useSessionGuard } from '../../hooks/useSessionGuard';
+import { useActionLock } from '../../hooks/useActionLock';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
 
 const GenderSetupScreen = () => {
+  const current = useSessionGuard();
+  const runAction = useActionLock(current);
   const [gender, setGender] = useState(null);
   const [loading, setLoading] = useState(false);
   const { user, updateProfile } = useUser();
 
-  const handleContinue = async () => {
+  const handleContinue = () => runAction('save', async () => {
     // Safety check: Valid selection must exist
     if (!gender) {
       Alert.alert("Selection Required", "Please select your gender to continue.");
@@ -31,11 +35,11 @@ const GenderSetupScreen = () => {
 
       // Close the loop: RootNavigator will now grant access to Home
     } catch (e) {
-      Alert.alert("Update Failed", "Failed to save gender preference. Please try again.");
+      if (current()) Alert.alert("Update Failed", "Failed to save gender preference. Please try again.");
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  };
+  });
 
   return (
     <View style={styles.container}>

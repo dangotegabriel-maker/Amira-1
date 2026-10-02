@@ -1,3 +1,5 @@
+import { useSessionGuard } from '../../hooks/useSessionGuard';
+import { useActionLock } from '../../hooks/useActionLock';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from "react-native";
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -5,6 +7,8 @@ import { COLORS } from '../../theme/COLORS';
 import { useUser } from '../../context/UserContext';
 
 const BirthdaySetupScreen = ({ navigation }) => {
+  const current = useSessionGuard();
+  const runAction = useActionLock(current);
   const today = new Date();
   const maximumDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
   const minimumDate = new Date(today.getFullYear() - 120, today.getMonth(), today.getDate());
@@ -22,7 +26,7 @@ const BirthdaySetupScreen = ({ navigation }) => {
     return age;
   };
 
-  const handleContinue = async () => {
+  const handleContinue = () => runAction('save', async () => {
     const age = calculateAge(date);
 
     if (!(date instanceof Date) || Number.isNaN(date.getTime()) || date > today || age > 120) {
@@ -41,9 +45,9 @@ const BirthdaySetupScreen = ({ navigation }) => {
         await updateProfile({ dob, age });
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to save birthdate. Please try again.");
+      if (current()) Alert.alert("Error", "Failed to save birthdate. Please try again.");
     }
-  };
+  });
 
   return (
     <View style={styles.container}>

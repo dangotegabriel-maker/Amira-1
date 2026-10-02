@@ -8,6 +8,7 @@ const mockIdentity={calls:jest.fn(),blocked:jest.fn()};
 const mockBlock={unblock:jest.fn()};
 const mockCall={respond:jest.fn()};
 const mockHistory={listPage:jest.fn()};
+let mockNotices=[];const mockNoticeRead=jest.fn();
 jest.mock('../../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:{uid:mockUid,hostStatus:{isApproved:false}}})}));
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true,useFocusEffect:callback=>require('react').useEffect(callback,[callback])}));
 jest.mock('../../../services/publicIdentityService',()=>({publicIdentityService:mockIdentity}));
@@ -15,7 +16,7 @@ jest.mock('../../../services/blockService',()=>({blockService:mockBlock}));
 jest.mock('../../../services/callService',()=>({callService:mockCall}));
 jest.mock('../../../services/callHistoryService',()=>({callHistoryService:mockHistory}));
 jest.mock('../../../services/messagingService',()=>({messagingService:{subscribeInbox:callback=>{callback([]);return ()=>{};}}}));
-jest.mock('../../../services/noticeService',()=>({noticeService:{subscribe:callback=>{callback([]);return ()=>{};}}}));
+jest.mock('../../../services/noticeService',()=>({noticeService:{subscribe:callback=>{callback(mockNotices);return ()=>{};},markRead:mockNoticeRead}}));
 jest.mock('../../../services/presenceService',()=>({presenceService:{get:async()=>null,isOnline:()=>false}}));
 jest.mock('lucide-react-native',()=>({Bell:()=>null,MessageCircle:()=>null,Phone:()=>null}));
 const Incoming=require('../../../components/IncomingCallCard').default;
@@ -92,4 +93,26 @@ test('old call-history page cannot request identities or populate a replacement 
 });
 test('late unblock failure after unmount is silent',async()=>{
  const alert=jest.spyOn(require('react-native').Alert,'alert').mockImplementation(()=>{});let reject;mockBlock.unblock.mockReturnValueOnce(new Promise((_done,fail)=>{reject=fail;}));const screen=render(<Blocked/>);await act(async()=>{});act(()=>{fireEvent.press(screen.getByText('Unblock'));});screen.unmount();await act(async()=>reject(new Error('old')));expect(alert).not.toHaveBeenCalled();alert.mockRestore();
+});
+
+
+test('blocked list rapid Unblock dispatches once and retry survives failure',async()=>{
+ mockIdentity.blocked.mockResolvedValue([{uid:'target',username:'Blocked target'}]);
+ let reject;mockBlock.unblock.mockReturnValueOnce(new Promise((_ok,fail)=>{reject=fail;})).mockResolvedValueOnce(undefined);
+ const alert=jest.spyOn(require('react-native').Alert,'alert').mockImplementation(()=>{});
+ const screen=render(<Blocked/>);await act(async()=>{});
+ act(()=>{fireEvent.press(screen.getByText('Unblock'));fireEvent.press(screen.getByText('Unblock'));});expect(mockBlock.unblock).toHaveBeenCalledTimes(1);
+ await act(async()=>reject(new Error('offline')));expect(screen.getByText('Blocked target')).toBeTruthy();
+ await act(async()=>fireEvent.press(screen.getByText('Unblock')));expect(mockBlock.unblock).toHaveBeenCalledTimes(2);expect(screen.queryByText('Blocked target')).toBeNull();alert.mockRestore();
+});
+
+
+test('notice read failure is visible without local success',async()=>{
+ const Messages=require('../MessageHomeScreen').default;
+ mockNotices=[{id:'notice',title:'A notice',body:'Message',isRead:false}];mockNoticeRead.mockRejectedValueOnce(new Error('offline'));
+ const alert=jest.spyOn(require('react-native').Alert,'alert').mockImplementation(()=>{});
+ const screen=render(<Messages route={{params:{}}} navigation={{}}/>);await act(async()=>{});
+ fireEvent.press(screen.getByText('NOTICES'));await act(async()=>fireEvent.press(screen.getByText('A notice')));
+ expect(mockNoticeRead).toHaveBeenCalledWith('notice');expect(alert).toHaveBeenCalledWith('Notice not marked read','Please try again.');
+ mockNotices=[];alert.mockRestore();
 });

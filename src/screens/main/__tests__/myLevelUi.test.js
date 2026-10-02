@@ -23,3 +23,21 @@ test('failed Level load does not fabricate a current badge or wallet progress',a
 test('unmounted milestone claim does not trigger a follow-up read or success Alert',async()=>{
  mockService.getOwn.mockResolvedValue({level:1,thresholdsConfigured:true,milestones:[{level:1,reward:{freeMessages:2},eligible:true,claimed:false}]});let resolve;mockService.claim.mockReturnValueOnce(new Promise(done=>{resolve=done;}));const screen=render(<Screen navigation={{}}/>);await flush();fireEvent.press(screen.getByText('Claim milestone'));screen.unmount();mockService.getOwn.mockClear();await act(async()=>resolve({}));expect(mockService.getOwn).not.toHaveBeenCalled();expect(Alert.alert).not.toHaveBeenCalled();
 });
+
+
+test('milestone claim is single-flight and confirmed claim survives refresh failure',async()=>{
+ mockService.getOwn.mockResolvedValueOnce({level:1,thresholdsConfigured:true,milestones:[{level:1,reward:{freeMessages:2},eligible:true,claimed:false}]}).mockRejectedValueOnce(new Error('offline'));
+ let resolve;mockService.claim.mockReturnValueOnce(new Promise(done=>{resolve=done;}));
+ const screen=render(<Screen navigation={{}}/>);await flush();
+ act(()=>{fireEvent.press(screen.getByText('Claim milestone'));fireEvent.press(screen.getByText('Claim milestone'));});expect(mockService.claim).toHaveBeenCalledTimes(1);
+ await act(async()=>resolve({level:1,reward:{freeMessages:2},idempotent:false}));
+ expect(screen.getByText('Milestone claimed')).toBeTruthy();expect(screen.queryByText('Claim milestone')).toBeNull();
+ expect(Alert.alert).toHaveBeenLastCalledWith('Milestone claimed',expect.stringContaining('could not be refreshed'));
+});
+
+test('failed milestone claim releases its lock and can retry without invented success',async()=>{
+ mockService.getOwn.mockResolvedValue({level:1,thresholdsConfigured:true,milestones:[{level:1,reward:{freeMessages:2},eligible:true,claimed:false}]});mockService.claim.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({level:1});
+ const screen=render(<Screen navigation={{}}/>);await flush();
+ await act(async()=>fireEvent.press(screen.getByText('Claim milestone')));expect(Alert.alert).toHaveBeenLastCalledWith('Milestone not confirmed','Please try again.');
+ await act(async()=>fireEvent.press(screen.getByText('Claim milestone')));expect(mockService.claim).toHaveBeenCalledTimes(2);
+});

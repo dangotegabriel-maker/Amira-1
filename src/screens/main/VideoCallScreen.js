@@ -1,5 +1,6 @@
+import { useActionLock } from '../../hooks/useActionLock';
 import { withRouteSafety, leaveCallRoute } from '../../navigation/routeSafety';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Flag, Gift, MessageCircle, Mic, MicOff, PhoneOff, RefreshCw } from 'lucide-react-native';
 import { COLORS } from '../../theme/COLORS';
@@ -23,6 +24,9 @@ const VideoCallScreen = ({ route, navigation }) => {
   const initialCall = route.params?.call;
   const sessionCurrent = useSessionGuard(initialCall?.callId || initialCall?.id);
   const remoteProfile = route.params?.creator || initialCall?.creator;
+  const runAction = useActionLock(sessionCurrent);
+  const reportRequest = useMemo(() => ({ id: null }), [sessionCurrent]);
+  const [endError, setEndError] = useState(false);
   const { user, coins } = useUser();
   const [call, setCall] = useState(initialCall);
   const [phase, setPhase] = useState(initialCall?.status || 'ringing');
@@ -65,12 +69,23 @@ const VideoCallScreen = ({ route, navigation }) => {
   const finish = async (reason = 'participant_ended') => {
     if (!sessionCurrent() || endedRef.current) return;
     endedRef.current = true;
+    setEndError(false);
     clearTimeout(reconnectRef.current);
     await rtcService.leaveSession().catch(() => {});
     if (!sessionCurrent()) return;
     const current = callRef.current;
     let result = { durationSeconds: current?.durationSeconds ?? duration, billedCredits: current?.billedCredits || 0 };
-    if (!current?.simulated) result = await callService.end(current.callId || current.id, reason).catch(() => result);
+    if (!current?.simulated) {
+      try { result = await callService.end(current.callId || current.id, reason); }
+      catch (_) {
+        if (sessionCurrent()) {
+          endedRef.current = false;
+          setEndError(true);
+          Alert.alert('Call end not confirmed', 'Please retry End Call. The server remains the authority for the call and its final charges.');
+        }
+        return;
+      }
+    }
     if (!sessionCurrent()) return;
     leaveCallRoute(navigation, route.key, {
       callId: current?.simulated ? undefined : current?.callId || current?.id,
@@ -104,7 +119,7 @@ const VideoCallScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     if (!sessionCurrent()) return undefined;
-    endedRef.current = false; joinedRef.current = false;
+    endedRef.current = false; joinedRef.current = false; setEndError(false);
     rtcEvidence.current = false; eventSequence.current = 0; eventQueue.current = Promise.resolve();
     syncPending.current = false; lastSync.current = 0; clockOffset.current = 0; reconnectRef.current = null;
     setRtcReady(false); setRemoteUid(null); setClockReady(initialCall?.simulated === true);
@@ -243,7 +258,7 @@ const VideoCallScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (phase !== 'connected' || mode !== 'paid' || call?.simulated) return undefined;
     const timer = setInterval(() => {
-      if (sessionCurrent() && !endedRef.current) callService.settleIncrement(call.callId || call.id).catch(() => {});
+      if (sessionCurrent() && !endedRef.current) runAction('settle', () => callService.settleIncrement(call.callId || call.id).catch(() => {}));
       // Insufficient-credit mode/deadline arrive through the call snapshot.
     }, BILLING_INCREMENT_SECONDS * 1000);
     return () => clearInterval(timer);
@@ -256,12 +271,22 @@ const VideoCallScreen = ({ route, navigation }) => {
     return () => sub.remove();
   }, [phase, sessionCurrent]);
 
-  const safety = () => Alert.alert('Call safety', 'Choose an action.', [
-    { text: 'Report', onPress: () => sessionCurrent() && reportService.submit({ reportedUserId: remoteProfile.uid, contextType: 'call',
-      contextId: call.callId, reason: 'other', details: 'Reported during video call' }).then(() => { if (sessionCurrent()) Alert.alert('Report received'); }) },
-    { text: 'Block & end', style: 'destructive', onPress: () => sessionCurrent() && blockService.block(remoteProfile.uid).then(() => finish('blocked')) },
-    { text: 'Cancel', style: 'cancel' },
-  ]);
+  const safety = () => {
+    const targetUid = remoteProfile?.uid || (user?.uid === call?.callerId ? call?.receiverId : call?.callerId);
+    if (!sessionCurrent() || !targetUid) return;
+    Alert.alert('Call safety', 'Choose an action.', [
+      { text: 'Report', onPress: () => runAction('safety', async () => {
+        try { await reportService.submit({ requestId: reportRequest.id || (reportRequest.id = reportService.requestId()), reportedUserId: targetUid, contextType: 'call', contextId: call.callId || call.id, reason: 'other', details: 'Reported during video call' });
+          if (sessionCurrent()) Alert.alert('Report received');
+        } catch (_) { if (sessionCurrent()) Alert.alert('Report not confirmed', 'Please try again.'); }
+      }) },
+      { text: 'Block & end', style: 'destructive', onPress: () => runAction('safety', async () => {
+        try { await blockService.block(targetUid); if (sessionCurrent()) await finish('blocked'); }
+        catch (_) { if (sessionCurrent()) Alert.alert('Block not confirmed', 'Please retry. You can still end the call.'); }
+      }) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
   const waitingText = 'Checking automatic paid continuation';
   const status = phase === 'connected'
     ? (mode === 'preview' ? (call?.freeVideoSource === 'consumer_rewards' ? 'FREE VIDEO TIME · ' : 'FREE PREVIEW · ') + formatTime(previewRemaining)
@@ -274,7 +299,7 @@ const VideoCallScreen = ({ route, navigation }) => {
         : remoteProfile?.profilePic && <Image source={{ uri: remoteProfile.profilePic }} style={styles.remoteImage} />}
       <View style={styles.heading}>
         <Text style={styles.name}>{remoteProfile?.username || 'Video call'}</Text>
-        <Text style={styles.status}>{status}</Text>
+        <Text style={styles.status}>{endError ? "Call end not confirmed. Retry End Call." : status}</Text>
         <Text style={styles.rate}>{rate} credits/min</Text>
         {phase === 'connected' && mode === 'paid' && <Text style={styles.billing}>
           {formatTime(duration)}{isConsumer ? ' · ' + coins + ' credits · next ' + quoteIncrement(rate) + ' credits/' + BILLING_INCREMENT_SECONDS + 's' : ''}
