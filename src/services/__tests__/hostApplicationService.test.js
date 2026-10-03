@@ -1,5 +1,5 @@
 const mockDocs=new Map(),mockWrites=[];
-jest.mock('firebase/firestore',()=>({doc:(_db,...parts)=>parts.join('/'),getDoc:jest.fn(),serverTimestamp:()=>123,
+jest.mock('firebase/firestore',()=>({doc:(_db,...parts)=>parts.join('/'),getDoc:jest.fn(),getDocFromServer:jest.fn(),serverTimestamp:()=>123,
  runTransaction:async(_db,work)=>work({get:async(path)=>({exists:()=>mockDocs.has(path),data:()=>mockDocs.get(path)}),set:(...args)=>mockWrites.push(args)})}));
 jest.mock('../firebaseService',()=>({auth:{currentUser:{uid:'p'}},db:{}}));
 const {hostApplicationService}=require('../hostApplicationService');
@@ -23,4 +23,14 @@ test('approved accounts cannot submit or save applications',async()=>{mockDocs.g
 test('draft only writes application fields; payload cannot override review status or owner',async()=>{
  await hostApplicationService.saveDraft({details:{bio:'draft'},status:'approved',ownerUid:'other',isApproved:true});
  expect(mockWrites).toEqual([['hostApplications/p',{details:{bio:'draft'},ownerUid:'p',status:'in_progress',updatedAt:123},{merge:true}]]);
+});
+
+
+test('Creator recovery requires a server draft and never falls back to stale cached metadata',async()=>{
+ const {getDoc,getDocFromServer}=require('firebase/firestore');getDoc.mockClear();
+ getDocFromServer.mockRejectedValueOnce(new Error('offline'));
+ await expect(hostApplicationService.getApplication({requireServer:true})).rejects.toThrow('offline');
+ expect(getDoc).not.toHaveBeenCalled();
+ getDocFromServer.mockResolvedValueOnce({id:'p',exists:()=>true,data:()=>application()});
+ await expect(hostApplicationService.getApplication({requireServer:true})).resolves.toMatchObject({id:'p',status:'in_progress'});
 });

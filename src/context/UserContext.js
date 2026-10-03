@@ -96,10 +96,16 @@ export const UserProvider = ({ children }) => {
     if (!current(session)) return;
     try {
       await dbService.updateUserProfile(session.authUser.uid, patch);
-      if (current(session)) await refreshUser();
     } catch (error) {
       if (!current(session)) return;
       throw error;
+    }
+    if (!current(session)) return;
+    try { await refreshUser(); }
+    catch (_) {
+      // The write was acknowledged. Route to existing profile recovery instead
+      // of telling onboarding that a confirmed save failed or merging locally.
+      failProfile(session);
     }
   };
   const fetchUserCoins = async () => {

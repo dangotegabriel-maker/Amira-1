@@ -161,3 +161,18 @@ test('chat block is single-flight and unblock reloads both sides instead of gran
  await act(async()=>unblock());expect(service.unblock).toHaveBeenCalledTimes(1);
  expect(screen.queryByPlaceholderText('Type a message...')).toBeNull();
 });
+
+
+test('message listener failure preserves history, offers a fresh subscription and ignores replaced callbacks',async()=>{
+ const records=[];mockMessaging.subscribeMessages.mockImplementation((id,value,error)=>{const stop=jest.fn();records.push({value,error,stop});return stop;});
+ const screen=await open();act(()=>records[0].value([{id:'a',senderId:'h',text:'Confirmed history'}]));
+ act(()=>records[0].error(new Error('offline')));
+ expect(screen.getByText('Confirmed history')).toBeTruthy();expect(screen.getByText('Message updates are unavailable.')).toBeTruthy();
+ await act(async()=>fireEvent.press(screen.getByText('Retry updates')));
+ expect(records[0].stop).toHaveBeenCalledTimes(1);
+ act(()=>{records.at(-1).error(new Error('offline'));records[0].value([]);});
+ expect(screen.getByText('Message updates are unavailable.')).toBeTruthy();
+ expect(screen.getByText('Confirmed history')).toBeTruthy();
+ act(()=>records.at(-1).value([]));expect(screen.queryByText('Message updates are unavailable.')).toBeNull();
+ screen.unmount();expect(records.at(-1).stop).toHaveBeenCalledTimes(1);
+});

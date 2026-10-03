@@ -125,3 +125,12 @@ test('profile save is synchronous single-flight and retries after authoritative 
  expect(mockProfileUpdate).not.toHaveBeenCalled();expect(navigation.goBack).not.toHaveBeenCalled();
  await act(async()=>save());expect(mockAuthUpdate).toHaveBeenCalledTimes(2);expect(mockProfileUpdate).toHaveBeenCalledTimes(1);expect(navigation.goBack).toHaveBeenCalledTimes(1);
 });
+
+
+test('confirmed profile save with failed refresh never reports failed mutation',async()=>{
+ mockAuthUpdate.mockResolvedValueOnce();mockProfileUpdate.mockResolvedValueOnce();mockRefresh.mockRejectedValueOnce(new Error('offline'));
+ const screen=render(<Edit navigation={{goBack:jest.fn()}}/>);
+ const save=screen.UNSAFE_getAllByType(TouchableOpacity).find(button=>button.props.onPress?.name==='handleSave');
+ await act(async()=>fireEvent.press(save));
+ expect(Alert.alert).toHaveBeenLastCalledWith('Profile saved',expect.stringContaining('refresh'));
+});

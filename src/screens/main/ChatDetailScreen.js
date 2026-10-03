@@ -85,6 +85,9 @@ const ChatDetailScreen = ({ route, navigation }) => {
   const [conversation, setConversation] = useState(null);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [updatesError, setUpdatesError] = useState('');
+  const [updatesVersion, setUpdatesVersion] = useState(0);
+  const [conversationError, setConversationError] = useState('');
   const [prepared, setPrepared] = useState(null);
   const conversationExists = prepared?.id === conversationId && prepared?.scope === current && prepared.exists;
   const setConversationExists = exists => setPrepared({ id: conversationId, scope: current, exists });
@@ -104,6 +107,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
     setMessages([]); setConversation(null); setConversationExists(false); setAccess(null);
     setSending(false); sendLock.current = false;
     setBlocked({ blocked: true, blockedByMe: false }); setLoading(true);
+    setUpdatesError(''); setConversationError('');
   }, [conversationId, current]);
   useEffect(() => { setText(''); pendingSend.current = null; }, [conversationId, targetCurrent]);
 
@@ -191,6 +195,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
     if (!conversationId || !current()) return undefined;
 
     let active = true;
+    setLoading(true); setUpdatesError('');
 
     blockService
       .getRelationship(receiverId)
@@ -209,51 +214,52 @@ const ChatDetailScreen = ({ route, navigation }) => {
         if (!active || !current()) return;
 
         setLoading(false);
-
-        Alert.alert(
-          'Conversation unavailable',
-          error.message
-        );
+        setUpdatesError('Conversation could not be loaded.');
       });
 
     return () => {
       active = false;
     };
-  }, [conversationId, receiverId, current]);
+  }, [conversationId, receiverId, current, updatesVersion]);
 
   useEffect(() => {
     if (!conversationId || !conversationExists || !focused || !appActive) {
       return undefined;
     }
 
-    return messagingService.subscribeMessages(
+    let active = true;
+    const stop = messagingService.subscribeMessages(
       conversationId,
       (items) => {
-        if (!current()) return;
+        if (!active || !current()) return;
         setMessages(items);
         setLoading(false);
+        setUpdatesError('');
 
         messagingService
           .markRead(conversationId)
           .catch(() => {});
       },
-      () => { if (current()) setLoading(false); }
+      () => { if (active && current()) { setLoading(false); setUpdatesError('Message updates are unavailable.'); } }
     );
-  }, [conversationId, conversationExists, focused, appActive, current]);
+    return () => { active = false; stop(); };
+  }, [conversationId, conversationExists, focused, appActive, current, updatesVersion]);
 
   useEffect(() => {
     if (!current() || !focused || !conversationId || !conversationExists) {
       return undefined;
     }
 
-    return messagingService.subscribeConversation(
+    let active = true;
+    const stop = messagingService.subscribeConversation(
       conversationId,
       (value) => {
-        if (current()) setConversation(value);
+        if (active && current()) { setConversation(value); setConversationError(''); }
       },
-      () => {}
+      () => { if (active && current()) setConversationError('Conversation updates are unavailable.'); }
     );
-  }, [conversationId, conversationExists, focused, current]);
+    return () => { active = false; stop(); };
+  }, [conversationId, conversationExists, focused, current, updatesVersion]);
 
   const send = async () => {
     if (!current() || sendLock.current || !text.trim()) return;
@@ -372,6 +378,12 @@ const ChatDetailScreen = ({ route, navigation }) => {
         Platform.OS === 'ios' ? 90 : 0
       }
     >
+      {(updatesError || conversationError) ? <View style={{ padding: 14 }}>
+        <Text>{updatesError || conversationError}</Text>
+        <TouchableOpacity onPress={() => { setUpdatesVersion(n => n + 1); setIdentityVersion(n => n + 1); setAccessVersion(n => n + 1); }}>
+          <Text>Retry updates</Text>
+        </TouchableOpacity>
+      </View> : null}
       {loading ? (
         <ActivityIndicator
           style={{ marginTop: 70 }}
@@ -392,7 +404,7 @@ const ChatDetailScreen = ({ route, navigation }) => {
           }
           ListEmptyComponent={
             <Text style={styles.empty}>
-              No messages yet. Say hello when you are ready.
+              {updatesError ? '' : 'No messages yet. Say hello when you are ready.'}
             </Text>
           }
           renderItem={({ item }) => {

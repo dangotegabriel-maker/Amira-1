@@ -1,5 +1,5 @@
 import {useSessionGuard} from '../../hooks/useSessionGuard';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, ImagePlus, Video, X } from 'lucide-react-native';
@@ -25,7 +25,7 @@ const HostApplicationScreen = ({ navigation }) => {
   const [applicationStatus, setApplicationStatus] = useState(user?.hostStatus?.verificationStatus || 'not_started');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const actionLock = useRef(false);
+  const actionLock = useMemo(() => ({ current: false }), [current]);
   const [loadError, setLoadError] = useState(false), [retry, setRetry] = useState(0);
   const [bio, setBio] = useState(user?.bio || '');
   const [interests, setInterests] = useState('');
@@ -36,8 +36,14 @@ const HostApplicationScreen = ({ navigation }) => {
   const [payoutMethod, setPayoutMethod] = useState('');
 
   useEffect(() => {
-    setLoading(true); setLoadError(false);
-    hostApplicationService.getApplication().then((application) => {
+    setStep(0); setApplicationStatus(user?.hostStatus?.verificationStatus || 'not_started');
+    setBio(user?.bio || ''); setInterests(''); setProfilePhoto(null); setGallery([]);
+    setIntroVideo(null); setEvidence([]); setPayoutMethod('');
+  }, [current]);
+
+  useEffect(() => {
+    setLoading(true); setLoadError(false); setBusy(false);
+    hostApplicationService.getApplication({ requireServer: true }).then((application) => {
       if (!current() || !application) return;
       setApplicationStatus(application.status || 'in_progress');
       setBio(application.details?.bio || '');
@@ -69,8 +75,18 @@ const HostApplicationScreen = ({ navigation }) => {
     if(!current() || actionLock.current)return;
     actionLock.current = true;
     setBusy(true);
-    try { await work(); } catch (error) { if(current())Alert.alert('Upload failed', error.message || 'Please try again.'); }
+    try { await work(); } catch (error) { if(current())Alert.alert(error.code === 'application/unconfirmed' ? 'Application update not confirmed' : 'Upload failed', error.message || 'Please try again.'); }
     finally { actionLock.current = false; if(current())setBusy(false); }
+  };
+
+  const saveMediaDraft = async patch => {
+    try { await hostApplicationService.saveDraft(patch); }
+    catch (_) {
+      if (current()) setLoadError(true);
+      const error = new Error('The application update was not confirmed. Reload the saved draft before making another change.');
+      error.code = 'application/unconfirmed';
+      throw error;
+    }
   };
 
   // A rejected draft response can follow a committed write. Retain uploaded media
@@ -79,11 +95,16 @@ const HostApplicationScreen = ({ navigation }) => {
     const media = await pickAndUpload({ category: 'profile', kind: 'image' });
     if (!current() || !media) return;
     const previous = profilePhoto;
-    await hostApplicationService.saveDraft({ media: { profilePhoto: media, gallery, ...(introVideo ? { introVideo } : {}) } });
-    if (!current()) return;
-    await dbService.updateUserProfile(user.uid, { profilePic: media.url, updatedAt: new Date() });
+    await saveMediaDraft({ media: { profilePhoto: media, gallery, ...(introVideo ? { introVideo } : {}) } });
     if (!current()) return;
     setProfilePhoto(media);
+    try { await dbService.updateUserProfile(user.uid, { profilePic: media.url, updatedAt: new Date() }); }
+    catch (_) {
+      if (current()) Alert.alert('Application photo saved', 'Your application has the new photo. Your profile photo could not be confirmed; reopen Edit Profile to check it.');
+      // The profile may still reference the previous file. Retain both files.
+      return;
+    }
+    if (!current()) return;
     if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
   });
 
@@ -92,14 +113,14 @@ const HostApplicationScreen = ({ navigation }) => {
     const media = await pickAndUpload({ category: 'gallery', kind: 'image' });
     if (!current() || !media) return;
     const nextGallery = [...gallery, media];
-    await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery: nextGallery, ...(introVideo ? { introVideo } : {}) } });
+    await saveMediaDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery: nextGallery, ...(introVideo ? { introVideo } : {}) } });
     if (!current()) return;
     setGallery(nextGallery);
   });
 
   const removeGalleryPhoto = (media) => performUpload(async () => {
     const nextGallery = gallery.filter((item) => item.path !== media.path);
-    await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery: nextGallery, ...(introVideo ? { introVideo } : {}) } });
+    await saveMediaDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery: nextGallery, ...(introVideo ? { introVideo } : {}) } });
     if (!current()) return;
     setGallery(nextGallery);
     await mediaService.deleteOwnedMedia(media.path).catch(() => {});
@@ -109,7 +130,7 @@ const HostApplicationScreen = ({ navigation }) => {
     const media = await pickAndUpload({ category: 'intro-video', kind: 'video' });
     if (!current() || !media) return;
     const previous = introVideo;
-    await hostApplicationService.saveDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery, introVideo: media } });
+    await saveMediaDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery, introVideo: media } });
     if (!current()) return;
     setIntroVideo(media);
     if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
@@ -120,7 +141,7 @@ const HostApplicationScreen = ({ navigation }) => {
     if (!current() || !media) return;
     const previous = evidence.find((item) => item.order === index);
     const nextEvidence = [...evidence.filter((item) => item.order !== index), { ...media, action, order: index }].sort((a, b) => a.order - b.order);
-    await hostApplicationService.saveDraft({ verification: { method: 'manual_review', evidence: nextEvidence, status: 'captured' } });
+    await saveMediaDraft({ verification: { method: 'manual_review', evidence: nextEvidence, status: 'captured' } });
     if (!current()) return;
     setEvidence(nextEvidence);
     if (previous?.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});

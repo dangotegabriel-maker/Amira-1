@@ -217,3 +217,14 @@ test.each(['a','b'])('old logout confirmation cannot terminate replacement %s se
  await act(async()=>{await oldLogout();});expect(mockSignOut).not.toHaveBeenCalled();
  expect(session.authenticatedSession.isCurrent()).toBe(true);
 });
+
+
+test('confirmed onboarding write with failed refresh enters profile recovery without repeating the write',async()=>{
+ mount();await ready();mockUpdate.mockResolvedValueOnce({success:true});mockRead.mockRejectedValueOnce(new Error('offline'));
+ await act(async()=>session.updateProfile({gender:'female'}));
+ expect(session.bootstrapStatus).toBe('profile_error');expect(mockAuth.currentUser.uid).toBe('a');
+ expect(mockListeners[0].stop).toHaveBeenCalledTimes(1);
+ mockEnsure.mockResolvedValueOnce({...profile('a'),gender:'female'});
+ await act(async()=>session.retryProfile());
+ expect(session.bootstrapStatus).toBe('ready');expect(session.user.gender).toBe('female');expect(mockUpdate).toHaveBeenCalledTimes(1);
+});

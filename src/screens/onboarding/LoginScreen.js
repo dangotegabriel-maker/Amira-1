@@ -88,7 +88,10 @@ const LoginScreen = () => {
     try {
       await authService.loginWithAccount(accountId, password);
     } catch (error) {
-      if(owner.mounted)Alert.alert('Login failed', 'The Account ID or password is incorrect.');
+      if(owner.mounted)Alert.alert('Login failed',
+        ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(error?.code)
+          ? 'The Account ID or password is incorrect.'
+          : 'Sign-in could not be completed. Check your connection and try again.');
     } finally {
       owner.kind=null;
       if(owner.mounted)setLoading('');

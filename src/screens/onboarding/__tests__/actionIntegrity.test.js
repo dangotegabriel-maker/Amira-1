@@ -59,3 +59,12 @@ test('login failure after auth screen unmount does not alert a replacement scree
   act(() => { fireEvent.press(screen.getByText('Log in to account')); }); screen.unmount();
   await act(async () => reject(new Error('obsolete'))); expect(Alert.alert).not.toHaveBeenCalled();
 });
+
+
+test('network login failure does not accuse valid credentials and can retry',async()=>{
+ mockLogin.mockRejectedValueOnce({code:'auth/network-request-failed'}).mockResolvedValueOnce();
+ const screen=render(<Login/>);fireEvent.changeText(screen.getByPlaceholderText('Account ID'),'123456');fireEvent.changeText(screen.getByPlaceholderText('Password'),'secret');
+ await act(async()=>fireEvent.press(screen.getByText('Log in to account')));
+ expect(Alert.alert).toHaveBeenLastCalledWith('Login failed',expect.stringContaining('connection'));
+ await act(async()=>fireEvent.press(screen.getByText('Log in to account')));expect(mockLogin).toHaveBeenCalledTimes(2);
+});

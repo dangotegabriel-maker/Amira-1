@@ -1,0 +1,21 @@
+ M src/components/SponsoredCallInviteBanner.js
+ M src/context/UserContext.js
+ M src/context/__tests__/userSessionIsolation.test.js
+ M src/screens/host/HostApplicationScreen.js
+ M src/screens/host/__tests__/creatorActionIntegrity.test.js
+ M src/screens/main/ChatDetailScreen.js
+ M src/screens/main/EditProfileScreen.js
+ M src/screens/main/MatchScreen.js
+ M src/screens/main/MessageHomeScreen.js
+ M src/screens/main/VideoCallScreen.js
+ M src/screens/main/__tests__/callPaymentUi.test.js
+ M src/screens/main/__tests__/discoveryProfileUi.test.js
+ M src/screens/main/__tests__/messageEntitlementUi.test.js
+ M src/screens/main/__tests__/privacyIdentityUi.test.js
+ M src/screens/main/__tests__/screenSessionLifecycle.test.js
+ M src/screens/onboarding/LoginScreen.js
+ M src/screens/onboarding/__tests__/actionIntegrity.test.js
+ M src/services/__tests__/hostApplicationService.test.js
+ M src/services/hostApplicationService.js
+?? docs/error-recovery-audit-git-status.txt
+?? docs/error-recovery-audit-report.md

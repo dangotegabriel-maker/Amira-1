@@ -23,6 +23,7 @@ const mockCalls = {
   getRtcCredentials: jest.fn(async () => ({ token: 'test' })), acknowledgeConnected: jest.fn(async () => ({})),
   syncPaymentState: jest.fn(async () => ({ serverNowMs: Date.now() })),
   confirmPaid: jest.fn(async () => ({ billingMode: 'paid' })), settleIncrement: jest.fn(async () => ({})),
+  reportConnection: jest.fn(async () => ({})),
   end: jest.fn(async () => ({ durationSeconds: 30, billedCredits: 5 })),
 };
 jest.mock('../../../context/UserContext', () => ({ useUser: () => ({authenticatedSession:mockAuthenticatedSession, user: mockUser, coins: 100 }) }));
@@ -225,4 +226,57 @@ test('CallSummary rating submits once for rapid presses and releases after a fai
  act(()=>{fireEvent.press(screen.getByText('Submit review'));fireEvent.press(screen.getByText('Submit review'));});expect(review.submit).toHaveBeenCalledTimes(1);
  await act(async()=>reject(new Error('offline')));
  await act(async()=>fireEvent.press(screen.getByText('Submit review')));expect(review.submit).toHaveBeenCalledTimes(2);expect(screen.getByText('Thank you for your review')).toBeTruthy();
+});
+
+
+test('lost end acknowledgement never resumes connection evidence after RTC has left',async()=>{
+ let rtcEvent;mockRtc.subscribe.mockImplementationOnce(callback=>{rtcEvent=callback;return()=>{};});
+ mockCalls.end.mockRejectedValueOnce(new Error('lost acknowledgement'));
+ const call={...pendingCall(),billingMode:'paid',accountingVersion:3,connection:{epoch:1,state:'connected',connectedMs:0,segmentStartedAtMs:Date.now(),leaseUntilMs:Date.now()+60000}};
+ mockCalls.reportConnection.mockResolvedValue(call);
+ const screen=await open(call);await act(async()=>rtcEvent({type:'remoteJoined',uid:2}));
+ expect(mockCalls.reportConnection).toHaveBeenCalled();
+ await act(async()=>fireEvent.press(screen.getByLabelText('End Call')));await flush();
+ mockCalls.reportConnection.mockClear();
+ await act(async()=>{rtcEvent({type:'remoteJoined',uid:2});jest.advanceTimersByTime(15000);});await flush();
+ expect(mockCalls.reportConnection).not.toHaveBeenCalled();expect(navigation.replace).not.toHaveBeenCalled();
+ expect(screen.getByText('Call end not confirmed. Retry End Call.')).toBeTruthy();screen.unmount();
+});
+
+test('in-flight connection report cannot apply its snapshot after RTC detaches and End fails',async()=>{
+ let rtcEvent,resolveReport;
+ mockRtc.subscribe.mockImplementationOnce(callback=>{rtcEvent=callback;return()=>{};});
+ mockCalls.reportConnection.mockReturnValueOnce(new Promise(resolve=>{resolveReport=resolve;}));
+ mockCalls.end.mockRejectedValueOnce(new Error('lost acknowledgement'))
+   .mockRejectedValueOnce(new Error('still unavailable'));
+ const call={...pendingCall(),billingMode:'paid',accountingVersion:3,lifecycleRevision:1,
+   connection:{epoch:1,state:'connected',connectedMs:0,segmentStartedAtMs:Date.now(),leaseUntilMs:Date.now()+60000}};
+ const screen=await open(call);
+ // Do not await the native callback: it is awaiting the manually held report.
+ act(()=>{void rtcEvent({type:'remoteJoined',uid:2});});await flush();
+ expect(mockCalls.reportConnection).toHaveBeenCalledTimes(1);
+ expect(mockCalls.reportConnection).toHaveBeenCalledWith('call-1',{state:'connected',sequence:1,epoch:1});
+ await act(async()=>fireEvent.press(screen.getByLabelText('End Call')));await flush();
+ expect(mockRtc.leaveSession).toHaveBeenCalledTimes(1);
+ expect(mockCalls.end).toHaveBeenCalledTimes(1);
+ expect(screen.getByText('Call end not confirmed. Retry End Call.')).toBeTruthy();
+ expect(navigation.replace).not.toHaveBeenCalled();
+
+ // Higher revision avoids passing because of revision filtering. A distinct
+ // rendered rate proves the stale response cannot update call state even though
+ // the end-error message masks phase, and the original session is still current.
+ expect(mockAuthenticatedSession.isCurrent()).toBe(true);
+ await act(async()=>resolveReport({...call,lifecycleRevision:2,ratePerMinute:987}));await flush();
+ expect(screen.queryByText('987 credits/min')).toBeNull();
+ expect(screen.getByText('25 credits/min')).toBeTruthy();
+ expect(screen.getByText('Call end not confirmed. Retry End Call.')).toBeTruthy();
+ await act(async()=>{void rtcEvent({type:'remoteJoined',uid:2});jest.advanceTimersByTime(15000);});await flush();
+ expect(mockCalls.reportConnection).toHaveBeenCalledTimes(1);
+ // Actually retry End, proving the stale response was rejected after its lock
+ // was released, rather than because End was still pending or the screen stale.
+ await act(async()=>fireEvent.press(screen.getByLabelText('End Call')));await flush();
+ expect(mockCalls.end).toHaveBeenCalledTimes(2);
+ expect(screen.getByText('Call end not confirmed. Retry End Call.')).toBeTruthy();
+ expect(navigation.replace).not.toHaveBeenCalled();expect(navigation.navigate).not.toHaveBeenCalled();
+ screen.unmount();
 });

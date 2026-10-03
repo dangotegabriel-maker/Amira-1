@@ -107,3 +107,25 @@ test('Following list serializes unfollow and keeps the row on failure',async()=>
  await act(async()=>reject(new Error('offline')));expect(screen.getByText('Unfollow')).toBeTruthy();expect(Alert.alert).toHaveBeenLastCalledWith('Unable to unfollow','Please try again.');
  await act(async()=>fireEvent.press(screen.getByText('Unfollow')));expect(mockFollow.unfollowHost).toHaveBeenCalledTimes(2);expect(screen.queryByText('Unfollow')).toBeNull();
 });
+
+
+test('sponsored invitation read failure has an explicit retry instead of disappearing',async()=>{
+ const service=require('../../../services/sponsoredInviteService').sponsoredInviteService;
+ service.pending.mockRejectedValueOnce(new Error('offline'));
+ const screen=render(<Home navigation={{}}/>);await flush();
+ expect(screen.getByText('Invitations could not be loaded.')).toBeTruthy();
+ service.pending.mockResolvedValueOnce({invites:[]});
+ await act(async()=>fireEvent.press(screen.getByText('Retry invitations')));
+ expect(screen.queryByText('Invitations could not be loaded.')).toBeNull();screen.unmount();
+});
+
+test('Quick Match cancellation uncertainty remains visible and retry uses the same request',async()=>{
+ const service=require('../../../services/quickMatchService').quickMatchService;
+ service.start.mockResolvedValueOnce({requestId:'q',status:'offering'});service.cancel.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({requestId:'q',status:'cancelled'});
+ const screen=render(<Match navigation={{}}/>);await flush();
+ await act(async()=>fireEvent.press(screen.getByText('Start Quick Match')));
+ await act(async()=>fireEvent.press(screen.getByText('Cancel')));
+ expect(screen.getByText('Quick Match result not confirmed. Please retry.')).toBeTruthy();
+ await act(async()=>fireEvent.press(screen.getByText('Cancel')));
+ expect(service.cancel.mock.calls.map(args=>args[0])).toEqual(['q','q']);screen.unmount();
+});

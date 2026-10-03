@@ -38,15 +38,16 @@ const VideoCallScreen = ({ route, navigation }) => {
   const [nowMs, setNowMs] = useState(Date.now());
   const clockOffset = useRef(0), syncPending = useRef(false), lastSync = useRef(0);
   const rtcEvidence = useRef(false), eventSequence = useRef(0), eventQueue = useRef(Promise.resolve());
+  const rtcDetached = useRef(false);
   const reportConnection = (state) => {
     eventQueue.current = eventQueue.current.catch(() => {}).then(async () => {
-      if (!sessionCurrent()) return;
+      if (!sessionCurrent() || rtcDetached.current) return;
       const current = callRef.current;
       if (endedRef.current || ![2,3].includes(current?.accountingVersion) || !['connected','reconnecting'].includes(current.status)) return;
       if (state === 'connected' && !rtcEvidence.current) return;
       const sequence = ++eventSequence.current;
       const value = await callService.reportConnection(current.callId || current.id, { state, sequence, epoch: current.connection.epoch });
-      if (sessionCurrent() && !endedRef.current && (value.lifecycleRevision || 0) >= (callRef.current?.lifecycleRevision || 0)) { callRef.current = value; setCall(value); setPhase(value.status); }
+      if (sessionCurrent() && !endedRef.current && !rtcDetached.current && (value.lifecycleRevision || 0) >= (callRef.current?.lifecycleRevision || 0)) { callRef.current = value; setCall(value); setPhase(value.status); }
     }).catch(() => {});
     return eventQueue.current;
   };
@@ -69,6 +70,10 @@ const VideoCallScreen = ({ route, navigation }) => {
   const finish = async (reason = 'participant_ended') => {
     if (!sessionCurrent() || endedRef.current) return;
     endedRef.current = true;
+    // Leaving RTC invalidates connection evidence even if the authoritative end
+    // response is lost. A retryable end must never restart connected heartbeats.
+    rtcDetached.current = true; rtcEvidence.current = false;
+    setRtcReady(false); setRemoteUid(null); setGiftOpen(false);
     setEndError(false);
     clearTimeout(reconnectRef.current);
     await rtcService.leaveSession().catch(() => {});
@@ -120,7 +125,7 @@ const VideoCallScreen = ({ route, navigation }) => {
   useEffect(() => {
     if (!sessionCurrent()) return undefined;
     endedRef.current = false; joinedRef.current = false; setEndError(false);
-    rtcEvidence.current = false; eventSequence.current = 0; eventQueue.current = Promise.resolve();
+    rtcDetached.current = false; rtcEvidence.current = false; eventSequence.current = 0; eventQueue.current = Promise.resolve();
     syncPending.current = false; lastSync.current = 0; clockOffset.current = 0; reconnectRef.current = null;
     setRtcReady(false); setRemoteUid(null); setClockReady(initialCall?.simulated === true);
     setGiftOpen(false); setGiftNotice(null); clearTimeout(giftTimer.current);
@@ -139,7 +144,7 @@ const VideoCallScreen = ({ route, navigation }) => {
       reconnectRef.current = setTimeout(() => { if(sessionCurrent())finishRef.current(reason); }, RTC_RECONNECT_GRACE_SECONDS * 1000);
     };
     const off = rtcService.subscribe(async (event) => {
-      if (!active || !sessionCurrent() || endedRef.current) return;
+      if (!active || !sessionCurrent() || endedRef.current || rtcDetached.current) return;
       if (event.type === 'remoteJoined') {
         clearTimeout(reconnectRef.current); reconnectRef.current = null;
         rtcEvidence.current = true;

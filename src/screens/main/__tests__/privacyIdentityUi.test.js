@@ -8,15 +8,15 @@ const mockIdentity={calls:jest.fn(),blocked:jest.fn()};
 const mockBlock={unblock:jest.fn()};
 const mockCall={respond:jest.fn()};
 const mockHistory={listPage:jest.fn()};
-let mockNotices=[];const mockNoticeRead=jest.fn();
+let mockNotices=[];const mockNoticeRead=jest.fn(),mockInboxSubscribe=jest.fn(),mockNoticesSubscribe=jest.fn();
 jest.mock('../../../context/UserContext',()=>({useUser:()=>({authenticatedSession:mockAuthenticatedSession,user:{uid:mockUid,hostStatus:{isApproved:false}}})}));
 jest.mock('@react-navigation/native',()=>({useIsFocused:()=>true,useFocusEffect:callback=>require('react').useEffect(callback,[callback])}));
 jest.mock('../../../services/publicIdentityService',()=>({publicIdentityService:mockIdentity}));
 jest.mock('../../../services/blockService',()=>({blockService:mockBlock}));
 jest.mock('../../../services/callService',()=>({callService:mockCall}));
 jest.mock('../../../services/callHistoryService',()=>({callHistoryService:mockHistory}));
-jest.mock('../../../services/messagingService',()=>({messagingService:{subscribeInbox:callback=>{callback([]);return ()=>{};}}}));
-jest.mock('../../../services/noticeService',()=>({noticeService:{subscribe:callback=>{callback(mockNotices);return ()=>{};},markRead:mockNoticeRead}}));
+jest.mock('../../../services/messagingService',()=>({messagingService:{subscribeInbox:(...args)=>mockInboxSubscribe(...args)}}));
+jest.mock('../../../services/noticeService',()=>({noticeService:{subscribe:(...args)=>mockNoticesSubscribe(...args),markRead:mockNoticeRead}}));
 jest.mock('../../../services/presenceService',()=>({presenceService:{get:async()=>null,isOnline:()=>false}}));
 jest.mock('lucide-react-native',()=>({Bell:()=>null,MessageCircle:()=>null,Phone:()=>null}));
 const Incoming=require('../../../components/IncomingCallCard').default;
@@ -25,7 +25,7 @@ const Messages=require('../MessageHomeScreen').default;
 const navigation={navigate:jest.fn(),setParams:jest.fn()};
 const call={callId:'call',callerId:'caller',expiresAtMs:0};
 const historyRecord={id:'call',callId:'call',callerId:'owner',receiverId:'target',participantIds:['owner','target'],status:'ended',connectedAt:new Date(Date.now()-222000),endedAt:new Date(),createdAt:new Date(Date.now()-300000),durationSeconds:222};
-beforeEach(()=>{mockNewSession();jest.clearAllMocks();mockUid='owner';mockIdentity.calls.mockResolvedValue([{callId:'call',identity:{uid:'caller',username:'Real caller',profilePic:''}}]);mockIdentity.blocked.mockResolvedValue([{uid:'target',username:'Owned blocked account',profilePic:''}]);mockHistory.listPage.mockResolvedValue({records:[],cursor:null,hasMore:false});});
+beforeEach(()=>{mockNewSession();jest.clearAllMocks();mockInboxSubscribe.mockImplementation(callback=>{callback([]);return()=>{};});mockNoticesSubscribe.mockImplementation(callback=>{callback(mockNotices);return()=>{};});mockUid='owner';mockIdentity.calls.mockResolvedValue([{callId:'call',identity:{uid:'caller',username:'Real caller',profilePic:''}}]);mockIdentity.blocked.mockResolvedValue([{uid:'target',username:'Owned blocked account',profilePic:''}]);mockHistory.listPage.mockResolvedValue({records:[],cursor:null,hasMore:false});});
 test('incoming card requests call-authorized identity and leaves response actions intact',async()=>{
  const screen=render(<Incoming call={call} navigation={navigation}/>);await act(async()=>{});
  expect(screen.getByText('Real caller')).toBeTruthy();expect(mockIdentity.calls).toHaveBeenCalledWith(['call']);
@@ -115,4 +115,21 @@ test('notice read failure is visible without local success',async()=>{
  fireEvent.press(screen.getByText('NOTICES'));await act(async()=>fireEvent.press(screen.getByText('A notice')));
  expect(mockNoticeRead).toHaveBeenCalledWith('notice');expect(alert).toHaveBeenCalledWith('Notice not marked read','Please try again.');
  mockNotices=[];alert.mockRestore();
+});
+
+
+test.each(['inbox','notices'])('%s failure is visible, retry cleans up, and obsolete callbacks cannot clear the error',async kind=>{
+ const records=[],subscribe=kind==='inbox'?mockInboxSubscribe:mockNoticesSubscribe;
+ subscribe.mockImplementation((value,error)=>{const stop=jest.fn();records.push({value,error,stop});return stop;});
+ const screen=render(<Messages navigation={navigation} route={{params:{}}}/>);await act(async()=>{});
+ if(kind==='notices')fireEvent.press(screen.getByText('NOTICES'));
+ act(()=>records[0].error(new Error('offline')));
+ expect(screen.queryByText(kind==='inbox'?'No conversations yet.':'No notices yet.')).toBeNull();
+ fireEvent.press(screen.getByText('Retry updates'));
+ expect(records[0].stop).toHaveBeenCalledTimes(1);expect(records).toHaveLength(2);
+ act(()=>{records[1].error(new Error('offline'));records[0].value([]);});
+ expect(screen.getByText('Retry updates')).toBeTruthy();
+ await act(async()=>{await records[1].value([]);});
+ expect(screen.getByText(kind==='inbox'?'No conversations yet.':'No notices yet.')).toBeTruthy();
+ screen.unmount();expect(records[1].stop).toHaveBeenCalledTimes(1);
 });
