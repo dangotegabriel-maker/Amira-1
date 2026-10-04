@@ -82,13 +82,16 @@ export const UserProvider = ({ children }) => {
     if (current(session)) return resolveProfile(session.authUser, session.lifecycle);
     return Promise.resolve();
   };
-  const refreshUser = async () => {
+  const refreshUser = async ({ recoverOnFailure = false } = {}) => {
     if (!current(session)) return;
     try {
       const profile = await dbService.getUserProfile(session.authUser.uid);
       commitProfile(session, profile);
     } catch (error) {
       if (!current(session)) return;
+      // Callers with an acknowledged write can recover hydration without
+      // reclassifying that write as failed. Only this captured owner may recover.
+      if (recoverOnFailure) { failProfile(session); return; }
       throw error;
     }
   };

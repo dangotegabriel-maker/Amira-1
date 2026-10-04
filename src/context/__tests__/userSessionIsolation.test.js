@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert, TouchableOpacity } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockAuth = { currentUser: null };
@@ -9,6 +10,7 @@ const mockSignOut = jest.fn(), mockStorage = jest.fn(), mockDisconnect = jest.fn
 const mockListeners = [];
 jest.mock('../../services/firebaseService', () => ({
   auth: mockAuth,
+  authService: { updateUserProfile: jest.fn(async () => ({ success: true })) },
   onAuthStateChanged: jest.fn((_auth, callback) => { mockAuthCallback = callback; return mockAuthStop; }),
   firebaseSignOut: (...args) => mockSignOut(...args),
   getWalletBalance: profile => profile.wallet.creditBalance,
@@ -27,10 +29,20 @@ jest.mock('../../services/amiraIdentityService', () => ({ amiraIdentityService: 
 jest.mock('../../services/socketService', () => ({ socketService: { disconnect: () => mockDisconnect() } }));
 jest.mock('../../services/applicationStorageService', () => ({ applicationStorageService: { clearAccountSession: () => mockStorage() } }));
 jest.mock('@react-native-community/datetimepicker', () => () => null);
+jest.mock('expo-image', () => ({ Image: () => null }));
+jest.mock('expo-image-picker', () => ({
+  requestMediaLibraryPermissionsAsync: async () => ({ granted: true }),
+  launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'local-test-photo' }] }),
+  MediaTypeOptions: { Images: 'images' },
+}));
+jest.mock('../../services/mediaService', () => ({ mediaService: {
+  uploadUserMedia: jest.fn(async () => ({ url: 'https://example.com/saved-photo' })),
+} }));
 
 const { UserProvider, useUser } = require('../UserContext');
 const Name = require('../../screens/onboarding/NameSetupScreen').default;
 const Birthday = require('../../screens/onboarding/BirthdaySetupScreen').default;
+const EditProfile = require('../../screens/main/EditProfileScreen').default;
 const profile = (uid, coins = 10, approved = false) => ({ uid, username: uid, dob: '1990-01-01', gender: 'other', countryCode: 'GH', hostStatus: { isApproved: approved }, wallet: { creditBalance: coins } });
 const deferred = () => {
   let resolve, reject;
@@ -227,4 +239,81 @@ test('confirmed onboarding write with failed refresh enters profile recovery wit
  mockEnsure.mockResolvedValueOnce({...profile('a'),gender:'female'});
  await act(async()=>session.retryProfile());
  expect(session.bootstrapStatus).toBe('ready');expect(session.user.gender).toBe('female');expect(mockUpdate).toHaveBeenCalledTimes(1);
+});
+
+
+// Model the existing root boundary: profile_error replaces the editing screen.
+const ReadyEdit = ({ navigation }) => {
+  const context = useUser();
+  return context.bootstrapStatus === 'ready' ? <EditProfile navigation={navigation} /> : null;
+};
+const pressEdit = async (screen, kind) => {
+  if (kind === 'profile') fireEvent.changeText(screen.getByPlaceholderText('Your name'), 'Alice');
+  const name = kind === 'photo' ? 'updatePhoto' : 'handleSave';
+  const button = screen.UNSAFE_getAllByType(TouchableOpacity).find(node => node.props.onPress?.name === name);
+  await act(async () => button.props.onPress());
+};
+
+test.each(['profile', 'photo'])('acknowledged Edit %s write with failed refresh enters recovery without claiming write failure', async kind => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    const navigation = { goBack: jest.fn() };
+    const screen = mount(<ReadyEdit navigation={navigation} />); await ready();
+    mockUpdate.mockResolvedValueOnce({ success: true }); mockRead.mockRejectedValueOnce(new Error('offline'));
+    await pressEdit(screen, kind);
+    expect(mockUpdate).toHaveBeenCalledWith('a', expect.objectContaining(kind === 'photo'
+      ? { profilePic: 'https://example.com/saved-photo' } : { username: 'Alice' }));
+    expect(session.bootstrapStatus).toBe('profile_error'); expect(session.user).toBeNull();
+    expect(mockAuth.currentUser.uid).toBe('a'); expect(mockListeners[0].stop).toHaveBeenCalledTimes(1);
+    expect(alert).not.toHaveBeenCalled(); expect(navigation.goBack).not.toHaveBeenCalled();
+    mockEnsure.mockResolvedValueOnce({ ...profile('a'), username: 'Alice', profilePic: 'https://example.com/saved-photo' });
+    await act(async () => session.retryProfile());
+    expect(session.bootstrapStatus).toBe('ready'); expect(mockUpdate).toHaveBeenCalledTimes(1);
+  } finally { alert.mockRestore(); }
+});
+
+test.each(['a', 'b'])('pending Edit refresh cannot put replacement account %s into profile_error', async uid => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    const navigation = { goBack: jest.fn() };
+    const screen = mount(<ReadyEdit navigation={navigation} />); await ready();
+    const oldRefresh = session.refreshUser, pending = deferred();
+    mockUpdate.mockResolvedValueOnce({ success: true }); mockRead.mockReturnValueOnce(pending.promise);
+    await pressEditStart(screen);
+    expect(mockRead).toHaveBeenCalledTimes(1);
+    await ready(uid, 88); await settle(pending, 'reject', new Error('obsolete read'));
+    await act(async () => oldRefresh({ recoverOnFailure: true }));
+    expect(mockRead).toHaveBeenCalledTimes(1);
+    expect(session.bootstrapStatus).toBe('ready'); expect(session.user.uid).toBe(uid); expect(session.coins).toBe(88);
+    expect(mockListeners[1].stop).not.toHaveBeenCalled(); expect(alert).not.toHaveBeenCalled();
+    expect(navigation.goBack).not.toHaveBeenCalled();
+  } finally { alert.mockRestore(); }
+});
+
+async function pressEditStart(screen) {
+  fireEvent.changeText(screen.getByPlaceholderText('Your name'), 'Alice');
+  const button = screen.UNSAFE_getAllByType(TouchableOpacity).find(node => node.props.onPress?.name === 'handleSave');
+  await act(async () => { void button.props.onPress(); });
+}
+
+test('ordinary successful Edit Profile save refreshes authoritative data and returns', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    const navigation = { goBack: jest.fn() }, screen = mount(<ReadyEdit navigation={navigation} />); await ready();
+    mockUpdate.mockResolvedValueOnce({ success: true }); mockRead.mockResolvedValueOnce({ ...profile('a'), username: 'Alice' });
+    await pressEdit(screen, 'profile');
+    expect(session.bootstrapStatus).toBe('ready'); expect(session.user.username).toBe('Alice');
+    expect(alert).toHaveBeenCalledWith('Success', 'Profile updated successfully!'); expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  } finally { alert.mockRestore(); }
+});
+
+test.each(['profile', 'photo'])('unconfirmed Edit %s write remains a write failure and does not activate hydration recovery', async kind => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  try {
+    const navigation = { goBack: jest.fn() }, screen = mount(<ReadyEdit navigation={navigation} />); await ready();
+    mockUpdate.mockRejectedValueOnce(new Error('write not confirmed')); await pressEdit(screen, kind);
+    expect(mockRead).not.toHaveBeenCalled(); expect(session.bootstrapStatus).toBe('ready');
+    expect(alert).toHaveBeenCalledWith(kind === 'photo' ? 'Upload failed' : 'Error', expect.any(String));
+    expect(navigation.goBack).not.toHaveBeenCalled();
+  } finally { alert.mockRestore(); }
 });

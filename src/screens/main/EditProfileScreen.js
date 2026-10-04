@@ -38,7 +38,7 @@ const EditProfileScreen = ({ navigation }) => {
       if(!current())return;
       setProfilePic(media.url);
       if(!current())return;
-      try { await refreshUser(); }
+      try { await refreshUser({ recoverOnFailure: true }); }
       catch (_) { if(current())Alert.alert('Photo saved', 'Your photo was saved. Profile refresh is unavailable; reopen your profile to check it.'); }
       if(!current())return;
     } catch (error) { if(current())Alert.alert('Upload failed', error.message || 'Please try again.'); }
@@ -71,7 +71,7 @@ const EditProfileScreen = ({ navigation }) => {
         updatedAt: new Date(),
       });
       if(!current())return;
-      try { await refreshUser(); }
+      try { await refreshUser({ recoverOnFailure: true }); }
       catch (_) {
         if(current())Alert.alert('Profile saved', 'Your changes were saved. Profile refresh is unavailable; reopen your profile to check them.');
         return;
