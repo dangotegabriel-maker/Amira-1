@@ -32,7 +32,7 @@ const EditProfileScreen = ({ navigation }) => {
     if(!current())return;
     if (result.canceled) return;
     setLoading(true);
-      const media = await mediaService.uploadUserMedia({ asset: result.assets[0], category: 'profile', kind: 'image' });
+      const media = await mediaService.uploadUserMedia({ isCurrent: current, asset: result.assets[0], category: 'profile', kind: 'image' });
       if(!current())return;
       await dbService.updateUserProfile(user.uid, { profilePic: media.url, updatedAt: new Date() });
       if(!current())return;
@@ -62,7 +62,6 @@ const EditProfileScreen = ({ navigation }) => {
         return;
       }
 
-      console.log('UID:', currentAuthUser.uid);
       await authService.updateUserProfile({ displayName: validation.value });
       if(!current())return;
       await dbService.updateUserProfile(currentAuthUser.uid, {
@@ -81,7 +80,7 @@ const EditProfileScreen = ({ navigation }) => {
       navigation.goBack();
     } catch (e) {
       if(!current())return;
-      console.log('FIRESTORE ERROR:', e);
+      console.log('FIRESTORE ERROR:', e?.code || 'unknown');
       Alert.alert("Error", "Failed to update profile.");
     } finally {
       if(current())setLoading(false);

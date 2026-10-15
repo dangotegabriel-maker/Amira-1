@@ -1,7 +1,7 @@
 let mockAuthenticatedSession;
 const mockNewSession=()=>{const token={isCurrent:()=>mockAuthenticatedSession===token};mockAuthenticatedSession=token;};
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 // React Native's first component render can require slow cold transforms on Windows.
@@ -60,6 +60,7 @@ const open = async (call = pendingCall()) => {
 };
 
 beforeEach(() => {mockNewSession();
+  AppState.currentState = 'active';
   jest.useFakeTimers().setSystemTime(new Date('2026-09-08T12:00:00Z'));
   jest.clearAllMocks();
   mockUser = { uid: 'consumer', role: 'consumer', vip: { tier: 'VIP_3', status: 'active' } };
@@ -279,4 +280,81 @@ test('in-flight connection report cannot apply its snapshot after RTC detaches a
  expect(screen.getByText('Call end not confirmed. Retry End Call.')).toBeTruthy();
  expect(navigation.replace).not.toHaveBeenCalled();expect(navigation.navigate).not.toHaveBeenCalled();
  screen.unmount();
+});
+
+
+test.each(['permission','credentials'])('pending RTC %s cannot join after End detaches and acknowledgement fails',async stage=>{
+ let resolve;const pending=new Promise(done=>{resolve=done;});
+ if(stage==='permission')mockRtc.requestPermissions.mockReturnValueOnce(pending);
+ else mockCalls.getRtcCredentials.mockReturnValueOnce(pending);
+ mockCalls.end.mockRejectedValueOnce(new Error('lost acknowledgement'));
+ const screen=await open({...pendingCall(),status:'connecting',billingMode:'preview'});
+ expect(mockRtc.joinSession).not.toHaveBeenCalled();
+ await act(async()=>fireEvent.press(screen.getByLabelText('End Call')));await flush();
+ expect(screen.getByText('Call end not confirmed. Retry End Call.')).toBeTruthy();
+ expect(mockAuthenticatedSession.isCurrent()).toBe(true);
+ await act(async()=>resolve(stage==='credentials'?{token:'late-token'}:undefined));await flush();
+ expect(mockRtc.joinSession).not.toHaveBeenCalled();expect(mockRtc.setCameraEnabled).not.toHaveBeenCalled();
+ expect(navigation.replace).not.toHaveBeenCalled();
+ await act(async()=>fireEvent.press(screen.getByLabelText('End Call')));await flush();
+ expect(mockCalls.end).toHaveBeenCalledTimes(2);screen.unmount();
+});
+
+test('media publishing failure detaches RTC and uses authoritative End',async()=>{
+ mockRtc.setCameraEnabled.mockRejectedValueOnce(new Error('Unable to update video publishing.'));
+ const screen=await open();await flush();
+ expect(mockRtc.leaveSession).toHaveBeenCalledTimes(1);
+ expect(mockCalls.end).toHaveBeenCalledWith('call-1','media_pause_failed');
+ expect(navigation.replace).toHaveBeenCalledTimes(1);screen.unmount();
+});
+
+test('accounting v3 rejects an older subscription revision without restoring paid media',async()=>{
+ const call={...pendingCall(),accountingVersion:3,lifecycleRevision:8};
+ const screen=await open(call);
+ await act(async()=>mockListener({...call,lifecycleRevision:7,billingMode:'paid',ratePerMinute:987}));
+ expect(screen.queryByText('987 credits/min')).toBeNull();
+ expect(screen.getByText('Starting paid continuation…')).toBeTruthy();
+ expect(mockRtc.setCameraEnabled).toHaveBeenLastCalledWith(false);
+ await act(async()=>mockListener({...call,lifecycleRevision:9,billingMode:'paid'}));
+ expect(mockRtc.setCameraEnabled).toHaveBeenLastCalledWith(true);
+ screen.unmount();
+});
+
+test.each(['permission','credentials'])('backgrounding during RTC %s detaches even when End acknowledgement fails',async stage=>{
+ const callbacks=new Set();
+ jest.spyOn(AppState,'addEventListener').mockImplementation((_event,callback)=>{callbacks.add(callback);return {remove:()=>callbacks.delete(callback)};});
+ let resolve;const pending=new Promise(done=>{resolve=done;});
+ if(stage==='permission')mockRtc.requestPermissions.mockReturnValueOnce(pending);
+ else mockCalls.getRtcCredentials.mockReturnValueOnce(pending);
+ mockCalls.end.mockRejectedValueOnce(new Error('lost acknowledgement'));
+ const screen=await open({...pendingCall(),status:'connecting'});
+ await act(async()=>{AppState.currentState='background';callbacks.forEach(callback=>callback('background'));});await flush();
+ expect(mockCalls.end).toHaveBeenCalledWith('call-1','app_backgrounded');
+ await act(async()=>{AppState.currentState='active';callbacks.forEach(callback=>callback('active'));resolve({token:'late'});});await flush();
+ expect(mockRtc.joinSession).not.toHaveBeenCalled();
+ expect(navigation.replace).not.toHaveBeenCalled();
+ expect(screen.getByText('Call end not confirmed. Retry End Call.')).toBeTruthy();
+ screen.unmount();
+});
+
+test('a connecting snapshot received while backgrounded cannot start RTC',async()=>{
+ AppState.currentState='background';
+ mockCalls.end.mockRejectedValueOnce(new Error('lost acknowledgement'));
+ const screen=await open({...pendingCall(),status:'connecting'});
+ expect(mockRtc.requestPermissions).not.toHaveBeenCalled();
+ expect(mockRtc.joinSession).not.toHaveBeenCalled();
+ expect(mockCalls.end).toHaveBeenCalledWith('call-1','app_backgrounded');
+ expect(navigation.replace).not.toHaveBeenCalled();screen.unmount();
+});
+
+test('temporary inactivity during a permission prompt does not abandon connecting RTC',async()=>{
+ const callbacks=new Set();
+ jest.spyOn(AppState,'addEventListener').mockImplementation((_event,callback)=>{callbacks.add(callback);return {remove:()=>callbacks.delete(callback)};});
+ let resolve;mockRtc.requestPermissions.mockReturnValueOnce(new Promise(done=>{resolve=done;}));
+ const screen=await open({...pendingCall(),status:'connecting'});
+ act(()=>{AppState.currentState='inactive';callbacks.forEach(callback=>callback('inactive'));});
+ expect(mockCalls.end).not.toHaveBeenCalled();
+ await act(async()=>{AppState.currentState='active';callbacks.forEach(callback=>callback('active'));resolve();});await flush();
+ expect(mockRtc.joinSession).toHaveBeenCalledTimes(1);
+ expect(mockCalls.end).not.toHaveBeenCalled();screen.unmount();
 });

@@ -57,10 +57,14 @@ const validateAsset = (asset, kind) => {
 };
 
 export const mediaService = {
-  uploadUserMedia: async ({ asset, category, kind = 'image', includeDownloadUrl = true }) => {
-    if (process.env.EXPO_PUBLIC_ENABLE_MEDIA_UPLOADS !== 'true') throw new Error('Media uploads are temporarily unavailable during development.');
+  uploadUserMedia: async ({ asset, category, kind = 'image', includeDownloadUrl = true, isCurrent = () => true }) => {
+    if (process.env.EXPO_PUBLIC_ENABLE_MEDIA_UPLOADS !== 'true') throw new Error('Media uploads are temporarily unavailable.');
     const currentUser = auth.currentUser;
     if (!currentUser?.uid) throw friendlyUploadError({ code: 'storage/unauthenticated' });
+    const checkSession = () => {
+      if (auth.currentUser !== currentUser || !isCurrent()) throw friendlyUploadError({ code: 'storage/canceled' });
+    };
+    checkSession();
     const safeCategory = validateCategory(category);
     const { contentType, limitBytes, extension } = validateAsset(asset, kind);
     const objectPath = `users/${currentUser.uid}/${safeCategory}/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
@@ -68,14 +72,18 @@ export const mediaService = {
     diagnostic('prepared', { authenticated: true, uid: currentUser.uid, uri: isPrivateEvidence ? '[private verification URI omitted]' : asset.uri, uriScheme: String(asset.uri).split(':')[0], mimeType: contentType, pickerFileSize: asset.fileSize || null, path: objectPath, bucket: firebaseConfig.storageBucket });
     try {
       await currentUser.getIdToken();
+      checkSession();
       const file = new File(asset.uri);
       const bytes = await file.bytes();
+      checkSession();
       if (!bytes?.byteLength) throw new Error('The selected media file could not be read. Please select it again.');
       if (bytes.byteLength > limitBytes) throw new Error(`${kind === 'video' ? 'Video' : 'Image'} is too large. Maximum size is ${kind === 'video' ? '40 MB' : '8 MB'}.`);
       diagnostic('payload-ready', { byteLength: bytes.byteLength, path: objectPath });
       const objectRef = ref(storage, objectPath);
       await uploadBytes(objectRef, bytes, { contentType, customMetadata: { ownerUid: currentUser.uid, mediaCategory: safeCategory } });
+      checkSession();
       const result = { ...(includeDownloadUrl ? { url: await getDownloadURL(objectRef) } : {}), path: objectPath, contentType, size: bytes.byteLength };
+      checkSession();
       diagnostic('complete', { path: objectPath, contentType, size: bytes.byteLength, hasDownloadUrl: Boolean(result.url) });
       return result;
     } catch (error) {
@@ -83,10 +91,18 @@ export const mediaService = {
       throw friendlyUploadError(error);
     }
   },
-  deleteOwnedMedia: async (path) => {
-    const uid = auth.currentUser?.uid;
+  deleteOwnedMedia: async (path, { isCurrent = () => true } = {}) => {
+    const currentUser = auth.currentUser;
+    const uid = currentUser?.uid;
     if (!uid) throw friendlyUploadError({ code: 'storage/unauthenticated' });
     if (!String(path || '').startsWith(`users/${uid}/`)) throw new Error('This media file cannot be removed.');
+    const checkSession = () => {
+      if (auth.currentUser !== currentUser || !isCurrent()) throw friendlyUploadError({ code: 'storage/canceled' });
+    };
+    checkSession();
+    await currentUser.getIdToken();
+    checkSession();
     await deleteObject(ref(storage, path));
+    checkSession();
   },
 };

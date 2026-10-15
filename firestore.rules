@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function owns(uid) { return signedIn() && request.auth.uid == uid; }
-    function admin() { return signedIn() && request.auth.token.admin == true; }
+    function admin() { return signedIn() && request.auth.token.get('admin', false) == true; }
     function approvedHost(data) { return data.get('hostStatus', {}).get('isApproved', false) == true; }
     function consumer(data) { return !approvedHost(data); }
     function participant(data) { return signedIn() && request.auth.uid in data.participantIds; }
@@ -249,7 +249,37 @@ service cloud.firestore {
     match /hostApplications/{uid} {
       allow read: if owns(uid) || admin();
       function applicant() { return owns(uid) && consumer(get(/databases/$(database)/documents/users/$(uid)).data); }
-      function applicationPayload() { return request.resource.data.ownerUid == uid && request.resource.data.status in ['in_progress', 'submitted']; }
+      // Submission can reference only this owner's private guided captures.
+      // Public gallery/profile files remain editable and are not evidence.
+      function privateCapturePath(path, slot) {
+        let parts = path.split('/');
+        return parts.size() == 5 && parts[0] == 'users' && parts[1] == uid
+          && parts[2] == 'verification' && parts[3] == slot && parts[4].size() > 0;
+      }
+      function privateCapture(item, slot, order) {
+        return item is map
+          && item.keys().hasAll(['path', 'order'])
+          && item.keys().hasOnly(['path', 'order', 'action', 'contentType', 'size'])
+          && item.path is string && item.order is int && item.order == order
+          && item.get('action', '') is string && item.get('contentType', '') is string
+          && item.get('size', 0) is int
+          && privateCapturePath(item.path, slot);
+      }
+      function fivePrivateCaptures(evidence) {
+        return evidence is list && evidence.size() == 5
+          && privateCapture(evidence[0], '1', 0) && privateCapture(evidence[1], '2', 1)
+          && privateCapture(evidence[2], '3', 2) && privateCapture(evidence[3], '4', 3)
+          && privateCapture(evidence[4], '5', 4);
+      }
+      function submittedEvidence() {
+        let verification = request.resource.data.get('verification', {});
+        return verification is map && fivePrivateCaptures(verification.get('evidence', []));
+      }
+      function applicationPayload() {
+        return request.resource.data.get('ownerUid', null) == uid
+          && request.resource.data.get('status', '') in ['in_progress', 'submitted']
+          && (request.resource.data.status != 'submitted' || submittedEvidence());
+      }
       allow create: if applicant() && applicationPayload() && request.resource.data.keys().hasOnly(['ownerUid','status','details','media','verification','payoutSetup','updatedAt','submittedAt']);
       allow update: if applicant() && applicationPayload()
         && resource.data.status in ['draft','in_progress','incomplete','rejected','needs_changes','action_required']

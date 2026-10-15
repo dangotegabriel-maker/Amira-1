@@ -37,6 +37,16 @@ const { UserProvider, useUser } = require('../../context/UserContext');
 
 beforeEach(() => jest.clearAllMocks());
 
+test('active profile paths do not dump authenticated IDs or raw Firebase errors to logs', () => {
+  for (const file of ['src/services/firebaseService.js', 'src/screens/main/EditProfileScreen.js']) {
+    const logs = source(file).split('\n').filter(line => /console\.(log|warn|error)\(/.test(line));
+    for (const line of logs) {
+      expect(line).not.toMatch(/console\..*\buid\b/i);
+      expect(line).not.toMatch(/,\s*(error|e|migrationError)\s*\)/);
+    }
+  }
+});
+
 describe('legacy local financial authority containment', () => {
   test('removes the local ledger, withdrawal, dormant debit, and legacy gifting implementation', () => {
     for (const relative of [

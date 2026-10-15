@@ -4,34 +4,50 @@ import { calculateAgeFromDob, isApprovedHost } from '../models/userModel';
 
 const applicationRef = (uid) => doc(db, 'hostApplications', uid);
 
+const captureSession = (isCurrent) => {
+  const currentUser = auth.currentUser;
+  if (!currentUser?.uid) throw new Error('Sign in required.');
+  const check = () => {
+    if (auth.currentUser !== currentUser || !isCurrent()) {
+      const error = new Error('The application session is no longer current.');
+      error.code = 'application/session-changed';
+      throw error;
+    }
+  };
+  check();
+  return { uid: currentUser.uid, check };
+};
+
 export const hostApplicationService = {
-  getApplication: async ({ requireServer = false } = {}) => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) throw new Error('Sign in required.');
+  getApplication: async ({ requireServer = false, isCurrent = () => true } = {}) => {
+    const { uid, check } = captureSession(isCurrent);
     const snapshot = await (requireServer ? getDocFromServer : getDoc)(applicationRef(uid));
+    check();
     return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
   },
-  saveDraft: async (patch) => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) throw new Error('Sign in required.');
+  saveDraft: async (patch, { isCurrent = () => true } = {}) => {
+    const { uid, check } = captureSession(isCurrent);
     return runTransaction(db, async (transaction) => {
+      check();
       const ref = applicationRef(uid);
       const [snapshot, profile] = await Promise.all([transaction.get(ref), transaction.get(doc(db, 'users', uid))]);
+      check();
       if (!profile.exists() || isApprovedHost(profile.data())) throw new Error('Consumer application required.');
       if (snapshot.exists() && ['submitted','pending','under_review','approved'].includes(snapshot.data().status)) throw new Error('Application is already under review or approved.');
       const draft = Object.fromEntries(Object.entries(patch).filter(([key]) => ['details','media','verification','payoutSetup'].includes(key)));
       transaction.set(ref, { ...draft, ownerUid: uid, status: 'in_progress', updatedAt: serverTimestamp() }, { merge: true });
     });
   },
-  submit: async () => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) throw new Error('Sign in required.');
+  submit: async ({ isCurrent = () => true } = {}) => {
+    const { uid, check } = captureSession(isCurrent);
     const appRef = applicationRef(uid);
     const userRef = doc(db, 'users', uid);
     return runTransaction(db, async (transaction) => {
+      check();
       const [applicationSnapshot, userSnapshot] = await Promise.all([
         transaction.get(appRef), transaction.get(userRef),
       ]);
+      check();
       if (!applicationSnapshot.exists() || !userSnapshot.exists()) throw new Error('Application or profile not found.');
       const application = applicationSnapshot.data();
       const user = userSnapshot.data();

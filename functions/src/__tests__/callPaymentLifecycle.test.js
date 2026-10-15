@@ -727,3 +727,156 @@ test('Activity callables bind ownership/authentication and reject forged profile
 test('Connect callables require auth, approved ownership and cannot forge Busy or overwrite a lock',async()=>{for(const name of ['getHostAvailability','getHostConnectConsumers','getHostConnectToday']){await expect(invoke(name,null,{})).rejects.toMatchObject({code:'unauthenticated'});await expect(invoke(name,'consumer',{})).rejects.toMatchObject({code:'permission-denied'});await expect(invoke(name,'host',{ownerUid:'other'})).rejects.toMatchObject({code:'invalid-argument'});}await expect(invoke('setHostAvailability','host',{availability:'busy'})).rejects.toMatchObject({code:'invalid-argument'});await expect(invoke('setHostAvailability','host',{availability:'offline'})).resolves.toMatchObject({availability:'offline'});mockDocs.set('activeCallLocks/host',{callId:'genuine'});await expect(invoke('setHostAvailability','host',{availability:'online'})).rejects.toMatchObject({code:'failed-precondition'});expect(mockDocs.get('activeCallLocks/host')).toEqual({callId:'genuine'});});
 
 test('identity callable requires authentication and rejects every client allocation parameter',async()=>{await expect(invoke('ensureAmiraId',null,{})).rejects.toMatchObject({code:'unauthenticated'});for(const data of [{uid:'other'},{amiraId:'AMR-123456'},{seed:1},{role:'host'},{createdAt:1},null,[]])await expect(invoke('ensureAmiraId','consumer',data)).rejects.toMatchObject({code:'invalid-argument'});});
+
+
+test('sponsored intro then earned FVT debits only actual reward seconds once across sync and End',async()=>{
+ mockDocs.set('economyConfig/current',{enableEarnedVideoSeconds:true,enableLegacyDailyPreview:false});
+ mockDocs.set('consumerRewards/consumer',{freeVideoSeconds:7});
+ const offer=await sponsoredInvite(),accepted=await invoke('respondToSponsoredCallInvite','consumer',{inviteId:offer.inviteId,action:'accept',termsFingerprint:offer.termsFingerprint}),callId=accepted.callId;
+ await invoke('acknowledgeVideoConnected','consumer',{callId});await invoke('acknowledgeVideoConnected','host',{callId});
+ expect(callData(callId)).toMatchObject({freeVideoSource:'sponsored_invite_plus_rewards',freeVideoAllowanceSeconds:37});
+ const connectedAt=callData(callId).connectedAtMs;
+ await advanceTo(connectedAt+30000);
+ expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(7);expect(balance()).toBe(100);
+ await advanceTo(connectedAt+34000);
+ expect(callData(callId).freeVideoConsumedSeconds).toBe(4);expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(3);
+ await invoke('syncVideoCallPaymentState','consumer',{callId});expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(3);
+ await advanceTo(connectedAt+37000);
+ expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(0);expect(callData(callId).billingMode).toBe('paid');
+ await invoke('endVideoCall','consumer',{callId});await invoke('endVideoCall','consumer',{callId});
+ expect(mockDocs.get('consumerRewards/consumer').freeVideoSeconds).toBe(0);expect(callData(callId).freeVideoConsumedSeconds).toBe(7);
+});
+
+
+test('late Quick Match state cannot extend an expired request into another Host offer',async()=>{
+ mockDocs.set('consumerRewards/consumer',{quickMatchCount:1,quickMatchReserved:0});
+ mockDocs.set('users/host2',{...mockDocs.get('users/host'),uid:'host2'});
+ await invoke('startQuickMatch','consumer',{requestId:'expired_poll',termsVersion:'automatic-paid-v3'});
+ const raw=mockDocs.get('quickMatchRequests/consumer/requests/expired_poll');
+ expect(raw.candidateIds.length).toBe(2);jest.setSystemTime(raw.expiresAtMs+1);
+ const result=await invoke('getQuickMatchState','consumer',{});
+ expect(result.status).toBe('expired');expect(mockDocs.get('consumerRewards/consumer')).toMatchObject({quickMatchCount:1,quickMatchReserved:0});
+ expect(mockDocs.has('quickMatchActive/consumer')).toBe(false);
+});
+
+
+const quickMatchReviewService = (db = mockDb) => require('../quickMatchService').createQuickMatchService({
+  db, ...require('firebase-admin/firestore'), ...require('firebase-functions/v2/https'),
+  createRtc: () => ({}),
+});
+const expiringQuickMatch = async (id = 'expiry_review') => {
+  mockDocs.set('consumerRewards/consumer', {quickMatchCount:3, quickMatchReserved:0});
+  mockDocs.set('users/host2', {...mockDocs.get('users/host'), uid:'host2'});
+  await invoke('startQuickMatch', 'consumer', {requestId:id, termsVersion:'automatic-paid-v3'});
+  return mockDocs.get(`quickMatchRequests/consumer/requests/${id}`);
+};
+
+test.each(['poll', 'accept', 'cancel', 'reconcile'])('overall Quick Match expiration via %s releases only its reservation with consistent status/reason', async path => {
+  const request = await expiringQuickMatch();
+  // Keep the individual offer alive past overall expiry, and leave a second
+  // reservation as a sentinel: clamping at zero cannot hide double release.
+  request.offerDeadlineMs = request.expiresAtMs + 20000;
+  mockDocs.get('quickMatchActive/consumer').offerDeadlineMs = request.offerDeadlineMs;
+  mockDocs.get('consumerRewards/consumer').quickMatchReserved = 2;
+  jest.setSystemTime(request.expiresAtMs);
+  const service = quickMatchReviewService();
+  const result = path === 'poll' ? await invoke('getQuickMatchState', 'consumer', {})
+    : path === 'accept' ? await invoke('respondToQuickMatch', request.offeredHostId, {consumerUid:'consumer',requestId:request.requestId,action:'accept'})
+    : path === 'cancel' ? await invoke('cancelQuickMatch','consumer',{requestId:request.requestId})
+    : await service.reconcile('consumer',{requestId:request.requestId});
+  expect(result.status).toBe('expired');
+  expect(mockDocs.get(`quickMatchRequests/consumer/requests/${request.requestId}`)).toMatchObject({status:'expired',endReason:'request_expired',fundingStatus:'released',attemptIndex:0,callId:null});
+  expect(mockDocs.has('quickMatchActive/consumer')).toBe(false);
+  expect([...mockDocs.keys()].filter(key => key.startsWith('calls/'))).toEqual([]);
+  await Promise.all([service.state('consumer'), service.cancel('consumer',{requestId:request.requestId}), service.reconcile('consumer',{requestId:request.requestId})]);
+  expect(mockDocs.get('consumerRewards/consumer')).toMatchObject({quickMatchCount:3,quickMatchReserved:1});
+});
+
+test.each(['poll','decline','timed_out_accept'])('next Quick Match offer from %s is capped to overall deadline', async path => {
+  const request = await expiringQuickMatch();
+  jest.setSystemTime(request.expiresAtMs - 1000);
+  if (path === 'poll') await invoke('getQuickMatchState','consumer',{});
+  else await invoke('respondToQuickMatch',request.offeredHostId,{consumerUid:'consumer',requestId:request.requestId,action:path === 'decline' ? 'decline' : 'accept'});
+  const next = mockDocs.get(`quickMatchRequests/consumer/requests/${request.requestId}`);
+  expect(next).toMatchObject({status:'offering',offeredHostId:'host2',attemptIndex:1,offerDeadlineMs:request.expiresAtMs});
+  expect(mockDocs.get('quickMatchActive/consumer').offerDeadlineMs).toBe(request.expiresAtMs);
+});
+
+test('concurrent expired Quick Match polls release once and cannot advance candidates', async () => {
+  const request = await expiringQuickMatch();
+  request.offerDeadlineMs = request.expiresAtMs + 20000;
+  mockDocs.get('quickMatchActive/consumer').offerDeadlineMs = request.offerDeadlineMs;
+  mockDocs.get('consumerRewards/consumer').quickMatchReserved = 2;
+  jest.setSystemTime(request.expiresAtMs);
+  const results = await Promise.all(Array.from({length:6}, () => invoke('getQuickMatchState','consumer',{})));
+  expect(results.every(result => ['expired','idle'].includes(result.status))).toBe(true);
+  expect(results.some(result => result.status === 'expired')).toBe(true);
+  expect(mockDocs.get(`quickMatchRequests/consumer/requests/${request.requestId}`)).toMatchObject({status:'expired',attemptIndex:0});
+  expect(mockDocs.get('consumerRewards/consumer')).toMatchObject({quickMatchCount:3,quickMatchReserved:1});
+});
+
+test.each(['accepted','connecting','connected'])('stale Quick Match expiry preserves %s call and reservation/consumption', async status => {
+  const request = await expiringQuickMatch();
+  const accepted = await invoke('respondToQuickMatch',request.offeredHostId,{consumerUid:'consumer',requestId:request.requestId,action:'accept'});
+  if (status === 'connected') {
+    await invoke('acknowledgeVideoConnected','consumer',{callId:accepted.callId});
+    await invoke('acknowledgeVideoConnected',request.offeredHostId,{callId:accepted.callId});
+  } else if (status === 'accepted') {
+    mockDocs.get(`quickMatchRequests/consumer/requests/${request.requestId}`).status = status;
+    mockDocs.get('quickMatchActive/consumer').status = status;
+  }
+  const before = clone([...mockDocs.entries()]);
+  jest.setSystemTime(request.expiresAtMs + 1);
+  expect((await quickMatchReviewService().reconcile('consumer',{requestId:request.requestId})).status).toBe(status);
+  expect((await invoke('getQuickMatchState','consumer',{})).status).toBe(status);
+  expect(await invoke('respondToQuickMatch',request.offeredHostId,{consumerUid:'consumer',requestId:request.requestId,action:'accept'})).toMatchObject({status,callId:accepted.callId,idempotent:true});
+  if (status === 'connected') await expect(invoke('cancelQuickMatch','consumer',{requestId:request.requestId})).rejects.toMatchObject({code:'failed-precondition'});
+  expect(clone([...mockDocs.entries()])).toEqual(before);
+});
+
+test('Quick Match reconciliation before overall deadline leaves the offer reserved', async () => {
+  const request = await expiringQuickMatch();
+  const before = clone([...mockDocs.entries()]);
+  expect((await quickMatchReviewService().reconcile('consumer',{requestId:request.requestId})).status).toBe('offering');
+  expect(clone([...mockDocs.entries()])).toEqual(before);
+});
+
+test('poll holding an old offering snapshot rereads acceptance before expiration cleanup', async () => {
+  const request = await expiringQuickMatch();
+  let release, observed;
+  const held = new Promise(resolve => {release = resolve;});
+  const ready = new Promise(resolve => {observed = resolve;});
+  const db = {...mockDb, doc:path => {
+    const reference = mockDb.doc(path);
+    if (path === 'quickMatchActive/consumer') reference.get = async () => {
+      const old = snapshot(reference); observed(); await held; return old;
+    };
+    return reference;
+  }};
+  jest.setSystemTime(request.offerDeadlineMs); // Initial poll requires a transaction.
+  const pending = quickMatchReviewService(db).state('consumer');
+  await ready;
+  // Accept the next offer before the held poll resumes with its stale snapshot.
+  await invoke('respondToQuickMatch',request.offeredHostId,{consumerUid:'consumer',requestId:request.requestId,action:'decline'});
+  const accepted = await invoke('respondToQuickMatch','host2',{consumerUid:'consumer',requestId:request.requestId,action:'accept'});
+  const before = clone([...mockDocs.entries()]);
+  jest.setSystemTime(request.expiresAtMs + 1);
+  release();
+  expect(await pending).toMatchObject({status:'connecting',callId:accepted.callId});
+  expect(clone([...mockDocs.entries()])).toEqual(before);
+});
+
+
+test.each(['poll','decline'])('Quick Match %s advances sequentially without skipping the last candidate', async path => {
+  const request = await expiringQuickMatch();
+  // Seed a third eligible candidate to exercise both transitions.
+  mockDocs.set('users/host3',{...mockDocs.get('users/host'),uid:'host3'});
+  request.candidateIds.push('host3');
+  mockDocs.get('quickMatchActive/consumer').candidateIds.push('host3');
+  for (const index of [1,2]) {
+    const previous = mockDocs.get(`quickMatchRequests/consumer/requests/${request.requestId}`);
+    if (path === 'poll') {jest.setSystemTime(previous.offerDeadlineMs);await invoke('getQuickMatchState','consumer',{});}
+    else await invoke('respondToQuickMatch',previous.offeredHostId,{consumerUid:'consumer',requestId:request.requestId,action:'decline'});
+    expect(mockDocs.get(`quickMatchRequests/consumer/requests/${request.requestId}`)).toMatchObject({status:'offering',attemptIndex:index,offeredHostId:request.candidateIds[index]});
+  }
+});

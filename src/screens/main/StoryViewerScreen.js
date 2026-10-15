@@ -1,6 +1,7 @@
 import { withRouteSafety, backOrMain } from '../../navigation/routeSafety';
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from "react-native";
+import { AppState, View, Text, StyleSheet, TouchableOpacity, Dimensions } from "react-native";
+import { useIsFocused } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { X } from 'lucide-react-native';
@@ -8,10 +9,24 @@ import { X } from 'lucide-react-native';
 const { width } = Dimensions.get('window');
 
 const VideoStoryMedia = ({ uri }) => {
+  const focused = useIsFocused();
+  const [foreground, setForeground] = useState(AppState.currentState === 'active');
   const player = useVideoPlayer(uri || '', (playerInstance) => {
     playerInstance.loop = false;
-    playerInstance.play();
   });
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      // Pause immediately, before a render/effect can resume playback.
+      if (state !== 'active') player.pause();
+      setForeground(state === 'active');
+    });
+    return () => subscription.remove();
+  }, [player]);
+  useEffect(() => {
+    if (focused && foreground) player.play();
+    else player.pause();
+    return () => player.pause();
+  }, [player, focused, foreground]);
 
   return (
     <VideoView
@@ -35,9 +50,19 @@ const StoryViewerScreen = ({ route = {}, navigation }) => {
   const stories = useMemo(() => route.params?.stories || [], [route.params?.stories]);
   const userName = route.params?.userName || 'Story';
   const [index, setIndex] = useState(0);
+  const [now, setNow] = useState(Date.now());
   useEffect(() => { setIndex(0); }, [stories]);
 
-  const currentStory = stories[index];
+  const selectedStory = stories[index];
+  const currentStory = Number.isFinite(selectedStory?.expiresAtMs) && selectedStory.expiresAtMs > now ? selectedStory : null;
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    update();
+    const remaining = selectedStory?.expiresAtMs - Date.now();
+    const timer = remaining > 0 ? setTimeout(update, Math.min(remaining, 2147483647)) : undefined;
+    const subscription = AppState.addEventListener('change', update);
+    return () => { clearTimeout(timer); subscription.remove(); };
+  }, [selectedStory]);
 
   const goNext = () => {
     if (index < stories.length - 1) {

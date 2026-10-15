@@ -152,7 +152,7 @@ const createCallRecovery = ({ db, FieldValue, HttpsError }) => {
       ledgers.push([ledgerRef,ledgerValue,walletLedgerRef,{...wallet}]);count = n;
     }
     const deltaFree = Math.max(0, freeUsed - (call.freeVideoConsumedSeconds || 0));
-    if (['consumer_rewards','quick_match_intro_plus_rewards'].includes(call.freeVideoSource) && deltaFree) {
+    if (['consumer_rewards','quick_match_intro_plus_rewards','sponsored_invite_plus_rewards'].includes(call.freeVideoSource) && deltaFree) {
       const seconds = reward.data()?.freeVideoSeconds || 0;
       if (seconds < deltaFree) throw new HttpsError('failed-precondition', 'Free video balance is inconsistent.');
       tx.update(rewardRef, { freeVideoSeconds: seconds - deltaFree, updatedAt: FieldValue.serverTimestamp() });

@@ -26,5 +26,21 @@ async function main(){
  assert.equal((await db.collection('activeCallLocks').get()).size,0);
  assert.equal((await db.doc('users/h').get()).data().hostStatus.availability,'online');
  console.log('Real Firestore transaction race: 11 assertions passed (v3 settle/end/reconcile/reconnect/duplicate end and P/B/L/U invariant).');
+ // Frozen connected evidence isolates reward accounting from emulator latency.
+ const sponsoredId='sponsored-rewards',sponsoredNow=Date.now();
+ await db.doc('consumerRewards/c').set({freeVideoSeconds:7});
+ await db.doc('sponsoredCallInvites/invite').set({status:'connected'});
+ await db.doc(`calls/${sponsoredId}`).set({...call,source:'sponsored_invite',sponsoredInviteId:'invite',
+   sponsoredSeconds:30,freeVideoSource:'sponsored_invite_plus_rewards',freeVideoAllowanceSeconds:37,
+   freeVideoRewardSeconds:7,billingMode:'preview',connection:{...call.connection,
+     connectedMs:34000,freeMs:34000,paidMs:0,reconnectDeadlineMs:sponsoredNow+120000}});
+ await Promise.all([recovery.run(sponsoredId,'c','sync'),recovery.run(sponsoredId,'h','sync')]);
+ assert.equal((await db.doc('consumerRewards/c').get()).data().freeVideoSeconds,3);
+ assert.equal((await db.doc(`calls/${sponsoredId}`).get()).data().freeVideoConsumedSeconds,4);
+ await Promise.all([recovery.run(sponsoredId,'c','end'),recovery.run(sponsoredId,'h','end')]);
+ assert.equal((await db.doc('consumerRewards/c').get()).data().freeVideoSeconds,3);
+ assert.equal((await db.doc('sponsoredCallInvites/invite').get()).data().status,'completed');
+ assert.equal((await db.doc(`calls/${sponsoredId}`).get()).data().billedCredits,0);
+ console.log('Sponsored earned FVT: 5 assertions passed (concurrent sync/end, 30-second intro excluded, no duplicate debit).');
 }
 main().finally(()=>deleteApp(app)).catch(error=>{console.error(error);process.exitCode=1;});

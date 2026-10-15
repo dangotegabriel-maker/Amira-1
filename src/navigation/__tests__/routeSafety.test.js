@@ -81,7 +81,7 @@ jest.mock('expo-video',()=>({VideoView:()=>null,useVideoPlayer:()=>({})}));
 jest.mock('lucide-react-native',()=>({X:()=>null}));
 test('replacing the story collection resets its index and its empty state has a safe exit',()=>{
  const Story=require('../../screens/main/StoryViewerScreen').default;
- const story=id=>({id,uri:`https://example.com/${id}`,type:'image',visibility:'public'});
+ const story=id=>({id,uri:`https://example.com/${id}`,type:'image',visibility:'public',expiresAtMs:Date.now()+60000});
  const navigation={canGoBack:()=>false,reset:jest.fn()};
  const screen=render(<Story navigation={navigation} route={{params:{stories:[story('a'),story('b')]}}}/>);
  fireEvent.press(screen.UNSAFE_getAllByType(TouchableOpacity).find(node=>node.props.onPress?.name==='goNext'));

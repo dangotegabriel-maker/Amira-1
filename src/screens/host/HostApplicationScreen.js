@@ -13,6 +13,8 @@ import { hostApplicationService } from '../../services/hostApplicationService';
 import { dbService } from '../../services/firebaseService';
 import { canContinueWithoutMedia, getMissingCreatorRequirements } from '../../utils/creatorApplication';
 
+const { INTERESTS, controlledInterests } = require('../../../functions/src/hostDiscoveryDomain');
+
 const STEPS = ['About You', 'Your Profile', 'Photos', 'Intro Video', 'Verification', 'Payout Setup', 'Review & Submit'];
 const VERIFICATION_ACTIONS = ['Face centered', 'Look straight', 'Turn slightly left', 'Turn slightly right', 'Blink'];
 const isDevelopmentBuild = typeof __DEV__ !== 'undefined' && __DEV__ === true;
@@ -28,7 +30,7 @@ const HostApplicationScreen = ({ navigation }) => {
   const actionLock = useMemo(() => ({ current: false }), [current]);
   const [loadError, setLoadError] = useState(false), [retry, setRetry] = useState(0);
   const [bio, setBio] = useState(user?.bio || '');
-  const [interests, setInterests] = useState('');
+  const [interests, setInterests] = useState([]);
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [gallery, setGallery] = useState([]);
   const [introVideo, setIntroVideo] = useState(null);
@@ -37,17 +39,17 @@ const HostApplicationScreen = ({ navigation }) => {
 
   useEffect(() => {
     setStep(0); setApplicationStatus(user?.hostStatus?.verificationStatus || 'not_started');
-    setBio(user?.bio || ''); setInterests(''); setProfilePhoto(null); setGallery([]);
+    setBio(user?.bio || ''); setInterests([]); setProfilePhoto(null); setGallery([]);
     setIntroVideo(null); setEvidence([]); setPayoutMethod('');
   }, [current]);
 
   useEffect(() => {
     setLoading(true); setLoadError(false); setBusy(false);
-    hostApplicationService.getApplication({ requireServer: true }).then((application) => {
+    hostApplicationService.getApplication({ requireServer: true, isCurrent: current }).then((application) => {
       if (!current() || !application) return;
       setApplicationStatus(application.status || 'in_progress');
       setBio(application.details?.bio || '');
-      setInterests((application.details?.interests || []).join(', '));
+      setInterests(controlledInterests(application.details?.interests));
       setProfilePhoto(application.media?.profilePhoto || null);
       setGallery(application.media?.gallery || []);
       setIntroVideo(application.media?.introVideo || null);
@@ -56,7 +58,7 @@ const HostApplicationScreen = ({ navigation }) => {
     }).catch(() => { if(current())setLoadError(true); }).finally(() => {if(current())setLoading(false);});
   }, [current, retry]);
 
-  const parsedInterests = useMemo(() => interests.split(',').map((value) => value.trim()).filter(Boolean).slice(0, 8), [interests]);
+  const parsedInterests = controlledInterests(interests);
 
   const pickAndUpload = async ({ kind = 'image', category, camera = false, includeDownloadUrl = true }) => {
     const permission = camera
@@ -68,7 +70,7 @@ const HostApplicationScreen = ({ navigation }) => {
     if (kind === 'video') options.videoMaxDuration = 30;
     const result = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
     if (!current() || result.canceled) return null;
-    return mediaService.uploadUserMedia({ asset: result.assets[0], category, kind, includeDownloadUrl });
+    return mediaService.uploadUserMedia({ isCurrent: current, asset: result.assets[0], category, kind, includeDownloadUrl });
   };
 
   const performUpload = async (work) => {
@@ -80,7 +82,7 @@ const HostApplicationScreen = ({ navigation }) => {
   };
 
   const saveMediaDraft = async patch => {
-    try { await hostApplicationService.saveDraft(patch); }
+    try { await hostApplicationService.saveDraft(patch, { isCurrent: current }); }
     catch (_) {
       if (current()) setLoadError(true);
       const error = new Error('The application update was not confirmed. Reload the saved draft before making another change.');
@@ -105,7 +107,7 @@ const HostApplicationScreen = ({ navigation }) => {
       return;
     }
     if (!current()) return;
-    if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
+    if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path, { isCurrent: current }).catch(() => {});
   });
 
   const uploadGalleryPhoto = () => performUpload(async () => {
@@ -123,7 +125,7 @@ const HostApplicationScreen = ({ navigation }) => {
     await saveMediaDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery: nextGallery, ...(introVideo ? { introVideo } : {}) } });
     if (!current()) return;
     setGallery(nextGallery);
-    await mediaService.deleteOwnedMedia(media.path).catch(() => {});
+    await mediaService.deleteOwnedMedia(media.path, { isCurrent: current }).catch(() => {});
   });
 
   const uploadIntroVideo = () => performUpload(async () => {
@@ -133,7 +135,7 @@ const HostApplicationScreen = ({ navigation }) => {
     await saveMediaDraft({ media: { ...(profilePhoto ? { profilePhoto } : {}), gallery, introVideo: media } });
     if (!current()) return;
     setIntroVideo(media);
-    if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
+    if (previous?.path && previous.path !== media.path) mediaService.deleteOwnedMedia(previous.path, { isCurrent: current }).catch(() => {});
   });
 
   const uploadVerificationCapture = (action, index) => performUpload(async () => {
@@ -144,30 +146,30 @@ const HostApplicationScreen = ({ navigation }) => {
     await saveMediaDraft({ verification: { method: 'manual_review', evidence: nextEvidence, status: 'captured' } });
     if (!current()) return;
     setEvidence(nextEvidence);
-    if (previous?.path) mediaService.deleteOwnedMedia(previous.path).catch(() => {});
+    if (previous?.path) mediaService.deleteOwnedMedia(previous.path, { isCurrent: current }).catch(() => {});
   });
 
   const saveCurrentStep = async () => {
     if ((calculateAgeFromDob(user?.dob) || 0) < 18) throw new Error('You must be at least 18 years old to apply.');
     if (step === 1) {
       if (bio.trim().length < 20) throw new Error('Please add a short bio of at least 20 characters.');
-      await hostApplicationService.saveDraft({ details: { bio: bio.trim(), interests: parsedInterests, rateTier: INITIAL_HOST_TIER.id, videoRateCredits: INITIAL_HOST_TIER.creditsPerMinute } });
+      await saveMediaDraft({ details: { bio: bio.trim(), interests: parsedInterests, rateTier: INITIAL_HOST_TIER.id, videoRateCredits: INITIAL_HOST_TIER.creditsPerMinute } });
     }
     if (step === 2 && !canContinueWithoutMedia({ step, mediaUploadsEnabled, isDev: isDevelopmentBuild })) {
       if (!profilePhoto?.url) throw new Error('A main profile photo is required.');
-      await hostApplicationService.saveDraft({ media: { profilePhoto, gallery } });
+      await saveMediaDraft({ media: { profilePhoto, gallery } });
     }
     if (step === 3 && !canContinueWithoutMedia({ step, mediaUploadsEnabled, isDev: isDevelopmentBuild })) {
       if (!introVideo?.url) throw new Error('A short profile video is required.');
-      await hostApplicationService.saveDraft({ media: { profilePhoto, gallery, introVideo } });
+      await saveMediaDraft({ media: { profilePhoto, gallery, introVideo } });
     }
     if (step === 4 && !canContinueWithoutMedia({ step, mediaUploadsEnabled, isDev: isDevelopmentBuild })) {
       if (evidence.length < VERIFICATION_ACTIONS.length) throw new Error('Complete every guided verification capture.');
-      await hostApplicationService.saveDraft({ verification: { method: 'manual_review', evidence, status: 'captured' } });
+      await saveMediaDraft({ verification: { method: 'manual_review', evidence, status: 'captured' } });
     }
     if (step === 5) {
       if (!payoutMethod) throw new Error('Select a future payout method.');
-      await hostApplicationService.saveDraft({ payoutSetup: { method: payoutMethod, status: 'details_required_after_approval' } });
+      await saveMediaDraft({ payoutSetup: { method: payoutMethod, status: 'details_required_after_approval' } });
     }
   };
 
@@ -185,7 +187,7 @@ const HostApplicationScreen = ({ navigation }) => {
     actionLock.current = true;
     setBusy(true);
     try {
-      await hostApplicationService.submit();
+      await hostApplicationService.submit({ isCurrent: current });
       if(!current())return;
       setApplicationStatus('submitted');
       try { await refreshUser(); }
@@ -196,33 +198,33 @@ const HostApplicationScreen = ({ navigation }) => {
     finally { actionLock.current = false; if(current())setBusy(false); }
   };
 
-  if (isApprovedHost(user)) return <View style={[styles.container, { padding: 20, paddingTop: 60 }]}><Text style={styles.sectionTitle}>Approved Host</Text><Text style={styles.note}>Your Creator application has been approved.</Text></View>;
+  if (isApprovedHost(user) || applicationStatus === 'approved') return <View style={[styles.container, { padding: 20, paddingTop: 60 }]}><Text style={styles.sectionTitle}>Approved Host</Text><Text style={styles.note}>Your Creator application has been approved.</Text></View>;
   if (['submitted','pending','under_review'].includes(applicationStatus)) return <View style={[styles.container, { padding: 20, paddingTop: 60 }]}><Text style={styles.sectionTitle}>Application Under Review</Text><Text style={styles.note}>Your application is waiting for review. You can continue using Amira as a Consumer.</Text><TouchableOpacity style={styles.next} onPress={() => navigation.goBack()}><Text style={styles.nextText}>Back</Text></TouchableOpacity></View>;
   if (loading) return <View style={styles.center}><ActivityIndicator color={COLORS.primary} size="large" /></View>;
   if (loadError) return <View style={styles.center}><Text>Application could not be loaded.</Text><TouchableOpacity onPress={() => setRetry(value => value + 1)}><Text>Try again</Text></TouchableOpacity><TouchableOpacity onPress={() => navigation.goBack()}><Text>Back</Text></TouchableOpacity></View>;
 
   const missingRequirements = getMissingCreatorRequirements({ profilePhoto, introVideo, evidence, payoutMethod });
-  const mediaUnavailable = isDevelopmentBuild && !mediaUploadsEnabled;
+  const mediaUnavailable = !mediaUploadsEnabled;
 
   const renderStep = () => {
     if (step === 0) return <><Text style={styles.sectionTitle}>Welcome to your host application</Text><Text style={styles.note}>You are {calculateAgeFromDob(user?.dob)}. Host applicants must be 18 or older. We will guide you through a profile, photos and a simple manual review.</Text><Text style={styles.note}>All new hosts begin at Entry level. Higher earning tiers are unlocked based on performance and account standing.</Text></>;
     if (step === 1) return <>
       <Text style={styles.label}>Short bio</Text><TextInput style={[styles.input, styles.multiline]} multiline value={bio} onChangeText={setBio} placeholder="Tell consumers what makes a conversation with you special" />
       <Text style={styles.label}>Need inspiration? Choose a template</Text><ScrollView horizontal showsHorizontalScrollIndicator={false}>{BIO_TEMPLATES.map((template) => <TouchableOpacity key={template.id} style={styles.template} onPress={() => setBio(template.text)}><Text style={styles.templateTone}>{template.tone}</Text><Text style={styles.templateText} numberOfLines={3}>{template.text}</Text></TouchableOpacity>)}</ScrollView>
-      <Text style={styles.label}>Interests (comma separated)</Text><TextInput style={styles.input} value={interests} onChangeText={setInterests} placeholder="Music, travel, culture" />
+      <Text style={styles.label}>Interests ({interests.length}/10)</Text><View style={styles.gallery}>{INTERESTS.map(interest => <TouchableOpacity key={interest} accessibilityRole="checkbox" accessibilityLabel={interest} accessibilityState={{ checked: interests.includes(interest) }} disabled={busy} style={[styles.template, interests.includes(interest) && styles.completed]} onPress={() => setInterests(previous => previous.includes(interest) ? previous.filter(value => value !== interest) : [...previous, interest].slice(0, 10))}><Text>{interest}</Text></TouchableOpacity>)}</View>
       <Text style={styles.note}>Your bio remains editable after choosing a template.</Text>
     </>;
     if (step === 2) return <>
       <Text style={styles.sectionTitle}>Main profile photo</Text>
-      {mediaUnavailable && <View style={styles.unavailableBox}><Text style={styles.unavailableTitle}>Media uploads unavailable</Text><Text style={styles.note}>Continue to preview the remaining steps. Photos remain required and no placeholder will be saved.</Text></View>}
+      {mediaUnavailable && <View style={styles.unavailableBox}><Text style={styles.unavailableTitle}>Media uploads unavailable</Text><Text style={styles.note}>Photos remain required. No placeholder will be saved.</Text></View>}
       {profilePhoto?.url && <Image source={{ uri: profilePhoto.url }} style={styles.preview} />}
       <TouchableOpacity style={styles.action} disabled={busy || mediaUnavailable} onPress={uploadMainPhoto}><ImagePlus color={COLORS.primary} /><Text style={styles.actionText}>{profilePhoto ? 'Replace main photo' : 'Choose main photo'}</Text></TouchableOpacity>
       <Text style={styles.sectionTitle}>Additional photos ({gallery.length}/4)</Text>
       <View style={styles.gallery}>{gallery.map((item) => <View key={item.path} style={styles.thumbWrap}><Image source={{ uri: item.url }} style={styles.thumb} /><TouchableOpacity style={styles.removePhoto} onPress={() => removeGalleryPhoto(item)} disabled={busy}><X color="white" size={15} /></TouchableOpacity></View>)}</View>
       {gallery.length < 4 && <TouchableOpacity style={styles.action} disabled={busy || mediaUnavailable} onPress={uploadGalleryPhoto}><ImagePlus color={COLORS.primary} /><Text style={styles.actionText}>Add gallery photo</Text></TouchableOpacity>}
     </>;
-    if (step === 3) return <><Video color={COLORS.primary} size={46} /><Text style={styles.sectionTitle}>Short profile video</Text><Text style={styles.note}>Upload a clear introduction up to 30 seconds.</Text>{mediaUnavailable&&<View style={styles.unavailableBox}><Text style={styles.unavailableTitle}>Video upload unavailable</Text><Text style={styles.note}>Continue for UI testing. Intro Video remains required.</Text></View>}{introVideo?.url && <Text style={styles.success}>Video uploaded</Text>}<TouchableOpacity style={styles.action} disabled={busy || mediaUnavailable} onPress={uploadIntroVideo}><Video color={COLORS.primary} /><Text style={styles.actionText}>{introVideo ? 'Replace video' : 'Choose video'}</Text></TouchableOpacity></>;
-    if (step === 4) return <><Camera color={COLORS.primary} size={46} /><Text style={styles.sectionTitle}>Guided live verification</Text><Text style={styles.note}>Follow each prompt so our team can review your application safely. These private captures are never used as profile photos.</Text>{mediaUnavailable&&<View style={styles.unavailableBox}><Text style={styles.unavailableTitle}>Verification capture unavailable</Text><Text style={styles.note}>Continue for UI testing. Verification remains required.</Text></View>}{VERIFICATION_ACTIONS.map((action, index) => { const capture = evidence.find((item) => item.order === index); return <TouchableOpacity key={action} disabled={busy || mediaUnavailable} style={[styles.verificationAction, capture && styles.completed]} onPress={() => uploadVerificationCapture(action, index)}><Text style={styles.actionText}>{action}</Text>{capture ? <CheckCircle2 color="#22C55E" /> : <Camera color={COLORS.primary} />}</TouchableOpacity>; })}</>;
+    if (step === 3) return <><Video color={COLORS.primary} size={46} /><Text style={styles.sectionTitle}>Short profile video</Text><Text style={styles.note}>Upload a clear introduction up to 30 seconds.</Text>{mediaUnavailable&&<View style={styles.unavailableBox}><Text style={styles.unavailableTitle}>Video upload unavailable</Text><Text style={styles.note}>Intro Video remains required. Please try again when uploads are available.</Text></View>}{introVideo?.url && <Text style={styles.success}>Video uploaded</Text>}<TouchableOpacity style={styles.action} disabled={busy || mediaUnavailable} onPress={uploadIntroVideo}><Video color={COLORS.primary} /><Text style={styles.actionText}>{introVideo ? 'Replace video' : 'Choose video'}</Text></TouchableOpacity></>;
+    if (step === 4) return <><Camera color={COLORS.primary} size={46} /><Text style={styles.sectionTitle}>Guided live verification</Text><Text style={styles.note}>Follow each prompt so our team can review your application safely. These private captures are never used as profile photos.</Text>{mediaUnavailable&&<View style={styles.unavailableBox}><Text style={styles.unavailableTitle}>Verification capture unavailable</Text><Text style={styles.note}>Verification remains required. Please try again when uploads are available.</Text></View>}{VERIFICATION_ACTIONS.map((action, index) => { const capture = evidence.find((item) => item.order === index); return <TouchableOpacity key={action} disabled={busy || mediaUnavailable} style={[styles.verificationAction, capture && styles.completed]} onPress={() => uploadVerificationCapture(action, index)}><Text style={styles.actionText}>{action}</Text>{capture ? <CheckCircle2 color="#22C55E" /> : <Camera color={COLORS.primary} />}</TouchableOpacity>; })}</>;
     if (step === 5) return <><Text style={styles.sectionTitle}>Future payout setup</Text><Text style={styles.note}>Payouts are not active yet. Choose the method you expect to configure after approval.</Text>{['Mobile Money', 'Bank Transfer'].map((method) => <TouchableOpacity key={method} style={[styles.payout, payoutMethod === method && styles.selected]} onPress={() => setPayoutMethod(method)}><Text style={styles.actionText}>{method}</Text></TouchableOpacity>)}</>;
     return <><CheckCircle2 color={missingRequirements.length ? '#F59E0B' : COLORS.primary} size={54} /><Text style={styles.sectionTitle}>Review and submit</Text><Text style={styles.review}>Bio: {bio}</Text><Text style={styles.review}>Photos: {profilePhoto?.url ? 'Ready' : 'Required'}</Text><Text style={styles.review}>Intro Video: {introVideo?.url ? 'Ready' : 'Required'}</Text><Text style={styles.review}>Verification: {evidence.length >= VERIFICATION_ACTIONS.length ? 'Ready' : 'Required'}</Text><Text style={styles.review}>Starting level: Entry · {INITIAL_HOST_TIER.creditsPerMinute} credits/min</Text><Text style={styles.review}>Future payout method: {payoutMethod || 'Required'}</Text>{missingRequirements.length > 0 && <Text style={styles.missing}>Complete before submission: {missingRequirements.join(', ')}</Text>}<Text style={styles.note}>Your application will be reviewed by the Amira team. Approval cannot be granted from this app.</Text></>;
   };

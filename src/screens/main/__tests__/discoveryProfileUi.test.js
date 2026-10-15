@@ -37,7 +37,7 @@ beforeEach(()=>{mockFocused=true;mockNewSession();jest.clearAllMocks();mockUser=
 afterEach(()=>jest.restoreAllMocks());
 test('Home tabs exactly For You/New/Following, no Search or fake Stories; filters survive tabs and Match and clear',async()=>{const nav={navigate:jest.fn()},screen=render(<Home navigation={nav}/>);await flush();for(const tab of ['FOR YOU','NEW','FOLLOWING'])expect(screen.getByText(tab)).toBeTruthy();expect(screen.queryByText(/Search/i)).toBeNull();expect(screen.queryByText('Stories')).toBeNull();act(()=>setSessionDiscoveryFilters('consumer',{...EMPTY_DISCOVERY_FILTERS,country:{cca2:'US'}}));expect(screen.queryByText('online')).toBeNull();fireEvent.press(screen.getByText('NEW'));await flush();expect(screen.getByText('No hosts were approved in the last 14 days.')).toBeTruthy();fireEvent.press(screen.getByText('FOLLOWING'));await flush();expect(screen.getByText('Follow approved hosts to browse them here.')).toBeTruthy();screen.unmount();const match=render(<Match navigation={nav}/>);await flush();expect(match.getByText('No eligible Hosts right now')).toBeTruthy();match.unmount();const home=render(<Home navigation={nav}/>);await flush();fireEvent.press(home.getByText('Clear filters'));expect(home.getByText('online')).toBeTruthy();home.unmount();});
 test('normal Match Next is unlimited without repeats before exhaustion; Message and Video use existing paths',async()=>{const nav={navigate:jest.fn()},screen=render(<Match navigation={nav}/>);await flush();expect(screen.getByText('online')).toBeTruthy();fireEvent.press(screen.getByText('Message'));expect(nav.navigate).toHaveBeenCalledWith('ChatDetail',{userId:'online',name:'online'});fireEvent.press(screen.getByText('Video'));expect(mockCall).toHaveBeenCalledWith({navigation:nav,isCurrent:expect.any(Function),creator:expect.objectContaining({uid:'online'})});fireEvent.press(screen.getByText('Next Match'));expect(screen.getByText('offline')).toBeTruthy();fireEvent.press(screen.getByText('Next Match'));expect(screen.getByText('online')).toBeTruthy();for(let i=0;i<12;i++)fireEvent.press(screen.getByText('Next Match'));expect(mockDiscovery.getApprovedHosts).toHaveBeenCalledTimes(1);screen.unmount();});
-test('Match error has retry; no successful fake match',async()=>{mockDiscovery.getApprovedHosts.mockRejectedValue(new Error('offline'));const screen=render(<Match navigation={{}}/>);await flush();expect(screen.getByText('Matches could not be loaded. Try again.')).toBeTruthy();expect(screen.getByText('Try Again')).toBeTruthy();expect(screen.queryByText('Next Match')).toBeNull();screen.unmount();});
+test('Match error has retry; no successful fake match',async()=>{mockDiscovery.getApprovedHosts.mockRejectedValue(new Error('offline'));const screen=render(<Match navigation={{}}/>);await flush();expect(screen.getByText('Matches could not be loaded. Try again.')).toBeTruthy();expect(screen.queryByText('No eligible Hosts right now')).toBeNull();expect(screen.getByText('Matches unavailable')).toBeTruthy();expect(screen.getByText('Try Again')).toBeTruthy();expect(screen.queryByText('Next Match')).toBeNull();screen.unmount();});
 test('full Host profile has real counts, mutual Friends, sticky actions, safe Gift and More without Share; Like/unlike refresh real counts',async()=>{const nav={navigate:jest.fn(),goBack:jest.fn()},screen=render(<Profile route={{params:{userId:'h'}}} navigation={nav}/>);await flush();expect(screen.getByText('Friends')).toBeTruthy();expect(screen.getByText('Followers')).toBeTruthy();expect(screen.getByText('Likes')).toBeTruthy();for(const text of ['Interests','Moments','Gifts','Share'])expect(screen.queryByText(text)).toBeNull();expect(screen.getByText('37 Credits/min')).toBeTruthy();expect(screen.getByText('Gift')).toBeTruthy();mockProfile.setLiked.mockResolvedValue({liked:true});mockProfile.get.mockResolvedValue({...host('h'),social:{...host('h').social,liked:true,likes:1}});fireEvent.press(screen.getByLabelText('Like Host'));await flush();expect(mockProfile.setLiked).toHaveBeenCalledWith('h',true);expect(screen.getByLabelText('Unlike Host')).toBeTruthy();mockProfile.setLiked.mockResolvedValue({liked:false});mockProfile.get.mockResolvedValue(host('h'));fireEvent.press(screen.getByLabelText('Unlike Host'));await flush();expect(mockProfile.setLiked).toHaveBeenCalledWith('h',false);fireEvent.press(screen.getByLabelText('More'));for(const text of ['Report','Block','Not Interested'])expect(screen.getByText(text)).toBeTruthy();expect(screen.queryByText('Share')).toBeNull();fireEvent.press(screen.getByText('Not Interested'));await flush();expect(mockProfile.hide).toHaveBeenCalledWith('h');expect(nav.goBack).toHaveBeenCalled();screen.unmount();});
 
 test('failed social refresh displays unavailable rather than fabricated zero; counters are non-tappable',async()=>{const screen=render(<Profile route={{params:{userId:'h'}}} navigation={{}}/>);await flush();expect(screen.getByText('Followers').parent.props.onPress).toBeUndefined();mockProfile.setLiked.mockResolvedValue({liked:true});mockProfile.get.mockRejectedValue(new Error('network'));fireEvent.press(screen.getByLabelText('Like Host'));await flush();expect(screen.getAllByText('Unavailable')).toHaveLength(3);expect(screen.getByLabelText('Unlike Host')).toBeTruthy();screen.unmount();});
@@ -128,4 +128,62 @@ test('Quick Match cancellation uncertainty remains visible and retry uses the sa
  expect(screen.getByText('Quick Match result not confirmed. Please retry.')).toBeTruthy();
  await act(async()=>fireEvent.press(screen.getByText('Cancel')));
  expect(service.cancel.mock.calls.map(args=>args[0])).toEqual(['q','q']);screen.unmount();
+});
+
+
+test.each(['resolve','reject'])('pre-cancel Quick Match poll %s cannot override cancellation intent',async outcome=>{
+ jest.useFakeTimers();AppState.currentState='active';
+ const service=require('../../../services/quickMatchService').quickMatchService;
+ service.start.mockResolvedValueOnce({requestId:'q',status:'offering'});
+ let resolvePoll,rejectPoll,resolveCancel;
+ service.state.mockReturnValueOnce(new Promise((resolve,reject)=>{resolvePoll=resolve;rejectPoll=reject;}));
+ service.cancel.mockReturnValueOnce(new Promise(resolve=>{resolveCancel=resolve;}));
+ const navigation={navigate:jest.fn()},screen=render(<Match navigation={navigation}/>);await flush();
+ await act(async()=>fireEvent.press(screen.getByText('Start Quick Match')));
+ await act(async()=>jest.advanceTimersByTime(3000));expect(service.state).toHaveBeenCalledTimes(1);
+ act(()=>{fireEvent.press(screen.getByText('Cancel'));});expect(service.cancel).toHaveBeenCalledWith('q');
+ await act(async()=>{if(outcome==='resolve')resolvePoll({requestId:'q',status:'connecting',callId:'obsolete'});else rejectPoll(new Error('old poll'));});
+ expect(navigation.navigate).not.toHaveBeenCalled();expect(screen.queryByText(/updates are unavailable/)).toBeNull();
+ await act(async()=>jest.advanceTimersByTime(6000));expect(service.state).toHaveBeenCalledTimes(1);
+ await act(async()=>resolveCancel({requestId:'q',status:'cancelled'}));
+ expect(screen.getByText('Quick Match cancelled.')).toBeTruthy();
+ await act(async()=>jest.advanceTimersByTime(6000));expect(service.state).toHaveBeenCalledTimes(1);
+ screen.unmount();jest.useRealTimers();
+});
+
+test('failed cancellation rejects its old poll even after unlocking, then a fresh poll recovers',async()=>{
+ jest.useFakeTimers();AppState.currentState='active';
+ const service=require('../../../services/quickMatchService').quickMatchService;
+ service.start.mockResolvedValueOnce({requestId:'q',status:'offering'});
+ let resolvePoll;service.state.mockReturnValueOnce(new Promise(resolve=>{resolvePoll=resolve;}))
+ .mockResolvedValue({requestId:'q',status:'connected',callId:'fresh',host:{uid:'h'}});
+ service.cancel.mockRejectedValueOnce(new Error('lost acknowledgement'));
+ const navigation={navigate:jest.fn()},screen=render(<Match navigation={navigation}/>);await flush();
+ await act(async()=>fireEvent.press(screen.getByText('Start Quick Match')));
+ await act(async()=>jest.advanceTimersByTime(3000));
+ await act(async()=>fireEvent.press(screen.getByText('Cancel')));
+ expect(screen.getByText('Quick Match result not confirmed. Please retry.')).toBeTruthy();
+ await act(async()=>resolvePoll({requestId:'q',status:'connecting',callId:'old'}));
+ expect(navigation.navigate).not.toHaveBeenCalled();
+ await act(async()=>jest.advanceTimersByTime(3000));
+ expect(navigation.navigate).toHaveBeenCalledTimes(1);
+ expect(navigation.navigate).toHaveBeenCalledWith('VideoCall',expect.objectContaining({call:expect.objectContaining({callId:'fresh'})}));
+ screen.unmount();jest.useRealTimers();
+});
+
+test('Quick Match start replay enters the existing connected call once',async()=>{
+ const service=require('../../../services/quickMatchService').quickMatchService;
+ service.start.mockResolvedValueOnce({requestId:'q',status:'connected',callId:'existing',host:{uid:'h'}});
+ const navigation={navigate:jest.fn()},screen=render(<Match navigation={navigation}/>);await flush();
+ await act(async()=>{fireEvent.press(screen.getByText('Start Quick Match'));fireEvent.press(screen.getByText('Start Quick Match'));});
+ expect(navigation.navigate).toHaveBeenCalledTimes(1);screen.unmount();
+});
+
+test.each(['connected','completed'])('sponsored %s replay only enters a live call',async status=>{
+ const service=require('../../../services/sponsoredInviteService').sponsoredInviteService;
+ service.pending.mockResolvedValueOnce({invites:[{inviteId:'invite',hostIdentity:{username:'Host'},sponsoredSeconds:30,consumerRatePerMinute:25,termsFingerprint:'terms'}]});
+ service.respond.mockResolvedValueOnce({status,callId:'existing'});
+ const navigation={navigate:jest.fn()},screen=render(<Home navigation={navigation}/>);await flush();
+ await act(async()=>{fireEvent.press(screen.getByText('Accept'));fireEvent.press(screen.getByText('Accept'));});
+ expect(navigation.navigate).toHaveBeenCalledTimes(status==='connected'?1:0);screen.unmount();
 });

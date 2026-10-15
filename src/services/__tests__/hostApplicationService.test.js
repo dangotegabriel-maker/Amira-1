@@ -1,10 +1,11 @@
-const mockDocs=new Map(),mockWrites=[];
+const mockDocs=new Map(),mockWrites=[],mockAuth={currentUser:null};
+let mockAfterRead;
 jest.mock('firebase/firestore',()=>({doc:(_db,...parts)=>parts.join('/'),getDoc:jest.fn(),getDocFromServer:jest.fn(),serverTimestamp:()=>123,
- runTransaction:async(_db,work)=>work({get:async(path)=>({exists:()=>mockDocs.has(path),data:()=>mockDocs.get(path)}),set:(...args)=>mockWrites.push(args)})}));
-jest.mock('../firebaseService',()=>({auth:{currentUser:{uid:'p'}},db:{}}));
+ runTransaction:async(_db,work)=>work({get:async(path)=>{const result={exists:()=>mockDocs.has(path),data:()=>mockDocs.get(path)};mockAfterRead?.();return result;},set:(...args)=>mockWrites.push(args)})}));
+jest.mock('../firebaseService',()=>({auth:mockAuth,db:{}}));
 const {hostApplicationService}=require('../hostApplicationService');
 const application=()=>({ownerUid:'p',status:'in_progress',media:{profilePhoto:{url:'test-photo'},introVideo:{url:'test-video',path:'test-path'}},verification:{evidence:Array.from({length:5},(_,order)=>({order,path:`test-evidence-${order}`}))},payoutSetup:{method:'Bank Transfer'}});
-beforeEach(()=>{mockDocs.clear();mockWrites.length=0;mockDocs.set('users/p',{dob:'1990-01-01',role:'consumer',hostStatus:{isApproved:false},hostProfile:{videoRateCredits:50,rateTier:'STANDARD'}});mockDocs.set('hostApplications/p',application());});
+beforeEach(()=>{mockAuth.currentUser={uid:'p'};mockAfterRead=null;mockDocs.clear();mockWrites.length=0;mockDocs.set('users/p',{dob:'1990-01-01',role:'consumer',hostStatus:{isApproved:false},hostProfile:{videoRateCredits:50,rateTier:'STANDARD'}});mockDocs.set('hostApplications/p',application());});
 test('complete fixture submits without Host approval or price writes',async()=>{
  await expect(hostApplicationService.submit()).resolves.toEqual({success:true});
  expect(mockWrites[0]).toEqual(['hostApplications/p',expect.objectContaining({status:'submitted'}),{merge:true}]);
@@ -33,4 +34,24 @@ test('Creator recovery requires a server draft and never falls back to stale cac
  expect(getDoc).not.toHaveBeenCalled();
  getDocFromServer.mockResolvedValueOnce({id:'p',exists:()=>true,data:()=>application()});
  await expect(hostApplicationService.getApplication({requireServer:true})).resolves.toMatchObject({id:'p',status:'in_progress'});
+});
+
+
+test.each(['same UID','different UID','logout','context replaced'])('draft transaction rejects %s before writes',async kind=>{
+ let current=true;
+ mockAfterRead=()=>{if(kind==='context replaced')current=false;else mockAuth.currentUser=kind==='logout'?null:{uid:kind==='same UID'?'p':'other'};};
+ await expect(hostApplicationService.saveDraft({verification:{evidence:[]}},{isCurrent:()=>current})).rejects.toMatchObject({code:'application/session-changed'});
+ expect(mockWrites).toHaveLength(0);
+});
+test('submission transaction does not continue after session replacement during reads',async()=>{
+ mockAfterRead=()=>{mockAuth.currentUser={uid:'p'};};
+ await expect(hostApplicationService.submit()).rejects.toMatchObject({code:'application/session-changed'});
+ expect(mockWrites).toHaveLength(0);
+});
+test('authoritative reload from an old session is not returned to its caller',async()=>{
+ const {getDocFromServer}=require('firebase/firestore');let finish;
+ getDocFromServer.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+ const pending=hostApplicationService.getApplication({requireServer:true});mockAuth.currentUser={uid:'p'};
+ const rejected=expect(pending).rejects.toMatchObject({code:'application/session-changed'});
+ finish({exists:()=>true,data:()=>application()});await rejected;
 });

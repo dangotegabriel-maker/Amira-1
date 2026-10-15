@@ -26,7 +26,9 @@ async function main(){
  await db.doc('users/c/following/reverse').set({consumerId:'c',hostId:'reverse',createdAt:FieldValue.serverTimestamp()});
  check(ids(await service.candidates('c','Following')),['h']);await db.doc('users/c/following/h').delete();check(ids(await service.candidates('c','Following')),[]);
  await denied(service.candidates('h'));check(ids(await service.candidates('p')),['h','legacy','old','reverse']);
+ await db.doc('users/h').update({stories:[{id:'live',uri:'https://media.example/story',type:'video',visibility:'public',expiresAt:Timestamp.fromMillis(now+60000)},{id:'expired',uri:'https://media.example/old',type:'image',visibility:'public',expiresAt:Timestamp.fromMillis(now-1)}]});
  const result=await service.profile('c','h');check(result.hostProfile.videoRateCredits,37);check(result.hostApprovedAt,now-13*86400000);
+ check(result.stories.length,1);check(result.stories[0].expiresAtMs,now+60000);
  for(const field of ['email','wallet','payoutSetup','earnings','dob'])check(Object.hasOwn(result,field),false);
  check(result.social.likes,0);await Promise.all([service.setLike('c',{hostId:'h',liked:true}),service.setLike('c',{hostId:'h',liked:true}),service.setLike('c',{hostId:'h',liked:true})]);
  check((await service.profile('c','h')).social.likes,1);check((await db.collection('users/h/likes').get()).size,1);check((await service.setLike('c',{hostId:'h',liked:true})).idempotent,true);

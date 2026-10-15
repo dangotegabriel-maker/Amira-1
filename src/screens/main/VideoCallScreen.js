@@ -152,7 +152,7 @@ const VideoCallScreen = ({ route, navigation }) => {
         if (!callRef.current?.simulated) {
           if (callRef.current?.connection) await reportConnection('connected');
           else await callService.acknowledgeConnected(callRef.current.callId || callRef.current.id).catch(() => {});
-          if (active && sessionCurrent() && callRef.current?.status === 'connected') setPhase('connected');
+          if (active && sessionCurrent() && !endedRef.current && !rtcDetached.current && callRef.current?.status === 'connected') setPhase('connected');
         } else {
           const connectedAtMs = Date.now();
           setCall((current) => ({ ...current, status: 'connected', billingMode: 'preview', connectedAtMs,
@@ -182,21 +182,25 @@ const VideoCallScreen = ({ route, navigation }) => {
     } else {
       unsubscribe = callService.subscribe(initialCall.callId || initialCall.id, (next) => {
         if (!active || !sessionCurrent() || endedRef.current) return;
-        if (next.accountingVersion === 2 && (next.lifecycleRevision || 0) < (callRef.current?.lifecycleRevision || 0)) return;
+        if ([2,3].includes(next.accountingVersion) && (next.lifecycleRevision || 0) < (callRef.current?.lifecycleRevision || 0)) return;
         callRef.current = next;
         eventSequence.current = Math.max(eventSequence.current, next.connection?.participants?.[user?.uid]?.sequence || 0);
         setCall(next);
         setPhase(next.status);
-        if (['connecting', 'connected', 'reconnecting'].includes(next.status) && !joinedRef.current) {
+        if (['connecting', 'connected', 'reconnecting'].includes(next.status) && !joinedRef.current && !rtcDetached.current) {
+          if (AppState.currentState === 'background') {
+            finishRef.current('app_backgrounded');
+            return;
+          }
           joinedRef.current = true;
           (async () => {
             try {
               await rtcService.requestPermissions();
-              if (!active || !sessionCurrent() || endedRef.current) return;
+              if (!active || !sessionCurrent() || endedRef.current || rtcDetached.current) return;
               const credentials = await callService.getRtcCredentials(next.callId || next.id);
-              if (!active || !sessionCurrent() || endedRef.current) return;
-              await rtcService.joinSession(credentials, () => active && sessionCurrent() && !endedRef.current);
-              if (active && sessionCurrent() && !endedRef.current) setRtcReady(true);
+              if (!active || !sessionCurrent() || endedRef.current || rtcDetached.current) return;
+              await rtcService.joinSession(credentials, () => active && sessionCurrent() && !endedRef.current && !rtcDetached.current);
+              if (active && sessionCurrent() && !endedRef.current && !rtcDetached.current) setRtcReady(true);
 
             } catch (error) {
               if (!active || !sessionCurrent()) return;
@@ -271,7 +275,9 @@ const VideoCallScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (sessionCurrent() && state !== 'active' && ['connected', 'reconnecting'].includes(phase)) finishRef.current('app_backgrounded');
+      // Permission prompts can briefly make a connecting app inactive.
+      if (sessionCurrent() && ((state === 'background' && phase === 'connecting')
+          || (state !== 'active' && ['connected', 'reconnecting'].includes(phase)))) finishRef.current('app_backgrounded');
     });
     return () => sub.remove();
   }, [phase, sessionCurrent]);

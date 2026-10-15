@@ -41,6 +41,8 @@ async function main(){
  await updateDoc(doc(h,'users/h'),{'hostProfile.bio':'Normal edit'});checks++;
  await updateDoc(doc(p,'users/p'),{role:'consumer'});checks++;
  await getDoc(doc(p,'consumerRewards/p'));checks++;await getDoc(doc(c,'consumerRewards/c'));checks++;await denied(getDoc(doc(h,'consumerRewards/c')));
+ const evidence=Array.from({length:5},(_,order)=>({order,path:`users/c/verification/${order+1}/fixture.jpg`}));
+ await updateDoc(doc(c,'hostApplications/c'),{verification:{evidence}});
  const batch=writeBatch(c);batch.update(doc(c,'hostApplications/c'),{status:'submitted',submittedAt:serverTimestamp()});batch.update(doc(c,'users/c'),{role:'consumer','hostStatus.hasApplied':true,'hostStatus.verificationStatus':'pending','hostStatus.availability':'offline'});await batch.commit();checks++;
  assert.equal((await getDoc(doc(c,'users/c'))).data().role,'consumer');checks++;
  await denied(updateDoc(doc(c,'hostApplications/c'),{status:'approved'}));

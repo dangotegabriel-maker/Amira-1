@@ -127,7 +127,6 @@ const requireAuthenticatedUser = (expectedUid) => {
   if (expectedUid && expectedUid !== user.uid) {
     throw new Error('Authenticated user does not match the requested profile.');
   }
-  console.log('UID:', user.uid);
   return user;
 };
 
@@ -253,7 +252,7 @@ export const authService = {
       }
       throw new Error("No authenticated user found.");
     } catch (error) {
-      console.error("Firebase Update Profile Error:", error);
+      console.error("Firebase Update Profile Error:", error?.code || 'unknown');
       throw error;
     }
   },
@@ -262,7 +261,7 @@ export const authService = {
       await firebaseSignOut(auth);
       return { success: true };
     } catch (error) {
-      console.error("Firebase Sign Out Error:", error);
+      console.error("Firebase Sign Out Error:", error?.code || 'unknown');
       throw error;
     }
   }
@@ -280,7 +279,7 @@ export const dbService = {
       }
       return null;
     } catch (error) {
-      console.error("Firestore Get User Profile Error:", error);
+      console.error("Firestore Get User Profile Error:", error?.code || 'unknown');
       throw error;
     }
   },
@@ -291,7 +290,7 @@ export const dbService = {
       await setDoc(userRef, data, { merge: true });
       return { success: true };
     } catch (error) {
-      console.log('FIRESTORE ERROR:', error);
+      console.log('FIRESTORE ERROR:', error?.code || 'unknown');
       throw error;
     }
   },
@@ -344,7 +343,7 @@ export const dbService = {
       await setDoc(userRef, newUser, { merge: true });
       return { success: true, user: newUser };
     } catch (error) {
-      console.log('FIRESTORE ERROR:', error);
+      console.log('FIRESTORE ERROR:', error?.code || 'unknown');
       throw error;
     }
   },
@@ -375,7 +374,7 @@ export const dbService = {
         } catch (migrationError) {
           // A legacy ruleset may not yet allow every canonical field. Do not
           // prevent sign-in; surface the normalized profile and retry later.
-          console.log('PROFILE MIGRATION ERROR:', migrationError);
+          console.log('PROFILE MIGRATION ERROR:', migrationError?.code || 'unknown');
         }
       }
     }
@@ -394,7 +393,7 @@ export const dbService = {
           : null);
       },
       (error) => {
-        console.log('FIRESTORE ERROR:', error);
+        console.log('FIRESTORE ERROR:', error?.code || 'unknown');
         onError?.(error);
       },
     );

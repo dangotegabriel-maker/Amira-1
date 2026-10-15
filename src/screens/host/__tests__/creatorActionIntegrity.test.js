@@ -23,6 +23,21 @@ const openAt = async steps => {
   for (let i = 0; i < steps; i++) await act(async () => fireEvent.press(screen.getByText('Continue')));
   return screen;
 };
+test('Creator interests use the established vocabulary, allow all ten, and can be cleared', async () => {
+  mockRead.mockResolvedValueOnce({...draft(),details:{...draft().details,interests:['music','unapproved text','Music']}});
+  const screen = await openAt(1);
+  expect(screen.getByText('Interests (1/10)')).toBeTruthy();
+  const {INTERESTS} = require('../../../../functions/src/hostDiscoveryDomain');
+  for (const interest of INTERESTS.filter(value => value !== 'Music')) fireEvent.press(screen.getByLabelText(interest));
+  expect(screen.getByText('Interests (10/10)')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByText('Continue')));
+  expect(mockSave).toHaveBeenLastCalledWith(expect.objectContaining({details:expect.objectContaining({interests:INTERESTS})}),expect.objectContaining({isCurrent:expect.any(Function)}));
+  screen.unmount();
+  const empty = await openAt(1);
+  fireEvent.press(empty.getByLabelText('Music')); fireEvent.press(empty.getByLabelText('Music'));
+  await act(async () => fireEvent.press(empty.getByText('Continue')));
+  expect(mockSave).toHaveBeenLastCalledWith(expect.objectContaining({details:expect.objectContaining({interests:[]})}),expect.objectContaining({isCurrent:expect.any(Function)}));
+});
 test.each(['draft response', 'profile mirror'])('failed %s never deletes media that may already be referenced by an authoritative draft', async failure => {
   const screen = await openAt(2);
   if (failure === 'draft response') mockSave.mockRejectedValueOnce(new Error('response lost'));
@@ -65,6 +80,44 @@ test('confirmed draft photo remains selected when profile mirror fails',async()=
  const screen=await openAt(2);mockProfile.mockRejectedValueOnce(new Error('offline'));
  await act(async()=>fireEvent.press(screen.getByText('Replace main photo')));
  mockSave.mockClear();await act(async()=>fireEvent.press(screen.getByText('Continue')));
- expect(mockSave).toHaveBeenCalledWith(expect.objectContaining({media:expect.objectContaining({profilePhoto:expect.objectContaining({path:'users/consumer/new'})})}));
+ expect(mockSave).toHaveBeenCalledWith(expect.objectContaining({media:expect.objectContaining({profilePhoto:expect.objectContaining({path:'users/consumer/new'})})}),expect.objectContaining({isCurrent:expect.any(Function)}));
  expect(mockDelete).not.toHaveBeenCalled();
+});
+
+
+test('confirmed replacement deletes the previous photo only after draft and profile acknowledgements',async()=>{
+ const screen=await openAt(2);let draftDone,profileDone;
+ mockSave.mockReturnValueOnce(new Promise(resolve=>{draftDone=resolve;}));
+ mockProfile.mockReturnValueOnce(new Promise(resolve=>{profileDone=resolve;}));
+ act(()=>{fireEvent.press(screen.getByText('Replace main photo'));});await act(async()=>{});
+ expect(mockDelete).not.toHaveBeenCalled();expect(mockProfile).not.toHaveBeenCalled();
+ await act(async()=>draftDone());expect(mockDelete).not.toHaveBeenCalled();
+ await act(async()=>profileDone());
+ expect(mockDelete).toHaveBeenCalledWith('users/consumer/old',{isCurrent:expect.any(Function)});
+ const guard=mockDelete.mock.calls[0][1].isCurrent;expect(guard()).toBe(true);mockSession=null;expect(guard()).toBe(false);
+});
+test('replacement session after acknowledged draft suppresses profile write and deletion',async()=>{
+ const screen=await openAt(2);let done;mockSave.mockReturnValueOnce(new Promise(resolve=>{done=resolve;}));
+ act(()=>{fireEvent.press(screen.getByText('Replace main photo'));});await act(async()=>{});
+ mockSession=null;await act(async()=>done());
+ expect(mockProfile).not.toHaveBeenCalled();expect(mockDelete).not.toHaveBeenCalled();
+});
+test('uncertain step save blocks editing until authoritative draft reload succeeds',async()=>{
+ const screen=await openAt(3);mockSave.mockRejectedValueOnce(new Error('ack lost'));
+ await act(async()=>fireEvent.press(screen.getByText('Continue')));
+ expect(screen.getByText('Application could not be loaded.')).toBeTruthy();expect(mockDelete).not.toHaveBeenCalled();
+ mockRead.mockRejectedValueOnce(new Error('offline'));
+ await act(async()=>fireEvent.press(screen.getByText('Try again')));
+ expect(screen.getByText('Application could not be loaded.')).toBeTruthy();
+ expect(mockRead).toHaveBeenLastCalledWith({requireServer:true,isCurrent:expect.any(Function)});
+ mockRead.mockResolvedValueOnce({...draft(),status:'submitted'});
+ await act(async()=>fireEvent.press(screen.getByText('Try again')));
+ expect(screen.getByText('Application Under Review')).toBeTruthy();expect(mockDelete).not.toHaveBeenCalled();
+});
+
+test('authoritative approved application does not expose draft editing while profile hydration lags',async()=>{
+ mockRead.mockResolvedValueOnce({...draft(),status:'approved'});
+ const screen=await openAt(0);
+ expect(screen.getByText('Approved Host')).toBeTruthy();expect(screen.queryByText('Continue')).toBeNull();
+ expect(mockSave).not.toHaveBeenCalled();expect(mockUpload).not.toHaveBeenCalled();
 });

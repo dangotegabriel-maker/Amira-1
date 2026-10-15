@@ -1,0 +1,44 @@
+CP32 Final Integration Review — Git Manifest
+Repository: C:\Users\NiBS-GA\Amira-1
+Branch: amira-v2
+Baseline/unchanged HEAD: 693df18
+Final validation date: 2026-10-14 UTC
+
+All changes UNSTAGED. No stage, commit, push, amendment, deployment or discarded CP32 work.
+
+GIT STATUS --SHORT (verbatim)
+ M firestore.rules
+ M functions/src/__tests__/callPaymentLifecycle.test.js
+ M functions/src/__tests__/callRecovery.emulator.cjs
+ M functions/src/callRecovery.js
+ M functions/src/hostDiscoveryDomain.js
+ M functions/src/quickMatchService.js
+ M src/components/SponsoredCallInviteBanner.js
+ M src/navigation/__tests__/routeSafety.test.js
+ M src/screens/host/HostApplicationScreen.js
+ M src/screens/host/__tests__/creatorActionIntegrity.test.js
+ M src/screens/main/EditProfileScreen.js
+ M src/screens/main/MatchScreen.js
+ M src/screens/main/StoryViewerScreen.js
+ M src/screens/main/VideoCallScreen.js
+ M src/screens/main/__tests__/callPaymentUi.test.js
+ M src/screens/main/__tests__/discoveryProfileUi.test.js
+ M src/services/__tests__/clientAuthorityCleanup.test.js
+ M src/services/__tests__/creatorRoleRules.emulator.cjs
+ M src/services/__tests__/hostApplicationService.test.js
+ M src/services/__tests__/hostDiscovery.emulator.cjs
+ M src/services/__tests__/quickMatchLifecycle.emulator.cjs
+ M src/services/__tests__/rtcService.test.js
+ M src/services/firebaseService.js
+ M src/services/hostApplicationService.js
+ M src/services/mediaService.js
+ M src/services/rtcService.js
+ M storage.rules
+?? docs/production-readiness-audit-git-status.txt
+?? docs/production-readiness-audit-report.md
+?? functions/src/__tests__/storyExpiry.test.js
+?? src/screens/host/__tests__/creatorMediaUnavailable.test.js
+?? src/screens/main/__tests__/storyLifecycle.test.js
+?? src/services/__tests__/mediaCleanup.emulator.cjs
+?? src/services/__tests__/mediaSession.test.js
+?? src/services/__tests__/storageLookupFailure.emulator.cjs
